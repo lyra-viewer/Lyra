@@ -34,7 +34,6 @@ public partial class SdlCore : IDisposable
 
         InitializeWindowAndRenderer();
         InitializeInput();
-        ImageStore.Initialize();
 
         // TODO Load from arguments
         // LoadImage();

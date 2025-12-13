@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.FileLoader;
+using Lyra.SystemUtils;
 using SkiaSharp;
 using static SDL3.SDL;
 
@@ -33,7 +34,9 @@ public partial class SdlCore
             { Scancode.Minus, ZoomOut },
             { Scancode.Equals, ZoomIn },
             { Scancode.Alpha0, ToggleDisplayMode },
-            { Scancode.Alpha9, ToggleSampling }
+            { Scancode.S, ToggleSampling },
+            { Scancode.H, ToggleHelp },
+            { Scancode.Return, OpenFileExplorer }
         };
     }
 
@@ -135,6 +138,18 @@ public partial class SdlCore
     private void ToggleInfo()
     {
         _renderer.ToggleInfo();
+    }
+
+    private void ToggleHelp()
+    {
+        // TODO
+    }
+
+    private void OpenFileExplorer()
+    {
+        var path = DirectoryNavigator.GetCurrent() ?? DirectoryNavigator.GetTopDirectory();
+        if (path != null)
+            FileExplorerOpener.RevealPath(path);
     }
 
     private void ToggleDisplayMode()

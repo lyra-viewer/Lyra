@@ -9,7 +9,7 @@ public static class ImageStore
     
     public static void Initialize()
     {
-        _ = NativeLibraryLoader.Instance;
+        NativeLibraryLoader.Initialize();
     }
 
     public static Composite GetImage(string path)

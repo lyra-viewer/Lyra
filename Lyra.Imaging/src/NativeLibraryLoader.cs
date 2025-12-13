@@ -1,9 +1,9 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using LibHeifSharp;
 using Lyra.Common;
 using SDL3;
-using SkiaSharp;
 
 namespace Lyra.Imaging;
 
@@ -12,6 +12,7 @@ internal static class NativeLibraryLoader
     private static readonly string LibPath;
     private static readonly string SystemName;
     private static readonly Dictionary<string, string> PathDictionary = new();
+    private static readonly Dictionary<string, IntPtr> LoadedHandles = new();
 
     static NativeLibraryLoader()
     {
@@ -62,6 +63,37 @@ internal static class NativeLibraryLoader
         }
 
         ResolveLibraries();
+    }
+
+    public static void Initialize()
+    {
+        _ = Instance;
+
+        foreach (var (id, path) in PathDictionary)
+        {
+            if (LoadedHandles.ContainsKey(id))
+                continue;
+
+            if (!File.Exists(path))
+            {
+                Logger.Error($"[NativeLibraryLoader] {id} path missing: {path}");
+                continue;
+            }
+
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                var handle = NativeLibrary.Load(path);
+                LoadedHandles[id] = handle;
+                sw.Stop();
+                Logger.Debug($"[NativeLibraryLoader] Loaded {id} in {sw.Elapsed.TotalMilliseconds:F3} ms");
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                Logger.Error($"[NativeLibraryLoader] Failed to load {id} from {path} after {sw.Elapsed.TotalMilliseconds:F3} ms: {ex}");
+            }
+        }
     }
 
     private static void LoadLibrary(string basePath, string libraryName, string identifier)

@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Lyra.Common;
 
-namespace Lyra.Utils;
+namespace Lyra.SystemUtils;
 
 public static class TtfLoader
 {

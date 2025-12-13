@@ -9,9 +9,11 @@ public static class DirectoryNavigator
     private static List<string> _imageList = [];
     private static int _currentIndex = -1;
     private static bool? _singleDirectory;
-    
+
+    private static string? _topDirectory;
+
     private static readonly StringComparer PathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-    
+
     public static void SearchImages(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || (!File.Exists(path) && !Directory.Exists(path)))
@@ -32,7 +34,7 @@ public static class DirectoryNavigator
             anchorCandidate = path;
         }
 
-        var files = FilePathProcessor.ProcessImagePaths([currentDir], isDir, out var singleDirectory);
+        var files = FilePathProcessor.ProcessImagePaths([currentDir], isDir, out var singleDirectory, out _topDirectory);
         if (anchorCandidate is null && files.Count > 0)
             anchorCandidate = files[0];
 
@@ -50,8 +52,8 @@ public static class DirectoryNavigator
             .Where(File.Exists)
             .FirstOrDefault(p => ImageFormat.IsSupported(Path.GetExtension(p)));
 
-        var files = FilePathProcessor.ProcessImagePaths(paths, recurseSubdirs: null, out var singleDirectory);
-        
+        var files = FilePathProcessor.ProcessImagePaths(paths, recurseSubdirs: null, out var singleDirectory, out _topDirectory);
+
         if (anchorCandidate is null && files.Count > 0)
             anchorCandidate = files[0];
 
@@ -204,6 +206,11 @@ public static class DirectoryNavigator
         }
 
         return navigation;
+    }
+
+    public static string? GetTopDirectory()
+    {
+        return _topDirectory;
     }
 
     public static CollectionType GetCollectionType()
