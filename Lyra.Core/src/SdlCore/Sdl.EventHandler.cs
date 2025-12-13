@@ -10,7 +10,7 @@ public partial class SdlCore
 {
     private readonly List<string> _currentDroppedPaths = [];
     private bool _collectingDrop = false; // TODO
-
+    
     private void HandleEvents()
     {
         while (PollEvent(out var e))
@@ -104,8 +104,8 @@ public partial class SdlCore
 
         LoadImage();
         _currentDroppedPaths.Clear();
-        
-        RaiseWindow(_window);  
+
+        DeferUntilWarm(() => RaiseWindow(_window));
     }
 
     private void OnWindowResized()

@@ -150,6 +150,7 @@ For more information, visit the relevant repositories:
 - Support for multi-layer EXR and PSD navigation
 - Integration with asset management tools (e.g., Bridge folder syncing)
 - Image export or format conversion
+- Grid display
 
 ---
 

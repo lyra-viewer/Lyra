@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using LibHeifSharp;
 using Lyra.Common;
 using SDL3;
+using SkiaSharp;
 
 namespace Lyra.Imaging;
 

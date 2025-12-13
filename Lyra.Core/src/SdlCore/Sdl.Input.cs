@@ -108,18 +108,24 @@ public partial class SdlCore
             GetWindowSize(_window, out _lastWindowWidth, out _lastWindowHeight);
             GetWindowPosition(_window, out _lastWindowX, out _lastWindowY);
 
-            // SetWindowBordered(_window, false);
-            // SetWindowResizable(_window, false);
-            SetWindowFullscreen(_window, true);
-            SetWindowPosition(_window, 0, 0);
+            DeferUntilWarm(() =>
+            {
+                // SetWindowBordered(_window, false);
+                // SetWindowResizable(_window, false);
+                SetWindowFullscreen(_window, true);
+                SetWindowPosition(_window, 0, 0);
+            });
         }
         else
         {
-            // SetWindowBordered(_window, true);
-            // SetWindowResizable(_window, true);
-            SetWindowFullscreen(_window, false);
-            SetWindowSize(_window, _lastWindowWidth, _lastWindowHeight);
-            SetWindowPosition(_window, _lastWindowX, _lastWindowY);
+            DeferUntilWarm(() =>
+            {
+                // SetWindowBordered(_window, true);
+                // SetWindowResizable(_window, true);
+                SetWindowFullscreen(_window, false);
+                SetWindowSize(_window, _lastWindowWidth, _lastWindowHeight);
+                SetWindowPosition(_window, _lastWindowX, _lastWindowY);
+            });
         }
 
         Logger.Debug($"[Input] Fullscreen: {_isFullscreen}");

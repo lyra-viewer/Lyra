@@ -15,6 +15,15 @@ public partial class SdlCore : IDisposable
     private readonly GpuBackend _backend;
     private bool _running = true;
 
+    // IMPORTANT: Certain window operations (bring-to-front, fullscreen) are
+    // unreliable if performed too early, even when confirmed by SDL events.
+    // To avoid unstable behavior, these actions are deferred until a few
+    // frames have been rendered.
+    private bool _coldStartSafe;
+    private int _coldStartFramesPending;
+    private const int WindowWarmupFrames = 3;
+    private readonly List<Action> _deferredUntilWarm = [];
+
     private Composite? _composite;
     private int _zoomPercentage = 100;
     private DisplayMode _displayMode = DisplayMode.Undefined;
@@ -32,6 +41,7 @@ public partial class SdlCore : IDisposable
             return;
         }
 
+        ColdStartReset();
         InitializeWindowAndRenderer();
         InitializeInput();
 
@@ -52,6 +62,8 @@ public partial class SdlCore : IDisposable
             _window = CreateWindow("Lyra Viewer (Vulkan)", 0, 0, flags | WindowFlags.Vulkan);
             _renderer = new SkiaVulkanRenderer(_window);
         }
+
+        SetWindowFocusable(_window, true);
     }
 
     private void LoadImage()
@@ -88,7 +100,33 @@ public partial class SdlCore : IDisposable
             RecalculateDisplayModeIfNecessary();
             _renderer.Render();
             GLSwapWindow(_window);
+
+            if (!_coldStartSafe)
+            {
+                if (--_coldStartFramesPending <= 0)
+                {
+                    _coldStartSafe = true;
+                    foreach (var action in _deferredUntilWarm)
+                        action();
+
+                    _deferredUntilWarm.Clear();
+                }
+            }
         }
+    }
+    
+    private void DeferUntilWarm(Action action)
+    {
+        if (_coldStartSafe)
+            action();
+        else
+            _deferredUntilWarm.Add(action);
+    }
+    
+    private void ColdStartReset()
+    {
+        _coldStartFramesPending = WindowWarmupFrames;
+        _coldStartSafe = false;
     }
 
     private void RecalculateDisplayModeIfNecessary()
