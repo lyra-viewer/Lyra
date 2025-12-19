@@ -12,13 +12,16 @@ internal static class NativeLibraryLoader
 {
     private static readonly string LibPath;
     private static readonly string SystemName;
+    private static readonly string MacOsFrameworkPath;
+
     private static readonly Dictionary<string, string> PathDictionary = new();
     private static readonly Dictionary<string, IntPtr> LoadedHandles = new();
+    private static readonly List<string> SearchDirs = [];
 
     static NativeLibraryLoader()
     {
         var basePath = AppContext.BaseDirectory;
-        var macOsFrameworkPath = Path.Combine(basePath, "..", "Frameworks"); // Adjusted for .app bundle
+        MacOsFrameworkPath = Path.GetFullPath(Path.Combine(basePath, "..", "Frameworks")); // Adjusted for .app bundle
         LibPath = Path.Combine(basePath, "lib");
 
         SystemName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -26,6 +29,8 @@ internal static class NativeLibraryLoader
             : RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
                 ? "Linux"
                 : "macOS";
+
+        BuildSearchDirs(basePath);
 
         var platformLibraries = new Dictionary<string, string>
         {
@@ -60,12 +65,16 @@ internal static class NativeLibraryLoader
 
         foreach (var (id, libName) in platformLibraries)
         {
-            LoadLibrary(macOsFrameworkPath, libName, id);
+            LocateLibrary(libName, id);
         }
 
         ResolveLibraries();
     }
 
+    /// <summary>
+    /// Call at app startup to eagerly load what we managed to locate.
+    /// (DllImport resolvers will still work lazily.)
+    /// </summary>
     public static void Initialize()
     {
         _ = Instance;
@@ -87,7 +96,7 @@ internal static class NativeLibraryLoader
                 var handle = NativeLibrary.Load(path);
                 LoadedHandles[id] = handle;
                 sw.Stop();
-                Logger.Debug($"[NativeLibraryLoader] Loaded {id} in {sw.Elapsed.TotalMilliseconds:F3} ms");
+                Logger.Info($"[NativeLibraryLoader] Loaded {id} in {sw.Elapsed.TotalMilliseconds:F3} ms");
             }
             catch (Exception ex)
             {
@@ -96,27 +105,53 @@ internal static class NativeLibraryLoader
             }
         }
     }
-
-    private static void LoadLibrary(string basePath, string libraryName, string identifier)
+    
+    private static void BuildSearchDirs(string basePath)
     {
-        var libFilePath = Path.Combine(basePath, libraryName);
+        SearchDirs.Clear();
 
-        if (File.Exists(libFilePath))
+        // App bundle Frameworks
+        SearchDirs.Add(MacOsFrameworkPath);
+
+        // Fallback inside publish output: <BaseDirectory>/lib/<SystemName>/
+        SearchDirs.Add(Path.Combine(LibPath, SystemName));
+
+        // Homebrew (macOS only) - for Homebrew-dependent distribution
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            PathDictionary[identifier] = libFilePath;
+            // Common brew lib dirs
+            SearchDirs.Add("/opt/homebrew/lib"); // Apple Silicon
+            SearchDirs.Add("/usr/local/lib");    // Intel
+            
+            SearchDirs.Add("/opt/homebrew/opt/sdl3/lib");
+            SearchDirs.Add("/usr/local/opt/sdl3/lib");
+
+            SearchDirs.Add("/opt/homebrew/opt/libheif/lib");
+            SearchDirs.Add("/usr/local/opt/libheif/lib");
+
+            SearchDirs.Add("/opt/homebrew/opt/openexr/lib");
+            SearchDirs.Add("/usr/local/opt/openexr/lib");
         }
-        else
+
+        // Keep only existing directories, de-dup while preserving order
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        SearchDirs.RemoveAll(d => string.IsNullOrWhiteSpace(d) || !Directory.Exists(d) || !seen.Add(d));
+    }
+
+    private static void LocateLibrary(string libraryName, string identifier)
+    {
+        foreach (var dir in SearchDirs)
         {
-            var fallbackPath = Path.Combine(LibPath, SystemName, libraryName);
-            if (File.Exists(fallbackPath))
+            var candidate = Path.Combine(dir, libraryName);
+            if (File.Exists(candidate))
             {
-                PathDictionary[identifier] = fallbackPath;
-            }
-            else
-            {
-                Logger.Error($"[NativeLibraryLoader] Failed to locate {libraryName}.");
+                PathDictionary[identifier] = candidate;
+                Logger.Info($"[NativeLibraryLoader] Located {identifier} at {candidate}");
+                return;
             }
         }
+
+        Logger.Error($"[NativeLibraryLoader] Failed to locate {libraryName}.");
     }
 
     private static void ResolveLibraries()
@@ -167,6 +202,5 @@ internal static class NativeLibraryLoader
         };
     }
 
-    // Force class initialization
     public static readonly object Instance = new();
 }

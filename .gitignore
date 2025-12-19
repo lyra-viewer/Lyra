@@ -11,6 +11,8 @@ packaging/
 publish/
 build.sh
 build-macos.sh
+build-brew.sh
+build-macos-homebrew.sh
 publish.sh
 
 # Visual Studio Code
@@ -42,6 +44,7 @@ publish.sh
 x64/
 x86/
 build/
+build-brew/
 bld/
 [Bb]in/
 [Oo]bj/
