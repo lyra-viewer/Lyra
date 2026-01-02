@@ -14,7 +14,8 @@ internal class ImageSharpDecoder : IImageDecoder
     public bool CanDecode(ImageFormatType format) => format 
         is ImageFormatType.Tga 
         or ImageFormatType.Tiff
-        or ImageFormatType.Psd;
+        or ImageFormatType.Psd
+        or ImageFormatType.Psb;
     
     // public bool CanDecode(ImageFormatType format) => format 
     //     is ImageFormatType.Bmp
@@ -52,9 +53,9 @@ internal class ImageSharpDecoder : IImageDecoder
 
             composite.Image = SKImage.FromBitmap(bitmap);
         }
-        catch (Exception)
+        catch (Exception e)
         {
-            Logger.Warning($"[ImageSharpDecoder] Image could not be loaded: {path}");
+            Logger.Warning($"[ImageSharpDecoder] Image could not be loaded: {path} \n{e.Message}");
         }
     }
 }

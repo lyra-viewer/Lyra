@@ -22,7 +22,7 @@ internal static class LayerAndMaskInformationSectionReader
 
         if (length == 0)
             return LayerAndMaskInformation.Empty;
-        
+
         var layerInfoSummary = LayerInfoReader.Read(reader, end, isPsb, header);
         GlobalLayerMaskSummary globalMask = default;
         AdditionalLayerInformation[] additional = [];

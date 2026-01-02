@@ -1,3 +1,4 @@
+using Lyra.Imaging.Psd.Parser.Primitives;
 using Lyra.Imaging.Psd.Parser.PsdReader;
 using Lyra.Imaging.Psd.Parser.SectionData;
 
@@ -5,8 +6,6 @@ namespace Lyra.Imaging.Psd.Parser.SectionReaders;
 
 internal static class ImageResourcesSectionReader
 {
-    private static ReadOnlySpan<byte> Signature => "8BIM"u8;
-
     public static ImageResources Read(PsdBigEndianReader reader)
     {
         var length = reader.ReadUInt32();
@@ -18,7 +17,7 @@ internal static class ImageResourcesSectionReader
 
         while (reader.Position < end)
         {
-            reader.ExpectSignature(Signature);
+            reader.ExpectSignature(PsdSignatures.ImageResources);
 
             var id = reader.ReadUInt16();
             var name = reader.ReadPascalString(2);

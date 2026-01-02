@@ -1,29 +1,30 @@
 using System.Buffers.Binary;
 using System.Text;
+using Lyra.Imaging.Psd.Parser.Primitives;
 
 namespace Lyra.Imaging.Psd.Parser.PsdReader;
 
-internal sealed class PsdBigEndianReader(Stream stream)
+public sealed class PsdBigEndianReader(Stream stream)
 {
-    private readonly Stream _stream = stream ?? throw new ArgumentNullException(nameof(stream));
-
+    public Stream BaseStream { get; } = stream ?? throw new ArgumentNullException(nameof(stream));
+    
     #region Stream Helpers
-
-    public bool CanSeek => _stream.CanSeek;
-
+    
+    public bool CanSeek => BaseStream.CanSeek;
+    
     public long Position
     {
-        get => _stream.CanSeek ? _stream.Position : throw new NotSupportedException("Stream is not seekable.");
+        get => BaseStream.CanSeek ? BaseStream.Position : throw new NotSupportedException("Stream is not seekable.");
         set
         {
-            if (!_stream.CanSeek)
+            if (!BaseStream.CanSeek)
                 throw new NotSupportedException("Stream is not seekable.");
 
-            _stream.Position = value;
+            BaseStream.Position = value;
         }
     }
 
-    public long Length => _stream.CanSeek ? _stream.Length : throw new NotSupportedException("Stream does not support seeking.");
+    public long Length => BaseStream.CanSeek ? BaseStream.Length : throw new NotSupportedException("Stream does not support seeking.");
 
     #endregion
     
@@ -31,7 +32,7 @@ internal sealed class PsdBigEndianReader(Stream stream)
 
     public byte ReadByte()
     {
-        int b = _stream.ReadByte();
+        int b = BaseStream.ReadByte();
         if (b < 0) throw new EndOfStreamException();
         return (byte)b;
     }
@@ -41,7 +42,7 @@ internal sealed class PsdBigEndianReader(Stream stream)
         var total = 0;
         while (total < buffer.Length)
         {
-            var n = _stream.Read(buffer[total..]);
+            var n = BaseStream.Read(buffer[total..]);
             if (n == 0) throw new EndOfStreamException();
             total += n;
         }
@@ -97,13 +98,13 @@ internal sealed class PsdBigEndianReader(Stream stream)
         if (bytes == 0)
             return;
 
-        if (_stream.CanSeek)
+        if (BaseStream.CanSeek)
         {
-            var newPos = _stream.Position + bytes;
+            var newPos = BaseStream.Position + bytes;
             if (newPos < 0)
                 throw new IOException("Stream seek overflow.");
 
-            _stream.Position = newPos;
+            BaseStream.Position = newPos;
             return;
         }
 
@@ -117,21 +118,33 @@ internal sealed class PsdBigEndianReader(Stream stream)
             remaining -= toRead;
         }
     }
+    
+    public bool TryPeekUInt32(out uint value)
+    {
+        value = 0;
 
+        if (!CanSeek)
+            return false;
+
+        var pos = Position;
+        value = ReadUInt32();
+        Position = pos;
+        return true;
+    }
+    
     #endregion
 
     #region PSD Helpers
-
-    public void ExpectSignature(ReadOnlySpan<byte> expected)
+    
+    public void ExpectSignature(uint expectedFourCC)
     {
-        if (expected.Length is 0 or > 255)
-            throw new ArgumentOutOfRangeException(nameof(expected), "Invalid expected signature length.");
-
-        Span<byte> got = stackalloc byte[expected.Length];
-        ReadExactly(got);
-        if (!got.SequenceEqual(expected))
-            throw new InvalidDataException("Invalid signature.");
+        var got = ReadUInt32();
+        if (got != expectedFourCC)
+            throw new InvalidDataException(
+                $"Invalid signature. Expected '{FourCC.ToString(expectedFourCC)}' but got '{FourCC.ToString(got)}'.");
     }
+    
+    public bool TryPeekSignature(uint expected) => TryPeekUInt32(out var got) && got == expected;
 
     public string ReadPascalString(int padTo)
     {

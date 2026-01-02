@@ -1,3 +1,4 @@
+using Lyra.Imaging.Psd.Parser.Primitives;
 using Lyra.Imaging.Psd.Parser.PsdReader;
 using Lyra.Imaging.Psd.Parser.SectionData;
 
@@ -5,54 +6,48 @@ namespace Lyra.Imaging.Psd.Parser.SectionReaders;
 
 internal static class AdditionalLayerInformationReader
 {
-    // TODO PSD constants
-    private static ReadOnlySpan<byte> PhotoshopBlockSignature => "8BIM"u8;
-    private static ReadOnlySpan<byte> PhotoshopLargeBlockSignature => "8B64"u8;
-
     public static AdditionalLayerInformation[] ReadAll(PsdBigEndianReader reader, long sectionEnd, bool isPsb)
     {
         var blocks = new List<AdditionalLayerInformation>();
-
-        // Minimum header size:
-        // PSD: sig(4) + key(4) + len(4) = 12
-        // PSB: sig(4) + key(4) + len(8) = 16
-        var minHeaderSize = isPsb ? 16 : 12;
 
         while (reader.Position < sectionEnd)
         {
             var remaining = sectionEnd - reader.Position;
 
-            // Not enough bytes for another valid block; treat as padding
-            if (remaining < minHeaderSize)
+            // Need at least signature(4) + key(4)
+            if (remaining < 8)
             {
                 reader.Skip(remaining);
                 break;
             }
 
+            if (!reader.TryPeekSignature(PsdSignatures.PhotoshopBlock) &&
+                !reader.TryPeekSignature(PsdSignatures.PhotoshopLargeBlock))
+            {
+                break;
+            }
+
             var signature = ReadPhotoshopBlockSignature(reader);
             var key = reader.ReadUInt32();
-            long payloadLength;
-            if (!isPsb)
-            {
-                payloadLength = reader.ReadUInt32();
-            }
-            else
-            {
-                payloadLength = AdditionalLayerInformationKeys.UsesLongLengthFieldInPsb(key)
-                    ? checked((long)reader.ReadUInt64())
-                    : reader.ReadUInt32();
-            }
+
+            var lenFieldSize = (!isPsb || !AdditionalLayerInformationKeys.UsesLongLengthFieldInPsb(key)) ? 4 : 8;
+
+            remaining = sectionEnd - reader.Position;
+            if (remaining < lenFieldSize)
+                throw new InvalidDataException($"Truncated AdditionalLayerInformation length field for '{FourCC.ToString(key)}'.");
+
+            var payloadLength = lenFieldSize == 4
+                ? reader.ReadUInt32()
+                : checked((long)reader.ReadUInt64());
 
             var payloadOffset = reader.Position;
 
-            // Bounds check
             if (payloadOffset + payloadLength > sectionEnd)
             {
                 var errorInfo = new AdditionalLayerInformation(signature, key, payloadOffset, payloadLength);
-                throw new InvalidDataException($"AdditionalLayerInformation '{errorInfo.KeyFourCC}' exceeds LayerAndMask section bounds.");
+                throw new InvalidDataException($"AdditionalLayerInformation '{errorInfo.KeyFourCC}' exceeds section bounds.");
             }
 
-            // Skip payload
             reader.Skip(payloadLength);
 
             // Pad to even
@@ -70,17 +65,14 @@ internal static class AdditionalLayerInformationReader
         return blocks.ToArray();
     }
 
-    private static string ReadPhotoshopBlockSignature(PsdBigEndianReader reader)
+    private static uint ReadPhotoshopBlockSignature(PsdBigEndianReader reader)
     {
-        Span<byte> buffer = stackalloc byte[4];
-        reader.ReadExactly(buffer);
+        var pos = reader.Position;
+        var sig = reader.ReadUInt32();
 
-        if (buffer.SequenceEqual(PhotoshopBlockSignature))
-            return "8BIM";
+        if (PsdSignatures.IsPhotoshopBlock(sig))
+            return sig;
 
-        if (buffer.SequenceEqual(PhotoshopLargeBlockSignature))
-            return "8B64";
-
-        throw new InvalidDataException("Invalid Photoshop block signature.");
+        throw new InvalidDataException($"Invalid Photoshop block signature '{FourCC.ToString(sig)}' (0x{sig:X8}) at 0x{pos:X}.");
     }
 }

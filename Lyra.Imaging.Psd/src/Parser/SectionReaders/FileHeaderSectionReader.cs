@@ -1,3 +1,4 @@
+using Lyra.Imaging.Psd.Parser.Primitives;
 using Lyra.Imaging.Psd.Parser.PsdReader;
 using Lyra.Imaging.Psd.Parser.SectionData;
 
@@ -5,13 +6,11 @@ namespace Lyra.Imaging.Psd.Parser.SectionReaders;
 
 internal static class FileHeaderSectionReader
 {
-    private static ReadOnlySpan<byte> Signature => "8BPS"u8;
-    
     public static FileHeader Read(PsdBigEndianReader reader)
     {
-        reader.ExpectSignature(Signature);
+        reader.ExpectSignature(PsdSignatures.FileHeader);
 
-        ushort version = reader.ReadUInt16();
+        var version = reader.ReadUInt16();
         if (version is not (1 or 2))
             throw new NotSupportedException($"Not supported file version: {version}");
 

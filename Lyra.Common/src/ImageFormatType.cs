@@ -57,9 +57,13 @@ public enum ImageFormatType
     [Description("PNG Image")]
     Png,
     
-    [FileExtension([".psd", ".psb"])]
+    [FileExtension([".psd"])]
     [Description("Adobe Photoshop Document")]
     Psd,
+    
+    [FileExtension([".psb"])]
+    [Description("Adobe Photoshop Document")]
+    Psb,
 
     [FileExtension([".svg"])]
     [Description("Scalable Vector Graphics")]
