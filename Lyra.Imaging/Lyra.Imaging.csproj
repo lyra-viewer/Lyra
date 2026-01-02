@@ -9,18 +9,19 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="LibHeifSharp" Version="3.2.0" />
-      <PackageReference Include="MetadataExtractor" Version="2.9.0" />
-      <PackageReference Include="SDL3-CS" Version="3.3.3" />
-      <PackageReference Include="SDL3-CS.Native" Version="3.3.3" />
-      <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
-      <PackageReference Include="SkiaSharp" Version="3.119.1" />
-      <PackageReference Include="Svg.Skia" Version="3.2.1" />
-      <PackageReference Include="YamlDotNet" Version="16.3.0" />
+        <PackageReference Include="LibHeifSharp" Version="3.2.0"/>
+        <PackageReference Include="MetadataExtractor" Version="2.9.0"/>
+        <PackageReference Include="SDL3-CS" Version="3.3.3"/>
+        <PackageReference Include="SDL3-CS.Native" Version="3.3.3"/>
+        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12"/>
+        <PackageReference Include="SkiaSharp" Version="3.119.1"/>
+        <PackageReference Include="Svg.Skia" Version="3.2.1"/>
+        <PackageReference Include="YamlDotNet" Version="16.3.0"/>
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Lyra.Common\Lyra.Common.csproj" />
+        <ProjectReference Include="..\Lyra.Common\Lyra.Common.csproj"/>
+        <ProjectReference Include="..\Lyra.Imaging.Psd\Lyra.Imaging.Psd.csproj"/>
     </ItemGroup>
 
 </Project>

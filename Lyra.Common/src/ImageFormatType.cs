@@ -2,6 +2,7 @@ using System.ComponentModel;
 
 namespace Lyra.Common;
 
+// TODO register codecs from here, create new attribute
 public enum ImageFormatType
 {
     [FileExtension([".bmp"])]
@@ -56,10 +57,9 @@ public enum ImageFormatType
     [Description("PNG Image")]
     Png,
     
-    [DisabledType]
-    [FileExtension([".psd"])]
-    [Description("Photoshop File")]
-    Psd, // TODO
+    [FileExtension([".psd", ".psb"])]
+    [Description("Adobe Photoshop Document")]
+    Psd,
 
     [FileExtension([".svg"])]
     [Description("Scalable Vector Graphics")]

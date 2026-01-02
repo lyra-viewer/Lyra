@@ -11,7 +11,10 @@ namespace Lyra.Imaging.Codecs;
 
 internal class ImageSharpDecoder : IImageDecoder
 {
-    public bool CanDecode(ImageFormatType format) => format is ImageFormatType.Tga or ImageFormatType.Tiff;
+    public bool CanDecode(ImageFormatType format) => format 
+        is ImageFormatType.Tga 
+        or ImageFormatType.Tiff
+        or ImageFormatType.Psd;
     
     // public bool CanDecode(ImageFormatType format) => format 
     //     is ImageFormatType.Bmp
