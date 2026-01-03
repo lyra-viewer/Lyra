@@ -16,7 +16,7 @@ public partial class SdlCore
     private bool _isPanning;
 
     private const float ZoomFactor = 1.05f;
-    private const int MinZoom = 10;
+    private const int MinZoom = 1;
     private const int MaxZoom = 10000;
 
     private void InitializeInput()
@@ -184,8 +184,59 @@ public partial class SdlCore
         _renderer.SetOffset(_panHelper.CurrentOffset);
     }
 
-    private void ZoomIn() => ApplyZoom((int)MathF.Round(_zoomPercentage * ZoomFactor, MidpointRounding.AwayFromZero));
-    private void ZoomOut() => ApplyZoom((int)MathF.Round(_zoomPercentage / ZoomFactor, MidpointRounding.AwayFromZero));
+    private void ZoomIn() => ApplyZoom(GetNextZoom(_zoomPercentage, +1));
+
+    private void ZoomOut() => ApplyZoom(GetNextZoom(_zoomPercentage, -1));
+
+    private void ZoomAtPoint(float mouseX, float mouseY, float direction)
+    {
+        if (_composite == null || _composite.IsEmpty || _panHelper == null)
+            return;
+
+        var newZoom = GetNextZoom(_zoomPercentage, direction);
+        if (newZoom == _zoomPercentage)
+            return;
+
+        DimensionHelper.GetDrawableSize(_window, out var scale);
+        var mouse = new SKPoint(mouseX * scale, mouseY * scale);
+
+        _panHelper.UpdateZoom(_zoomPercentage);
+        var newOffset = _panHelper.GetOffsetForZoomAtCursor(mouse, newZoom);
+
+        _zoomPercentage = newZoom;
+        _displayMode = _zoomPercentage == 100
+            ? DisplayMode.OriginalImageSize
+            : DisplayMode.Free;
+
+        _renderer.SetDisplayMode(_displayMode);
+        _renderer.SetZoom(_zoomPercentage);
+
+        _panHelper.UpdateZoom(_zoomPercentage);
+        _panHelper.CurrentOffset = newOffset;
+        _panHelper.Clamp();
+        _renderer.SetOffset(_panHelper.CurrentOffset);
+    }
+    
+    private static int GetNextZoom(int currentZoom, float direction)
+    {
+        // direction > 0 → zoom in
+        // direction < 0 → zoom out
+
+        var candidate = direction > 0
+            ? (int)MathF.Round(currentZoom * ZoomFactor, MidpointRounding.AwayFromZero)
+            : (int)MathF.Round(currentZoom / ZoomFactor, MidpointRounding.AwayFromZero);
+
+        candidate = Math.Clamp(candidate, MinZoom, MaxZoom);
+
+        // Force monotonic progress (prevents rounding stalls)
+        if (direction > 0 && candidate <= currentZoom)
+            candidate = Math.Min(MaxZoom, currentZoom + 1);
+
+        if (direction < 0 && candidate >= currentZoom)
+            candidate = Math.Max(MinZoom, currentZoom - 1);
+
+        return candidate;
+    }
 
     private void ApplyZoom(int newZoom)
     {
@@ -200,38 +251,6 @@ public partial class SdlCore
 
         _panHelper.UpdateZoom(_zoomPercentage);
         ClampOrCenterOffset();
-    }
-
-    private void ZoomAtPoint(float mouseX, float mouseY, float direction)
-    {
-        if (_composite == null || _composite.IsEmpty || _panHelper == null)
-            return;
-
-        _panHelper.UpdateZoom(_zoomPercentage);
-        var newZoom = direction > 0
-            ? (int)MathF.Round(_zoomPercentage * ZoomFactor, MidpointRounding.AwayFromZero)
-            : (int)MathF.Round(_zoomPercentage / ZoomFactor, MidpointRounding.AwayFromZero);
-
-        newZoom = Math.Clamp(newZoom, MinZoom, MaxZoom);
-        if (newZoom == _zoomPercentage)
-            return;
-
-        DimensionHelper.GetDrawableSize(_window, out var scale);
-        var mouse = new SKPoint(mouseX * scale, mouseY * scale);
-
-        var newOffset = _panHelper.GetOffsetForZoomAtCursor(mouse, newZoom);
-
-        // Apply everything
-        _zoomPercentage = newZoom;
-        _displayMode = _zoomPercentage == 100 ? DisplayMode.OriginalImageSize : DisplayMode.Free;
-
-        _renderer.SetDisplayMode(_displayMode);
-        _renderer.SetZoom(_zoomPercentage);
-
-        _panHelper.UpdateZoom(_zoomPercentage);
-        _panHelper.CurrentOffset = newOffset;
-        _panHelper.Clamp();
-        _renderer.SetOffset(_panHelper.CurrentOffset);
     }
 
     private void UpdateFitToScreen()

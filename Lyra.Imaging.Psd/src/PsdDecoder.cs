@@ -8,8 +8,6 @@ namespace Lyra.Imaging.Psd;
 
 public sealed class PsdDecoder : SpecializedImageDecoder<PsdDecoderOptions>
 {
-    public static PsdDecoder Instance { get; } = new();
-
     protected override ImageInfo Identify(DecoderOptions options, Stream stream, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(options);

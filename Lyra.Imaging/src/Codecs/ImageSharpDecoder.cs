@@ -36,7 +36,7 @@ internal class ImageSharpDecoder : IImageDecoder
         
         try
         {
-            using var image = await Image.LoadAsync<Rgba32>(path);
+            using var image = await Image.LoadAsync<Rgba32>(path, ct);
 
             var width = image.Width;
             var height = image.Height;
