@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using SixLabors.ImageSharp.Formats;
 
-namespace Lyra.Imaging.Psd;
+namespace Lyra.Imaging.Psd.ImageSharp;
 
 public sealed class PsdFormatDetector : IImageFormatDetector
 {

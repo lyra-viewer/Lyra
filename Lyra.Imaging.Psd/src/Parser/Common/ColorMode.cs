@@ -1,4 +1,4 @@
-namespace Lyra.Imaging.Psd.Parser.SectionData;
+namespace Lyra.Imaging.Psd.Parser.Common;
 
 public enum ColorMode : ushort
 {

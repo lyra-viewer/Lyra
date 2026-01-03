@@ -1,6 +1,6 @@
 using Lyra.Imaging.Data;
 using Lyra.Imaging.Pipeline;
-using Lyra.Imaging.Psd;
+using Lyra.Imaging.Psd.ImageSharp;
 using SixLabors.ImageSharp;
 
 namespace Lyra.Imaging;

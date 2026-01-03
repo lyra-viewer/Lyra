@@ -1,3 +1,4 @@
+using Lyra.Imaging.Psd.Parser.Common;
 using Lyra.Imaging.Psd.Parser.PsdReader;
 using Lyra.Imaging.Psd.Parser.SectionData;
 

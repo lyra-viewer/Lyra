@@ -1,9 +1,9 @@
-namespace Lyra.Imaging.Psd.Parser.SectionData;
+namespace Lyra.Imaging.Psd.Parser.Common;
 
 public enum CompressionType
 {
     Raw = 0,
-    RLE = 1,
+    Rle = 1,
     Zip = 2,
     ZipPredict = 3,
 }
