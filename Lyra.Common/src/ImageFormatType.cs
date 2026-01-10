@@ -57,10 +57,12 @@ public enum ImageFormatType
     [Description("PNG Image")]
     Png,
     
+    [DisabledPreload]
     [FileExtension([".psd"])]
     [Description("Adobe Photoshop Document")]
     Psd,
     
+    [DisabledPreload]
     [FileExtension([".psb"])]
     [Description("Adobe Photoshop Document")]
     Psb,

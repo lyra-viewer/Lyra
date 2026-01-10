@@ -1,7 +1,5 @@
 using Lyra.Imaging.Data;
 using Lyra.Imaging.Pipeline;
-using Lyra.Imaging.Psd.ImageSharp;
-using SixLabors.ImageSharp;
 
 namespace Lyra.Imaging;
 
@@ -12,11 +10,6 @@ public static class ImageStore
     public static void Initialize()
     {
         NativeLibraryLoader.Initialize();
-        
-        var formatsManager = Configuration.Default.ImageFormatsManager;
-        formatsManager.AddImageFormat(PsdFormat.Instance);
-        formatsManager.AddImageFormatDetector(new PsdFormatDetector());
-        formatsManager.SetDecoder(PsdFormat.Instance, new PsdDecoder());
     }
 
     public static Composite GetImage(string path)

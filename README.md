@@ -15,7 +15,7 @@ creative professionals who rely on images as a core resource in their workflow �
 Built on SDL3 and SkiaSharp, Lyra is optimized for browsing collections of texture maps, HDRIs, baked assets, and
 other images exported from tools like Blender, Quixel Bridge or modern DCC pipelines.
 
-> _Development note:_ Lyra is designed and written simultaneously. 
+> _Development note:_ Lyra is designed and written simultaneously.
 > As a result, parts of the code reflect iterative exploration rather than a fully pre-planned architecture.
 > Refactoring is ongoing wherever it improves clarity or maintainability.
 
@@ -71,10 +71,10 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 
 ### Vector / Specialized Formats
 
-| Format     | Description                                        |
-|------------|----------------------------------------------------|
-| `.svg`     | Scalable vector graphics for masks or UI overlays. |
-| ~~`.psd`~~ | ~~Photoshop files (preview-only support).~~        |
+| Format | Description                                        |
+|--------|----------------------------------------------------|
+| `.svg` | Scalable vector graphics for masks or UI overlays. |
+| `.psd` | Photoshop files (preview-only support).            |
 
 ### Minor Formats
 
@@ -110,6 +110,7 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 | `⌥ ←` / `⌥ →` | First / Last image within the directory |
 
 ### Drag & Drop
+
 Open a file or directory by dragging it into Lyra Viewer.
 
 ---

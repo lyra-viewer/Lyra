@@ -11,12 +11,10 @@ namespace Lyra.Imaging.Codecs;
 
 internal class ImageSharpDecoder : IImageDecoder
 {
-    public bool CanDecode(ImageFormatType format) => format 
-        is ImageFormatType.Tga 
-        or ImageFormatType.Tiff
-        or ImageFormatType.Psd
-        or ImageFormatType.Psb;
-    
+    public bool CanDecode(ImageFormatType format) => format
+        is ImageFormatType.Tga
+        or ImageFormatType.Tiff;
+
     // public bool CanDecode(ImageFormatType format) => format 
     //     is ImageFormatType.Bmp
     //     or ImageFormatType.Jfif
@@ -31,9 +29,9 @@ internal class ImageSharpDecoder : IImageDecoder
         var path = composite.FileInfo.FullName;
         composite.DecoderName = GetType().Name;
         Logger.Debug($"[ImageSharpDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
-        
+
         composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
-        
+
         try
         {
             using var image = await Image.LoadAsync<Rgba32>(path, ct);
