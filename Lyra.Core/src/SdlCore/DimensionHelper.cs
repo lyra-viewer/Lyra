@@ -1,4 +1,4 @@
-using Lyra.Imaging.Data;
+using Lyra.Imaging.Content;
 using static SDL3.SDL;
 
 namespace Lyra.SdlCore;
@@ -17,10 +17,13 @@ public static class DimensionHelper
         var windowLogicalWidth = drawableBounds.Width / displayScale;
         var windowLogicalHeight = drawableBounds.Height / displayScale;
 
-        if (composite.ContentWidth <= windowLogicalWidth && composite.ContentHeight <= windowLogicalHeight)
+        var compositeLogicalWidth = composite.LogicalWidth;
+        var compositeLogicalHeight = composite.LogicalHeight;
+        
+        if (compositeLogicalWidth <= windowLogicalWidth && compositeLogicalHeight <= windowLogicalHeight)
             return DisplayMode.OriginalImageSize;
 
-        zoomPercentage = GetZoomToFitScreen(window, composite.ContentWidth, composite.ContentHeight);
+        zoomPercentage = GetZoomToFitScreen(window, compositeLogicalWidth, compositeLogicalHeight);
         return DisplayMode.FitToScreen;
     }
 

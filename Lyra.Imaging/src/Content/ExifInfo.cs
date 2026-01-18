@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace Lyra.Imaging.Data;
+namespace Lyra.Imaging.Content;
 
 public class ExifInfo
 {

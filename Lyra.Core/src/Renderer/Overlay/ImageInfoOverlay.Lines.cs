@@ -1,5 +1,5 @@
 using Lyra.Common.SystemExtensions;
-using Lyra.Imaging.Data;
+using Lyra.Imaging.Content;
 
 namespace Lyra.Renderer.Overlay;
 
@@ -10,8 +10,8 @@ public partial class ImageInfoOverlay
         var fileInfo = composite.FileInfo;
         var fileSize = SizeToStr(fileInfo.Length);
 
-        var width = composite.Image?.Width ?? composite.Picture?.CullRect.Width ?? 0;
-        var height = composite.Image?.Height ?? composite.Picture?.CullRect.Height ?? 0;
+        var width = composite.LogicalWidth;
+        var height = composite.LogicalHeight;
 
         var dirNav = string.Empty;
         if (states is { DirectoryCount: not null, DirectoryIndex: not null })
@@ -31,7 +31,10 @@ public partial class ImageInfoOverlay
 #endif
 
         if (states.ShowExif)
+        {
+            lines.AddRange(BuildFormatSpecificLines(composite));
             lines.AddRange(BuildExifLines(composite));
+        }
 
         return lines;
     }
@@ -46,6 +49,20 @@ public partial class ImageInfoOverlay
         yield return $"<d>[State]         {composite.State.Description()}</>";
         yield return $"<d>[Decoder]       {composite.DecoderName}</>";
         yield return $"<d>[Time (ms)]     Estimated: {MsToStr(composite.LoadTimeEstimated)}  |  Elapsed: {MsToStr(composite.LoadTimeElapsed)}</>";
+    }
+
+    private static IEnumerable<string> BuildFormatSpecificLines(Composite composite)
+    {
+        if (composite.FormatSpecific.Count == 0)
+        {
+            yield break;
+        }
+        
+        yield return "";
+        yield return "";
+        yield return "";
+        foreach (var line in composite.FormatSpecific)
+            yield return $"{line.Key}: {line.Value}";
     }
 
     private static IEnumerable<string> BuildExifLines(Composite composite)

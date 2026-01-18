@@ -11,10 +11,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SDL3-CS" Version="3.3.6" />
-    <PackageReference Include="SDL3-CS.Native" Version="3.3.6" />
+    <PackageReference Include="SDL3-CS" Version="3.3.7" />
+    <PackageReference Include="SDL3-CS.Native" Version="3.3.7" />
     <PackageReference Include="SkiaSharp" Version="3.119.1" />
-    <PackageReference Include="Svg.Skia" Version="3.4.0" />
+    <PackageReference Include="Svg.Skia" Version="3.4.1" />
   </ItemGroup>
 
   <ItemGroup>

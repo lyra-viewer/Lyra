@@ -1,4 +1,4 @@
-using Lyra.Imaging.Data;
+using Lyra.Imaging.Content;
 using SkiaSharp;
 using static Lyra.SdlCore.DimensionHelper;
 
@@ -67,8 +67,8 @@ public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
         var oldScale = _zoomPercentage / 100f;
         var newScale = newZoom / 100f;
 
-        var imageDrawSizeOld = composite.ScaledContentSize(oldScale);
-        var imageDrawSizeNew = composite.ScaledContentSize(newScale);
+        var imageDrawSizeOld = new SKSize(composite.LogicalWidth * oldScale, composite.LogicalHeight * oldScale);
+        var imageDrawSizeNew = new SKSize(composite.LogicalWidth * newScale, composite.LogicalHeight * newScale);
 
         var (_, _, bounds, _) = GetZoomedContentAndBounds();
 
@@ -98,8 +98,8 @@ public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
     {
         var bounds = GetDrawableSize(window, out var scale);
 
-        var width = composite.ContentWidth;
-        var height = composite.ContentHeight;
+        var width = composite.LogicalWidth;
+        var height = composite.LogicalHeight;
 
         if (width <= 0 || height <= 0)
             return (0, 0, bounds, scale);

@@ -258,7 +258,7 @@ public partial class SdlCore
         if (_composite == null || _composite.IsEmpty)
             return;
 
-        _zoomPercentage = DimensionHelper.GetZoomToFitScreen(_window, _composite.ContentWidth, _composite.ContentHeight);
+        _zoomPercentage = DimensionHelper.GetZoomToFitScreen(_window, _composite.LogicalWidth, _composite.LogicalHeight);
         _displayMode = _zoomPercentage == 100 ? DisplayMode.OriginalImageSize : DisplayMode.FitToScreen;
         _renderer.SetDisplayMode(_displayMode);
         _renderer.SetZoom(_zoomPercentage);

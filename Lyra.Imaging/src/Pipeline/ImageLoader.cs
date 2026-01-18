@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
-using Lyra.Imaging.Data;
+using Lyra.Imaging.Content;
 
 namespace Lyra.Imaging.Pipeline;
 

@@ -1,5 +1,5 @@
-using Lyra.Events;
-using static Lyra.Events.EventManager;
+using Lyra.Common.Events;
+using static Lyra.Common.Events.EventManager;
 
 namespace Lyra.Renderer.Overlay;
 

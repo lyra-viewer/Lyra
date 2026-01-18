@@ -1,6 +1,6 @@
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
-using Lyra.Imaging.Data;
+using Lyra.Imaging.Content;
 using SkiaSharp;
 using static System.Threading.Thread;
 
@@ -43,7 +43,7 @@ internal abstract class FloatRgbaDecoderBase : IImageDecoder
                     ConvertPixels(floatSpan, byteSpan, width, height, out composite.IsGrayscale);
                 }
 
-                composite.Image = SKImage.FromBitmap(bitmap);
+                composite.Content = new RasterContent(SKImage.FromBitmap(bitmap));
                 return composite;
             }
             finally

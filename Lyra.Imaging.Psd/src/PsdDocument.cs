@@ -60,14 +60,22 @@ public sealed class PsdDocument
         return new PsdDocument(header, colorMode, resources, layerAndMaskInformation, imageData, new PsdMetadata());
     }
 
-    public static SKImage Decode(Stream stream, CancellationToken ct) => Decode(stream, SurfaceFormat.Default, ct);
-
-    public static SKImage Decode(Stream stream, SurfaceFormat outputFormat, CancellationToken ct)
+    public SKImage Decode(Stream stream, CancellationToken ct)
     {
-        var psd = ReadDocument(stream);
-        var composite = PsdCompositeDecoder.DecodeComposite(psd, stream, outputFormat, null, ct);
+        return Decode(stream, SurfaceFormat.Default, ct);
+    }
+
+    public SKImage Decode(Stream stream, SurfaceFormat outputFormat, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        // IMPORTANT:
+        // ImageData.PayloadOffset already points to start of composite image data
+        if (stream.CanSeek)
+            stream.Position = ImageData.PayloadOffset;
+
+        var composite = PsdCompositeDecoder.DecodeComposite(this, stream, outputFormat, null, ct);
         var result = SkiaCompositeConverter.Convert(composite);
-        
         return result switch
         {
             SkiaCompositeResult.Single s => s.Image,
@@ -76,17 +84,18 @@ public sealed class PsdDocument
         };
     }
 
-    public static SKImage DecodePreview(Stream stream, int maxWidth, int maxHeight, long? maxSurfaceBytes, CancellationToken ct)
+    public SKImage DecodePreview(Stream stream, int maxWidth, int maxHeight, long? maxSurfaceBytes, CancellationToken ct)
     {
         return DecodePreview(stream, SurfaceFormat.Default, maxWidth, maxHeight, maxSurfaceBytes, ct);
     }
 
-    public static SKImage DecodePreview(Stream stream, SurfaceFormat outputFormat, int maxWidth, int maxHeight, long? maxSurfaceBytes, CancellationToken ct)
+    public SKImage DecodePreview(Stream stream, SurfaceFormat outputFormat, int maxWidth, int maxHeight, long? maxSurfaceBytes, CancellationToken ct)
     {
-        var psd = ReadDocument(stream);
-        var composite = PsdCompositeDecoder.DecodeCompositePreview(psd, stream, outputFormat, maxWidth, maxHeight, maxSurfaceBytes, ct);
+        if (stream.CanSeek)
+            stream.Position = ImageData.PayloadOffset;
+
+        var composite = PsdCompositeDecoder.DecodeCompositePreview(this, stream, outputFormat, maxWidth, maxHeight, maxSurfaceBytes, ct);
         var result = SkiaCompositeConverter.Convert(composite);
-        
         return result switch
         {
             SkiaCompositeResult.Single s => s.Image,
@@ -95,7 +104,7 @@ public sealed class PsdDocument
         };
     }
 
-    public static SkiaCompositeResult DecodeTiled(Stream stream, SurfaceFormat outputFormat, long maxBytesPerTile, int? tileEdgeHint, CancellationToken ct)
+    public SkiaCompositeResult DecodeTiled(Stream stream, SurfaceFormat outputFormat, long maxBytesPerTile, int? tileEdgeHint, CancellationToken ct)
     {
         throw new NotImplementedException();
     }

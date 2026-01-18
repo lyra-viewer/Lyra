@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Lyra.Common;
 using Lyra.FileLoader;
-using static Lyra.Events.EventManager;
+using static Lyra.Common.Events.EventManager;
 using static SDL3.SDL;
 
 namespace Lyra.SdlCore;

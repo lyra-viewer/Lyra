@@ -1,6 +1,6 @@
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
-using Lyra.Imaging.Data;
+using Lyra.Imaging.Content;
 using Svg.Skia;
 using static System.Threading.Thread;
 
@@ -33,8 +33,7 @@ public class SvgDecoder : IImageDecoder
             if (originalBounds.IsEmpty || originalBounds.Width < 1 || originalBounds.Height < 1) 
                 Logger.Debug("[SvgDecoder] Detected empty or invalid CullRect.");
 
-            composite.Picture = picture;
-            composite.IsVectorGraphics = true;
+            composite.Content = new VectorContent(picture);
             
             return composite;
         });

@@ -1,6 +1,6 @@
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
-using Lyra.Imaging.Data;
+using Lyra.Imaging.Content;
 using Lyra.Imaging.Pipeline;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -49,7 +49,7 @@ internal class ImageSharpDecoder : IImageDecoder
                 image.CopyPixelDataTo(span);
             }
 
-            composite.Image = SKImage.FromBitmap(bitmap);
+            composite.Content = new RasterContent(SKImage.FromBitmap(bitmap));
         }
         catch (Exception e)
         {

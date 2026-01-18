@@ -1,6 +1,6 @@
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
-using Lyra.Imaging.Data;
+using Lyra.Imaging.Content;
 using SkiaSharp;
 using static System.Threading.Thread;
 
@@ -50,6 +50,6 @@ internal class SkiaDecoder : IImageDecoder
             return;
         }
 
-        composite.Image = image;
+        composite.Content = new RasterContent(image);
     }
 }

@@ -1,6 +1,6 @@
-using static Lyra.Events.EventManager;
+using static Lyra.Common.Events.EventManager;
 
-namespace Lyra.Events;
+namespace Lyra.Common.Events;
 
 public interface IDisplayScaleAware
 {

@@ -1,4 +1,4 @@
-using Lyra.Imaging.Data;
+using Lyra.Imaging.Content;
 using Lyra.Imaging.Pipeline;
 
 namespace Lyra.Imaging;

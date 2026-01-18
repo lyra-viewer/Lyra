@@ -1,5 +1,5 @@
-using Lyra.Events;
-using Lyra.Imaging.Data;
+using Lyra.Common.Events;
+using Lyra.Imaging.Content;
 using Lyra.SdlCore;
 using SkiaSharp;
 

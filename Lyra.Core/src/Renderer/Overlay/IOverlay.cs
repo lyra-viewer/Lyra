@@ -1,4 +1,4 @@
-using Lyra.Events;
+using Lyra.Common.Events;
 using Lyra.SdlCore;
 using SkiaSharp;
 

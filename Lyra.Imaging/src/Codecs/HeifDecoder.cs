@@ -1,7 +1,7 @@
 using LibHeifSharp;
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
-using Lyra.Imaging.Data;
+using Lyra.Imaging.Content;
 using Lyra.Imaging.Pipeline;
 using SkiaSharp;
 using static System.Threading.Thread;
@@ -50,7 +50,7 @@ internal class HeifDecoder : IImageDecoder
                     }
                 }
 
-                composite.Image = SKImage.FromBitmap(skiaBitmap);
+                composite.Content = new RasterContent(SKImage.FromBitmap(skiaBitmap));
                 return composite;
             }
             catch (Exception e)

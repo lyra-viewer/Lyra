@@ -1,11 +1,11 @@
 using Lyra.Common.SystemExtensions;
 using Lyra.FileLoader;
-using Lyra.Imaging.Data;
+using Lyra.Imaging.Content;
 using Lyra.Renderer.Enum;
 using Lyra.Renderer.Overlay;
 using Lyra.SdlCore;
 using SkiaSharp;
-using static Lyra.Events.EventManager;
+using static Lyra.Common.Events.EventManager;
 using static SDL3.SDL;
 using DisplayMode = Lyra.SdlCore.DisplayMode;
 
@@ -26,6 +26,8 @@ public class SkiaOpenGlRenderer : IRenderer
     private SamplingMode _samplingMode = SamplingMode.Cubic;
     private BackgroundMode _backgroundMode = BackgroundMode.Black;
     private InfoMode _infoMode = InfoMode.Basic;
+
+    private readonly ICompositeContentDrawer _contentDrawer;
 
     private Composite? _composite;
     private SKPoint _offset = SKPoint.Empty;
@@ -48,6 +50,8 @@ public class SkiaOpenGlRenderer : IRenderer
 
         _imageInfoOverlay = new ImageInfoOverlay().WithScaleSubscription();
         _centeredOverlay = new CenteredTextOverlay().WithScaleSubscription();
+
+        _contentDrawer = new SkiaCompositeContentDrawer();
     }
 
     public void Render()
@@ -69,53 +73,27 @@ public class SkiaOpenGlRenderer : IRenderer
                 break;
         }
 
-        if (_composite is { IsVectorGraphics: true, Picture: not null })
+        if (_composite?.Content != null)
         {
-            RenderSvg(canvas, _composite.Picture);
-        }
-        else if (_composite?.Image != null)
-        {
-            RenderImage(canvas);
+            var sampling = _samplingMode switch
+            {
+                SamplingMode.Linear => new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear),
+                SamplingMode.Nearest => new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.Nearest),
+                SamplingMode.None => SKSamplingOptions.Default,
+                SamplingMode.Cubic or _ => new SKSamplingOptions(new SKCubicResampler()),
+            };
+
+            var logicalSize = new SKSize(_composite.LogicalWidth, _composite.LogicalHeight);
+
+            RenderCentered(canvas, logicalSize, c =>
+            {
+                var dest = new SKRect(0, 0, logicalSize.Width, logicalSize.Height);
+                _contentDrawer.Draw(c, _composite, dest, sampling);
+            });
         }
 
         RenderOverlay(canvas);
-
         canvas.Flush();
-    }
-
-    private void RenderImage(SKCanvas canvas)
-    {
-        if (_composite?.Image == null)
-            return;
-
-        var image = _composite.Image;
-        var sampling = _samplingMode switch
-        {
-            SamplingMode.Linear => new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear),
-            SamplingMode.Nearest => new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.Nearest),
-            SamplingMode.None => SKSamplingOptions.Default,
-            SamplingMode.Cubic or _ => new SKSamplingOptions(new SKCubicResampler()),
-        };
-
-        var logicalSize = new SKSize(_composite.ContentWidth, _composite.ContentHeight);
-
-        RenderCentered(canvas, logicalSize, c =>
-        {
-            var dest = new SKRect(0, 0, logicalSize.Width, logicalSize.Height);
-            c.DrawImage(image, dest, sampling);
-        });
-    }
-
-    private void RenderSvg(SKCanvas canvas, SKPicture picture)
-    {
-        var bounds = picture.CullRect;
-        var logicalSize = new SKSize(bounds.Width, bounds.Height);
-
-        RenderCentered(canvas, logicalSize, c =>
-        {
-            c.Translate(-bounds.Left, -bounds.Top); // normalize origin
-            c.DrawPicture(picture);
-        });
     }
 
     private void RenderCentered(SKCanvas canvas, SKSize logicalSize, Action<SKCanvas> drawContent)
@@ -132,10 +110,13 @@ public class SkiaOpenGlRenderer : IRenderer
         var top = (logicalWindowHeight - drawHeight) / 2 + _offset.Y / _displayScale;
 
         canvas.Save();
-        canvas.Scale(_displayScale); // logical → physical space
-        canvas.Translate(left, top); // center the image
-        canvas.Scale(zoomScale); // zoom
+        canvas.Scale(_displayScale);
+        canvas.Translate(left, top);
+
+        // Only zoom here. Preview->Full is already handled by DrawImage(dest=FULL)
+        canvas.Scale(zoomScale);
         drawContent(canvas);
+
         canvas.Restore();
     }
 
@@ -154,7 +135,7 @@ public class SkiaOpenGlRenderer : IRenderer
         if (_infoMode != InfoMode.None)
             _imageInfoOverlay.Render(canvas, bounds, textColor, (_composite, GetViewerState()));
 
-        if (_composite?.Image == null && _composite?.Picture == null)
+        if (_composite is null || _composite.IsEmpty)
         {
             if (_composite?.State == CompositeState.Loading)
                 _centeredOverlay.Render(canvas, bounds, textColor, "Loading...");
@@ -186,7 +167,7 @@ public class SkiaOpenGlRenderer : IRenderer
     private ViewerState GetViewerState()
     {
         var navigation = DirectoryNavigator.GetNavigation();
-        
+
         return new ViewerState
         {
             CollectionType = DirectoryNavigator.GetCollectionType().Description(),
@@ -203,7 +184,9 @@ public class SkiaOpenGlRenderer : IRenderer
 
     private string GetSamplingModeDescription()
     {
-        return _composite?.IsVectorGraphics == true ? "Disabled (resolution-independent)" : _samplingMode.Description();
+        return _composite?.Content?.Kind == CompositeContentKind.Vector
+            ? "Disabled (resolution-independent)"
+            : _samplingMode.Description();
     }
 
     public void OnDrawableSizeChanged(DrawableSizeChangedEvent e)
@@ -220,7 +203,7 @@ public class SkiaOpenGlRenderer : IRenderer
 
     public void ToggleSampling()
     {
-        if (_composite is { IsVectorGraphics: false })
+        if (_composite?.Content?.Kind != CompositeContentKind.Vector)
             _samplingMode = (SamplingMode)(((int)_samplingMode + 1) % System.Enum.GetValues<SamplingMode>().Length);
     }
 

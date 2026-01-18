@@ -1,5 +1,5 @@
 using Lyra.Common;
-using Lyra.Imaging.Data;
+using Lyra.Imaging.Content;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
 using MetadataExtractor.Formats.Heif;
