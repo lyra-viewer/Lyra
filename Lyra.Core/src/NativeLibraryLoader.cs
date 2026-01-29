@@ -6,7 +6,7 @@ using Lyra.Common;
 using SDL3;
 using SkiaSharp;
 
-namespace Lyra.Imaging;
+namespace Lyra;
 
 internal static class NativeLibraryLoader
 {
