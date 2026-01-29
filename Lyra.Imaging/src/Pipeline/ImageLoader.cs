@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
@@ -125,29 +124,41 @@ internal class ImageLoader
     {
         var extension = composite.FileInfo.Extension;
         var fileSize = composite.FileInfo.Length;
+
         composite.ImageFormatType = ImageFormat.GetImageFormat(extension);
         composite.LoadTimeEstimated = LoadTimeEstimator.EstimateLoadTime(extension, fileSize);
+
+        composite.Completed += OnCompleted;
 
         try
         {
             var decoder = DecoderManager.GetDecoder(composite.ImageFormatType);
             composite.State = CompositeState.Loading;
-            var stopwatch = Stopwatch.StartNew();
+            composite.BeginLoadTiming();
+
             ct.ThrowIfCancellationRequested();
 
             await decoder.DecodeAsync(composite, ct).ConfigureAwait(false);
 
             ct.ThrowIfCancellationRequested();
-            stopwatch.Stop();
 
             if (composite.IsEmpty)
-                composite.State = CompositeState.Failed;
-            else
             {
-                var elapsed = stopwatch.Elapsed.TotalMilliseconds;
-                composite.LoadTimeElapsed = elapsed;
-                LoadTimeEstimator.RecordLoadTime(extension, fileSize, elapsed);
-                composite.State = CompositeState.Complete;
+                composite.State = CompositeState.Failed;
+                return;
+            }
+            
+            composite.SignalReady();
+
+            // Promote to Complete if:
+            // - decoder finished everything synchronously (still Loading), or
+            // - content is not a streaming RasterLarge (no tiles), or tiles are already fully ready.
+            if (composite.State == CompositeState.Loading)
+                composite.SignalComplete();
+            else if (composite.State == CompositeState.Ready)
+            {
+                if (composite.Content is not RasterLargeContent large || !large.HasTiles || (large.TilesTotal is int total && large.TilesReady >= total)) 
+                    composite.SignalComplete();
             }
         }
         catch (OperationCanceledException)
@@ -158,6 +169,16 @@ internal class ImageLoader
         {
             Logger.Error($"[ImageLoader] Failed to load image {composite.FileInfo.FullName}: {ex}");
             composite.State = CompositeState.Failed;
+        }
+
+        return;
+
+        void OnCompleted(Composite c)
+        {
+            if (c.LoadTimeComplete is double time)
+                LoadTimeEstimator.RecordLoadTime(extension, fileSize, time);
+
+            c.Completed -= OnCompleted;
         }
     }
 

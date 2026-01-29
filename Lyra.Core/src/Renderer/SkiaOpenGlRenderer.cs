@@ -84,11 +84,22 @@ public class SkiaOpenGlRenderer : IRenderer
             };
 
             var logicalSize = new SKSize(_composite.LogicalWidth, _composite.LogicalHeight);
-
+            var zoomScale = _zoomPercentage / 100f;
             RenderCentered(canvas, logicalSize, c =>
             {
-                var dest = new SKRect(0, 0, logicalSize.Width, logicalSize.Height);
-                _contentDrawer.Draw(c, _composite, dest, sampling);
+                var destFull = new SKRect(0, 0, logicalSize.Width, logicalSize.Height);
+
+                var visibleFull = ViewportMath.ComputeVisibleFullRect(
+                    imageW: logicalSize.Width,
+                    imageH: logicalSize.Height,
+                    windowPxW: _windowWidth,
+                    windowPxH: _windowHeight,
+                    displayScale: _displayScale,
+                    zoomPercentage: _zoomPercentage,
+                    offsetPx: _offset
+                );
+
+                _contentDrawer.Draw(c, _composite, destFull, visibleFull, sampling, zoomScale, _displayScale);
             });
         }
 

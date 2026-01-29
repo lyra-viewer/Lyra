@@ -48,7 +48,7 @@ public partial class ImageInfoOverlay
         yield return "";
         yield return $"<d>[State]         {composite.State.Description()}</>";
         yield return $"<d>[Decoder]       {composite.DecoderName}</>";
-        yield return $"<d>[Time (ms)]     Estimated: {MsToStr(composite.LoadTimeEstimated)}  |  Elapsed: {MsToStr(composite.LoadTimeElapsed)}</>";
+        yield return $"<d>[Time (ms)]     Estimated: {MsToStr(composite.LoadTimeEstimated)}  |  Elapsed: {MsToStr(composite.LoadTimeComplete)}</>";
     }
 
     private static IEnumerable<string> BuildFormatSpecificLines(Composite composite)

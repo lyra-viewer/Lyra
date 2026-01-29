@@ -78,7 +78,7 @@ public sealed class CmykProcessor : IColorModeProcessor
             NeutralBAdd);
 
         var owner = MemoryPool<byte>.Shared.Rent(size);
-        var surface = new RgbaSurface(src.Width, src.Height, owner, stride);
+        var surface = new RgbaSurface(src.Width, src.Height, owner, stride, ctx.OutputFormat);
 
         try
         {

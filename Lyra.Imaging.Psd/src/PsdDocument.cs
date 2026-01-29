@@ -1,10 +1,8 @@
-using Lyra.Imaging.Psd.Adapters.SkiaSharp;
 using Lyra.Imaging.Psd.Core.Decode.Composite;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 using Lyra.Imaging.Psd.Core.Readers;
 using Lyra.Imaging.Psd.Core.SectionData;
 using Lyra.Imaging.Psd.Core.SectionReaders;
-using SkiaSharp;
 
 namespace Lyra.Imaging.Psd;
 
@@ -24,8 +22,7 @@ public sealed class PsdDocument
         ImageResources imageResources,
         LayerAndMaskInformation layerAndMaskInformation,
         ImageData imageData,
-        PsdMetadata psdMetadata
-    )
+        PsdMetadata psdMetadata)
     {
         FileHeader = fileHeader;
         ColorModeData = colorModeData;
@@ -37,6 +34,8 @@ public sealed class PsdDocument
 
     public static FileHeader ReadHeader(Stream stream)
     {
+        ArgumentNullException.ThrowIfNull(stream);
+
         if (stream.CanSeek)
             stream.Position = 0;
 
@@ -46,6 +45,8 @@ public sealed class PsdDocument
 
     public static PsdDocument ReadDocument(Stream stream)
     {
+        ArgumentNullException.ThrowIfNull(stream);
+
         if (stream.CanSeek)
             stream.Position = 0;
 
@@ -60,52 +61,75 @@ public sealed class PsdDocument
         return new PsdDocument(header, colorMode, resources, layerAndMaskInformation, imageData, new PsdMetadata());
     }
 
-    public SKImage Decode(Stream stream, CancellationToken ct)
-    {
-        return Decode(stream, SurfaceFormat.Default, ct);
-    }
-
-    public SKImage Decode(Stream stream, SurfaceFormat outputFormat, CancellationToken ct)
+    /// <summary>
+    /// Decode full-resolution composite into a contiguous RGBA surface.
+    /// </summary>
+    public RgbaSurface Decode(Stream stream, SurfaceFormat? outputFormat = null, long? maxSurfaceBytes = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        // IMPORTANT:
-        // ImageData.PayloadOffset already points to start of composite image data
         if (stream.CanSeek)
             stream.Position = ImageData.PayloadOffset;
 
-        var composite = PsdCompositeDecoder.DecodeComposite(this, stream, outputFormat, null, ct);
-        var result = SkiaCompositeConverter.Convert(composite);
-        return result switch
-        {
-            SkiaCompositeResult.Single s => s.Image,
-            SkiaCompositeResult.Tiled => throw new NotSupportedException("Decode() must return a single image. Use DecodeTiled() for tiled results."),
-            _ => throw new NotSupportedException($"Unknown SkiaCompositeResult type: {result.GetType().FullName}")
-        };
+        return PsdCompositeDecoder.DecodeComposite(this, stream, outputFormat ?? SurfaceFormat.Default, maxSurfaceBytes, ct);
     }
 
-    public SKImage DecodePreview(Stream stream, int maxWidth, int maxHeight, long? maxSurfaceBytes, CancellationToken ct)
+    /// <summary>
+    /// Decode a scaled-down composite preview (never scales up).
+    /// </summary>
+    public RgbaSurface DecodePreview(Stream stream, int maxWidth, int maxHeight, SurfaceFormat? outputFormat = null, long? maxSurfaceBytes = null, CancellationToken ct = default)
     {
-        return DecodePreview(stream, SurfaceFormat.Default, maxWidth, maxHeight, maxSurfaceBytes, ct);
-    }
+        ArgumentNullException.ThrowIfNull(stream);
 
-    public SKImage DecodePreview(Stream stream, SurfaceFormat outputFormat, int maxWidth, int maxHeight, long? maxSurfaceBytes, CancellationToken ct)
-    {
         if (stream.CanSeek)
             stream.Position = ImageData.PayloadOffset;
 
-        var composite = PsdCompositeDecoder.DecodeCompositePreview(this, stream, outputFormat, maxWidth, maxHeight, maxSurfaceBytes, ct);
-        var result = SkiaCompositeConverter.Convert(composite);
-        return result switch
-        {
-            SkiaCompositeResult.Single s => s.Image,
-            SkiaCompositeResult.Tiled => throw new NotSupportedException("Decode() must return a single image. Use DecodeTiled() for tiled results."),
-            _ => throw new NotSupportedException($"Unknown SkiaCompositeResult type: {result.GetType().FullName}")
-        };
+        return PsdCompositeDecoder.DecodeCompositePreview(this, stream, outputFormat ?? SurfaceFormat.Default, maxWidth, maxHeight, maxSurfaceBytes, ct);
     }
 
-    public SkiaCompositeResult DecodeTiled(Stream stream, SurfaceFormat outputFormat, long maxBytesPerTile, int? tileEdgeHint, CancellationToken ct)
+    /// <summary>
+    /// Create a tiled composite container (geometry only). Does NOT decode tiles.
+    /// </summary>
+    public TiledCompositeImage CreateTiledComposite(Stream stream, long maxBytesPerTile, int? tileEdgeHint = null, SurfaceFormat? outputFormat = null, CancellationToken ct = default)
     {
-        throw new NotImplementedException();
+        ArgumentNullException.ThrowIfNull(stream);
+
+        if (stream.CanSeek)
+            stream.Position = ImageData.PayloadOffset;
+
+        return PsdCompositeDecoder.DecodeCompositeTiled(this, stream, outputFormat ?? SurfaceFormat.Default, maxBytesPerTile, tileEdgeHint, ct);
+    }
+
+    /// <summary>
+    /// Decode composite payload into an existing tiled container (progressive-friendly).
+    /// </summary>
+    public void DecodeTiles(Stream stream, TiledCompositeImage tiled, SurfaceFormat? outputFormat = null, long? maxSurfaceBytes = null, Action<int, int>? onTileReady = null, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentNullException.ThrowIfNull(tiled);
+
+        if (stream.CanSeek)
+            stream.Position = ImageData.PayloadOffset;
+
+        PsdCompositeDecoder.DecodeTiles(this, stream, tiled, outputFormat ?? SurfaceFormat.Default, maxSurfaceBytes, onTileReady, ct);
+    }
+
+    /// <summary>
+    /// Decode composite payload into an existing tiled container (progressive-friendly),
+    /// using an optional caller-provided band (tileY) decode order.
+    /// 
+    /// Notes:
+    /// - Band order is honored for RAW/RLE (restartable payload).
+    /// - ZIP variants remain single-pass and will ignore bandOrder.
+    /// </summary>
+    public void DecodeTiles(Stream stream, TiledCompositeImage tiled, IReadOnlyList<int>? bandOrder, SurfaceFormat? outputFormat = null, long? maxSurfaceBytes = null, Action<int, int>? onTileReady = null, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentNullException.ThrowIfNull(tiled);
+
+        if (stream.CanSeek)
+            stream.Position = ImageData.PayloadOffset;
+
+        PsdCompositeDecoder.DecodeTiles(this, stream, tiled, outputFormat ?? SurfaceFormat.Default, maxSurfaceBytes, bandOrder, onTileReady, ct);
     }
 }

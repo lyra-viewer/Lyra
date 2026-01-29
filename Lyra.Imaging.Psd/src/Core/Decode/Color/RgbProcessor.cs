@@ -56,7 +56,7 @@ public sealed class RgbProcessor : IColorModeProcessor
         var alphaType = ctx.OutputFormat.AlphaType;
 
         var owner = MemoryPool<byte>.Shared.Rent(size);
-        var surface = new RgbaSurface(src.Width, src.Height, owner, stride);
+        var surface = new RgbaSurface(src.Width, src.Height, owner, stride, ctx.OutputFormat);
 
         try
         {

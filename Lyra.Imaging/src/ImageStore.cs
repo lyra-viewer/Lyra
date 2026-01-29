@@ -1,3 +1,4 @@
+using Lyra.Imaging.ConstraintsProvider;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Pipeline;
 
@@ -6,12 +7,12 @@ namespace Lyra.Imaging;
 public static class ImageStore
 {
     private static readonly ImageLoader ImageLoader = new();
-    
+
     public static void Initialize()
     {
-        NativeLibraryLoader.Initialize();
+        _ = DecodeConstraintsProvider.Current;
     }
-
+    
     public static Composite GetImage(string path)
     {
         if (!File.Exists(path))

@@ -55,8 +55,9 @@ public partial class SdlCore
                     break;
 
                 case EventType.WindowShown:
+                case EventType.WindowDisplayChanged:    
                 case EventType.WindowDisplayScaleChanged:
-                    OnWindowDisplayScaleChange();
+                    RefreshDisplayInfo();
                     break;
 
                 case EventType.WindowEnterFullscreen:
@@ -119,10 +120,15 @@ public partial class SdlCore
         Publish(new DrawableSizeChangedEvent(bounds.Width, bounds.Height, scale));
     }
 
-    private void OnWindowDisplayScaleChange()
+    private void RefreshDisplayInfo()
     {
-        Logger.Info("[EventHandler] Window shown or display scale changed.");
-        Publish(new DisplayScaleChangedEvent(GetWindowDisplayScale(_window)));
+        Logger.Info("[EventHandler] Refreshing display info.");
+        var displayScale = GetWindowDisplayScale(_window);
+        Publish(new DisplayScaleChangedEvent(displayScale));
+        
+        var displayId = GetDisplayForWindow(_window);
+        GetDisplayBounds(displayId, out var displayBounds);
+        Publish(new DisplayBoundsChangedEvent(displayBounds.W, displayBounds.H, displayScale, displayId));
     }
 
     private void OnMouseButtonDown(Event e)

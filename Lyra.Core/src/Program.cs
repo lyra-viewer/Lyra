@@ -1,5 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 using Lyra.Common;
+using Lyra.Imaging;
 
 namespace Lyra;
 
@@ -10,7 +11,7 @@ static class Program
         LogSetup();
         Logger.Info($"[Application] Application started on {RuntimeInformation.RuntimeIdentifier}");
 
-        Imaging.ImageStore.Initialize();
+        NativeLibraryLoader.Initialize();
 
         try
         {

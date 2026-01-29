@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Lyra.Common;
 
 namespace Lyra.Imaging.Content;
@@ -24,8 +25,15 @@ public sealed class Composite : IDisposable
     public float? FullWidth;
     public float? FullHeight;
 
-    public double? LoadTimeElapsed;
+    public double? LoadTimeReady;
+    public double? LoadTimeComplete;
+
+    private Stopwatch? _loadStopwatch;
+    private int _readySignaled;
+    private int _completeSignaled;
     public double LoadTimeEstimated;
+    
+    public event Action<Composite>? Completed;
 
     // Content
     public ICompositeContent? Content;
@@ -41,6 +49,43 @@ public sealed class Composite : IDisposable
 
     public bool IsEmpty => Content is null;
 
+    internal void BeginLoadTiming()
+    {
+        _loadStopwatch = Stopwatch.StartNew();
+        _readySignaled = 0;
+        LoadTimeReady = null;
+        LoadTimeComplete = null;
+    }
+
+    internal void SignalReady()
+    {
+        if (Interlocked.Exchange(ref _readySignaled, 1) != 0)
+            return;
+
+        if (_loadStopwatch is { IsRunning: true })
+            LoadTimeReady = _loadStopwatch.Elapsed.TotalMilliseconds;
+
+        if (State == CompositeState.Loading)
+            State = CompositeState.Ready;
+    }
+
+    internal void SignalComplete()
+    {
+        if (Interlocked.Exchange(ref _completeSignaled, 1) != 0)
+            return;
+
+        if (_loadStopwatch is { IsRunning: true })
+        {
+            _loadStopwatch.Stop();
+            LoadTimeComplete = _loadStopwatch.Elapsed.TotalMilliseconds;
+        }
+
+        if (State is CompositeState.Loading or CompositeState.Ready)
+            State = CompositeState.Complete;
+
+        Completed?.Invoke(this);
+    }
+
     public void Dispose()
     {
         Content?.Dispose();
@@ -55,7 +100,8 @@ public enum CompositeState
 {
     Pending,
     Loading,
-    Complete,
+    Ready,     // preview / full usable (tiles may still stream)
+    Complete,  // everything finished (e.g., tiles fully decoded)
     Failed,
     Cancelled,
     Disposed

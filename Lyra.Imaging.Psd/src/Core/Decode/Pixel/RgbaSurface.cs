@@ -11,16 +11,13 @@ public sealed class RgbaSurface : IDisposable
     public int Width { get; }
     public int Height { get; }
     public int Stride { get; } // bytes per row (>= Width * 4)
+    public SurfaceFormat Format { get; }
 
     public IMemoryOwner<byte> Owner { get; }
     public Memory<byte> Memory { get; }
     public Span<byte> Span => Memory.Span;
 
-    public RgbaSurface(
-        int width,
-        int height,
-        IMemoryOwner<byte> owner,
-        int stride)
+    public RgbaSurface(int width, int height, IMemoryOwner<byte> owner, int stride, SurfaceFormat format)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
@@ -30,6 +27,7 @@ public sealed class RgbaSurface : IDisposable
         Height = height;
         Stride = stride;
         Owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        Format = format;
 
         var requiredBytes = checked(stride * height);
         if (owner.Memory.Length < requiredBytes)
@@ -44,8 +42,8 @@ public sealed class RgbaSurface : IDisposable
     /// </summary>
     public Span<byte> GetRowSpan(int y)
     {
-        return (uint)y < (uint)Height 
-            ? Span.Slice(y * Stride, Width * 4) 
+        return (uint)y < (uint)Height
+            ? Span.Slice(y * Stride, Width * 4)
             : throw new ArgumentOutOfRangeException(nameof(y));
     }
 

@@ -6,9 +6,7 @@ namespace Lyra.Imaging.Psd.Core.Decode.Decompressors;
 
 public interface IPsdDecompressor
 {
-    void ValidatePayload(FileHeader header, ImageData imageData);
+    PlaneImage DecompressPreview(PsdBigEndianReader reader, FileHeader header, int width, int height, CancellationToken ct);
 
-    PlaneImage DecompressPlanes(PsdBigEndianReader reader, FileHeader header, CancellationToken ct);
-    
-    PlaneImage DecompressPlanesScaled(PsdBigEndianReader reader, FileHeader header, int width, int height, CancellationToken ct);
+    void DecompressPlanesRowRegion(PsdBigEndianReader reader, FileHeader header, int yStart, int yEnd, IPlaneRowConsumer consumer, CancellationToken ct);
 }

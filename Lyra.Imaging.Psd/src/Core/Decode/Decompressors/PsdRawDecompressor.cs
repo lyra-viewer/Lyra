@@ -1,5 +1,4 @@
 using System.Buffers;
-using Lyra.Imaging.Psd.Core.Common;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 using Lyra.Imaging.Psd.Core.Readers;
 using Lyra.Imaging.Psd.Core.SectionData;
@@ -8,8 +7,6 @@ namespace Lyra.Imaging.Psd.Core.Decode.Decompressors;
 
 internal sealed class PsdRawDecompressor : PsdDecompressorBase
 {
-    protected override CompressionType Compression => CompressionType.Raw;
-
     protected override PlaneImage Decompress8(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, CancellationToken ct)
     {
         var width = header.Width;
@@ -40,8 +37,42 @@ internal sealed class PsdRawDecompressor : PsdDecompressorBase
         }
     }
 
-    protected override PlaneImage Decompress8Scaled(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int outWidth, int outHeight, CancellationToken ct)
+    protected override PlaneImage Decompress8Preview(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int outWidth, int outHeight, CancellationToken ct)
     {
         return DecodeScaled8PlanesByRows(header.Width, header.Height, outWidth, outHeight, roles, ct, () => reader.ReadExactly);
     }
+
+    protected override void Decompress8RowRegion(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int yStart, int yEnd, IPlaneRowConsumer consumer, CancellationToken ct)
+    {
+        var width = header.Width;
+        var height = header.Height;
+
+        var rentedRow = ArrayPool<byte>.Shared.Rent(width);
+        try
+        {
+            var row = rentedRow.AsSpan(0, width);
+
+            for (var p = 0; p < roles.Length; p++)
+            {
+                for (var y = 0; y < height; y++)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    if (y < yStart || y >= yEnd)
+                    {
+                        reader.Skip(width);
+                        continue;
+                    }
+
+                    reader.ReadExactly(row);
+                    consumer.ConsumeRow(p, y, row);
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rentedRow);
+        }
+    }
+
 }

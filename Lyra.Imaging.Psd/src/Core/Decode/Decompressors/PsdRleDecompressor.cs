@@ -1,5 +1,4 @@
 using System.Buffers;
-using Lyra.Imaging.Psd.Core.Common;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 using Lyra.Imaging.Psd.Core.Readers;
 using Lyra.Imaging.Psd.Core.SectionData;
@@ -8,22 +7,10 @@ namespace Lyra.Imaging.Psd.Core.Decode.Decompressors;
 
 internal sealed class PsdRleDecompressor : PsdDecompressorBase
 {
-    protected override CompressionType Compression => CompressionType.Rle;
-
-    private ImageData? _imageData; // FIXME concurrency danger 
-
     private const int MaxPackedRowBytes = 16 * 1024 * 1024;
-
-    public override void ValidatePayload(FileHeader header, ImageData imageData)
-    {
-        _imageData = imageData;
-    }
 
     protected override PlaneImage Decompress8(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, CancellationToken ct)
     {
-        if (_imageData is null)
-            throw new InvalidOperationException("ValidatePayload must be called before DecompressPlanes.");
-
         var width = header.Width;
         var height = header.Height;
         var planeCount = roles.Length;
@@ -62,11 +49,8 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
         }
     }
 
-    protected override PlaneImage Decompress8Scaled(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int outWidth, int outHeight, CancellationToken ct)
+    protected override PlaneImage Decompress8Preview(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int outWidth, int outHeight, CancellationToken ct)
     {
-        if (_imageData is null)
-            throw new InvalidOperationException("ValidatePayload must be called before DecompressPlanesScaled.");
-
         var srcWidth = header.Width;
         var srcHeight = header.Height;
         var planeCount = roles.Length;
@@ -136,6 +120,57 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
         }
     }
 
+    protected override void Decompress8RowRegion(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int yStart, int yEnd, IPlaneRowConsumer consumer, CancellationToken ct)
+    {
+        var width = header.Width;
+        var height = header.Height;
+        var planeCount = roles.Length;
+
+        // Shared: read + validate row-byte-count table
+        var rowByteCounts = ReadAndValidateRowByteCounts(reader, header, planeCount, height, ct);
+
+        var packedRent = ArrayPool<byte>.Shared.Rent(64 * 1024);
+        var unpackedRent = ArrayPool<byte>.Shared.Rent(width);
+        var state = new RleRowDecodeState(packedRent);
+
+        try
+        {
+            for (var p = 0; p < planeCount; p++)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                for (var y = 0; y < height; y++)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    // Outside requested region: skip packed bytes without decoding.
+                    if (y < yStart || y >= yEnd)
+                    {
+                        if ((uint)state.RowIndex >= (uint)rowByteCounts.Length)
+                            throw new InvalidOperationException("Row index exceeded row-byte-count table length.");
+
+                        var packedLen = rowByteCounts[state.RowIndex++];
+                        if (packedLen < 0)
+                            throw new InvalidOperationException($"Negative PackBits row length: {packedLen}.");
+
+                        reader.Skip(packedLen);
+                        continue;
+                    }
+
+                    // Needed row: decode and forward to consumer
+                    DecodeNextUnpackedRow(reader, width, rowByteCounts, state, unpackedRent, ct);
+                    consumer.ConsumeRow(p, y, unpackedRent.AsSpan(0, width));
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(state.PackedBuffer);
+            ArrayPool<byte>.Shared.Return(unpackedRent);
+        }
+    }
+
+
     private sealed class RleRowDecodeState(byte[] initialPackedBuffer)
     {
         public int RowIndex;
@@ -158,7 +193,6 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
             rowByteCounts[i] = len;
         }
 
-        ValidateRlePayload((ImageData)_imageData!, planeCount, height, rowByteCounts, version);
         return rowByteCounts;
     }
 
@@ -213,6 +247,8 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
 
     private static void ValidateRlePayload(ImageData imageData, int planeCount, int height, int[] rowByteCounts, int version)
     {
+        // MEMO: Maybe useful in the future, now it sucks to wire it
+
         long sumPacked = 0;
         foreach (var len in rowByteCounts)
         {

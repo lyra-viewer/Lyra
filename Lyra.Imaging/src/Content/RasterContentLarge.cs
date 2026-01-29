@@ -15,7 +15,7 @@ public sealed class RasterLargeContent : ICompositeContent
     }
 
     public CompositeContentKind Kind => CompositeContentKind.RasterLarge;
-    
+
     public float FullWidth { get; }
     public float FullHeight { get; }
 
@@ -29,7 +29,25 @@ public sealed class RasterLargeContent : ICompositeContent
     public bool HasPreview => PreviewImage != null;
     public bool HasFullImage => FullImage != null;
     public bool HasTiles => TileSource != null;
-    
+
+    private int _tilesReady;
+    public int TilesReady => Volatile.Read(ref _tilesReady);
+    public bool PreferTiles { get; set; }
+    public int? TilesTotal { get; private set; }
+
+    public void SetTilesTotal(int total)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(total);
+        TilesTotal = total;
+        Interlocked.Exchange(ref _tilesReady, 0);
+    }
+
+    public void IncrementTileReady()
+    {
+        Interlocked.Increment(ref _tilesReady);
+    }
+
+
     public void SetPreview(SKImage? preview)
     {
         if (PreviewImage != null && PreviewImage.Handle != IntPtr.Zero)
@@ -66,7 +84,7 @@ public sealed class RasterLargeContent : ICompositeContent
 
 public interface ITileSource : IDisposable
 {
-    IEnumerable<RasterTile> GetTiles(SKRect visibleFullRect);
+    IEnumerable<RasterTile> GetTiles(SKRect visibleFullRect, SKSize imageSize);
 }
 
 public readonly record struct RasterTile(SKImage Image, SKRect DestRect);

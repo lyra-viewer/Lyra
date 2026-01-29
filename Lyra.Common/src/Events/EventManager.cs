@@ -40,9 +40,6 @@ public static class EventManager
     public readonly record struct DisplayScaleChangedEvent(float Scale);
     
     public readonly record struct DrawableSizeChangedEvent(int Width, int Height, float Scale);
-
-    public readonly record struct DropFileStarted;
-
-    public readonly record struct DropFileProgress(int Count);
-    public readonly record struct DropFileCompleted;
+    
+    public readonly record struct DisplayBoundsChangedEvent(int Width, int Height, float Scale, uint? DisplayId = null);
 }

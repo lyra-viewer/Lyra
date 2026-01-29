@@ -5,5 +5,5 @@ namespace Lyra.Renderer;
 
 public interface ICompositeContentDrawer
 {
-    void Draw(SKCanvas canvas, Composite composite, SKRect destFullRect, SKSamplingOptions sampling);
+    void Draw(SKCanvas canvas, Composite composite, SKRect destFullRect, SKRect visibleFullRect, SKSamplingOptions sampling, float zoomScale, float displayScale);
 }

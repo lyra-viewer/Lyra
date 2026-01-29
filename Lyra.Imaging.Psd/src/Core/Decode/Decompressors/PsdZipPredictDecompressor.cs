@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.IO.Compression;
-using Lyra.Imaging.Psd.Core.Common;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 using Lyra.Imaging.Psd.Core.Readers;
 using Lyra.Imaging.Psd.Core.SectionData;
@@ -9,8 +8,6 @@ namespace Lyra.Imaging.Psd.Core.Decode.Decompressors;
 
 internal sealed class PsdZipPredictDecompressor : PsdDecompressorBase
 {
-    protected override CompressionType Compression => CompressionType.ZipPredict;
-
     protected override PlaneImage Decompress8(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, CancellationToken ct)
     {
         var width = header.Width;
@@ -47,7 +44,7 @@ internal sealed class PsdZipPredictDecompressor : PsdDecompressorBase
         }
     }
 
-    protected override PlaneImage Decompress8Scaled(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int outWidth, int outHeight, CancellationToken ct)
+    protected override PlaneImage Decompress8Preview(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int outWidth, int outHeight, CancellationToken ct)
     {
         using var z = new ZLibStream(reader.BaseStream, CompressionMode.Decompress, leaveOpen: true);
         var zReader = new PsdBigEndianReader(z);
@@ -61,6 +58,39 @@ internal sealed class PsdZipPredictDecompressor : PsdDecompressorBase
             zReader.ReadExactly(rowBuffer);
             UndoPredictor8(rowBuffer);
         };
+    }
+
+    protected override void Decompress8RowRegion(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int yStart, int yEnd, IPlaneRowConsumer consumer, CancellationToken ct)
+    {
+        var width = header.Width;
+        var height = header.Height;
+
+        using var z = new ZLibStream(reader.BaseStream, CompressionMode.Decompress, leaveOpen: true);
+        var zReader = new PsdBigEndianReader(z);
+
+        var rentedRow = ArrayPool<byte>.Shared.Rent(width);
+        try
+        {
+            var row = rentedRow.AsSpan(0, width);
+
+            for (var p = 0; p < roles.Length; p++)
+            {
+                for (var y = 0; y < height; y++)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    zReader.ReadExactly(row);
+                    UndoPredictor8(row);
+
+                    if (y >= yStart && y < yEnd)
+                        consumer.ConsumeRow(p, y, row);
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rentedRow);
+        }
     }
 
     private static void UndoPredictor8(Span<byte> row)

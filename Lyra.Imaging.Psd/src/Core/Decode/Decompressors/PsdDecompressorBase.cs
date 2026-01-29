@@ -1,5 +1,4 @@
 using System.Buffers;
-using Lyra.Imaging.Psd.Core.Common;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 using Lyra.Imaging.Psd.Core.Readers;
 using Lyra.Imaging.Psd.Core.SectionData;
@@ -8,35 +7,9 @@ namespace Lyra.Imaging.Psd.Core.Decode.Decompressors;
 
 public abstract class PsdDecompressorBase : IPsdDecompressor
 {
-    protected abstract CompressionType Compression { get; } // TODO remove later
-
     #region Entry Points
 
-    public virtual void ValidatePayload(FileHeader header, ImageData imageData)
-    {
-        // Default: nothing to validate for most compression types.
-        // RLE overrides this to validate its row-byte-count table / total payload.
-    }
-
-    public PlaneImage DecompressPlanes(PsdBigEndianReader reader, FileHeader header, CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(reader);
-
-        ct.ThrowIfCancellationRequested();
-
-        ValidateCommonInputs(header);
-
-        var roles = CompositePlaneRoles.Get(header.ColorMode, header.NumberOfChannels);
-        return header.Depth switch
-        {
-            8 => Decompress8(reader, header, roles, ct),
-            16 => Decompress16(reader, header, roles, ct),
-            32 => Decompress32(reader, header, roles, ct),
-            _ => throw new NotSupportedException($"PSD composite decompress: Depth {header.Depth} not supported. Expected 8, 16, or 32.")
-        };
-    }
-
-    public PlaneImage DecompressPlanesScaled(PsdBigEndianReader reader, FileHeader header, int width, int height, CancellationToken ct)
+    public PlaneImage DecompressPreview(PsdBigEndianReader reader, FileHeader header, int width, int height, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(reader);
         ct.ThrowIfCancellationRequested();
@@ -52,11 +25,41 @@ public abstract class PsdDecompressorBase : IPsdDecompressor
         var roles = CompositePlaneRoles.Get(header.ColorMode, header.NumberOfChannels);
         return header.Depth switch
         {
-            8 => Decompress8Scaled(reader, header, roles, width, height, ct),
-            16 => Decompress16Scaled(reader, header, roles, width, height, ct),
-            32 => Decompress32Scaled(reader, header, roles, width, height, ct),
+            8 => Decompress8Preview(reader, header, roles, width, height, ct),
+            16 => Decompress16Preview(reader, header, roles, width, height, ct),
+            32 => Decompress32Preview(reader, header, roles, width, height, ct),
             _ => throw new NotSupportedException($"PSD composite decompress: Depth {header.Depth} not supported. Expected 8, 16, or 32.")
         };
+    }
+
+    public void DecompressPlanesRowRegion(PsdBigEndianReader reader, FileHeader header, int yStart, int yEnd, IPlaneRowConsumer consumer, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        ArgumentNullException.ThrowIfNull(consumer);
+
+        ct.ThrowIfCancellationRequested();
+        ValidateCommonInputs(header);
+
+        if ((uint)yStart > (uint)header.Height || (uint)yEnd > (uint)header.Height || yStart > yEnd)
+            throw new ArgumentOutOfRangeException(nameof(yStart), $"Invalid row region [{yStart}, {yEnd}) for height {header.Height}.");
+
+        var roles = CompositePlaneRoles.Get(header.ColorMode, header.NumberOfChannels);
+
+        if (header.Depth != 8)
+            throw new NotSupportedException("Row-region decode is currently implemented only for 8-bit. (16/32 will come later.)");
+
+        Decompress8RowRegion(reader, header, roles, yStart, yEnd, consumer, ct);
+    }
+    
+    #endregion
+
+    #region Helpers
+
+    public static PlaneImage AllocatePlaneImage(FileHeader header)
+    {
+        var roles = CompositePlaneRoles.Get(header.ColorMode, header.NumberOfChannels);
+        var planes = AllocatePlanes(header, roles);
+        return new PlaneImage(header.Width, header.Height, header.Depth, planes);
     }
 
     #endregion
@@ -66,20 +69,44 @@ public abstract class PsdDecompressorBase : IPsdDecompressor
     protected abstract PlaneImage Decompress8(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, CancellationToken ct);
 
     protected virtual PlaneImage Decompress16(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, CancellationToken ct)
-        => throw new NotSupportedException($"PSD composite decompress ({Compression}): 16-bit depth not implemented.");
+        => throw new NotSupportedException($"PSD composite decompress ({GetType().Name}): 16-bit depth not implemented.");
 
     protected virtual PlaneImage Decompress32(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, CancellationToken ct)
-        => throw new NotSupportedException($"PSD composite decompress ({Compression}): 32-bit depth not implemented.");
+        => throw new NotSupportedException($"PSD composite decompress ({GetType().Name}): 32-bit depth not implemented.");
 
-    protected virtual PlaneImage Decompress8Scaled(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int width, int height, CancellationToken ct)
-        => throw new NotSupportedException($"PSD composite decompress ({Compression}): scaled 8-bit decode not implemented.");
+    protected virtual PlaneImage Decompress8Preview(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int width, int height, CancellationToken ct)
+        => throw new NotSupportedException($"PSD composite decompress ({GetType().Name}): scaled 8-bit decode not implemented.");
 
-    protected virtual PlaneImage Decompress16Scaled(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int width, int height, CancellationToken ct)
-        => throw new NotSupportedException($"PSD composite decompress ({Compression}): scaled 16-bit decode not implemented.");
+    protected virtual PlaneImage Decompress16Preview(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int width, int height, CancellationToken ct)
+        => throw new NotSupportedException($"PSD composite decompress ({GetType().Name}): scaled 16-bit decode not implemented.");
 
-    protected virtual PlaneImage Decompress32Scaled(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int width, int height, CancellationToken ct)
-        => throw new NotSupportedException($"PSD composite decompress ({Compression}): scaled 32-bit decode not implemented.");
+    protected virtual PlaneImage Decompress32Preview(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int width, int height, CancellationToken ct)
+        => throw new NotSupportedException($"PSD composite decompress ({GetType().Name}): scaled 32-bit decode not implemented.");
 
+    protected virtual void Decompress8RowRegion(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int yStart, int yEnd, IPlaneRowConsumer consumer, CancellationToken ct)
+    {
+        // Fallback implementation for ALL decompressors:
+        // decode full planes once, then emit only the requested region in row-major order.
+        // This is correct and enables the new pipeline immediately.
+        // Later, each decompressor can override for true streaming/seeked region decode.
+        var full = Decompress8(reader, header, roles, ct);
+
+        var width = full.Width;
+        var planeCount = roles.Length;
+
+        for (var y = yStart; y < yEnd; y++)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            for (var p = 0; p < planeCount; p++)
+            {
+                var plane = full.Planes[p];
+                var row = plane.Data.AsSpan(y * plane.BytesPerRow, width);
+                consumer.ConsumeRow(p, y, row);
+            }
+        }
+    }
+    
     #endregion
 
     #region Scaled Decode Logic

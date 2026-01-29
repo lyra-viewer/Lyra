@@ -15,7 +15,7 @@ creative professionals who rely on images as a core resource in their workflow �
 Built on SDL3 and SkiaSharp, Lyra is optimized for browsing collections of texture maps, HDRIs, baked assets, and
 other images exported from tools like Blender, Quixel Bridge or modern DCC pipelines.
 
-> _Development note:_ Lyra is designed and written simultaneously.
+> _Developer note:_ Lyra is designed and written simultaneously.
 > As a result, parts of the code reflect iterative exploration rather than a fully pre-planned architecture.
 > Refactoring is ongoing wherever it improves clarity or maintainability.
 
@@ -43,7 +43,7 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 |------------------|-------------------------------------------------------------------------------|
 | `.png`           | Widely used lossless format, ideal for albedo, roughness, etc.                |
 | `.jpg` / `.jpeg` | Lossy format used for color/albedo maps or previews.                          |
-| `.jfif`          | JPEG File Interchange Format — a JPEG variant seen in EXIF/exported previews. |
+| `.jif` / `.jfif` | JPEG File Interchange Format — a JPEG variant seen in EXIF/exported previews. |
 | `.tga`           | Game engine-friendly format supporting alpha channels.                        |
 | `.tif` / `.tiff` | High-quality textures, often 16/32-bit, used in VFX.                          |
 | `.bmp`           | Rare but used in older or internal pipelines.                                 |
@@ -71,10 +71,10 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 
 ### Vector / Specialized Formats
 
-| Format | Description                                        |
-|--------|----------------------------------------------------|
-| `.svg` | Scalable vector graphics for masks or UI overlays. |
-| `.psd` | Photoshop files (preview-only support).            |
+| Format          | Description                                        |
+|-----------------|----------------------------------------------------|
+| `.svg`          | Scalable vector graphics for masks or UI overlays. |
+| `.psd` / `.psb` | Photoshop files (preview-only support).            |
 
 ### Minor Formats
 
@@ -117,30 +117,43 @@ Open a file or directory by dragging it into Lyra Viewer.
 
 ## Prerequisites & Dependencies
 
-Lyra Viewer is built with .NET Runtime 9.0 and integrates several high-performance libraries designed to handle modern
-image formats and fast rendering:
+Lyra Viewer is builton **.NET 9** and integrates several high-performance libraries designed to handle modern
+image formats, accurate color processing, and GPU-accelerated rendering:
 
-| Library              | Purpose                                        | License       |
-|----------------------|------------------------------------------------|---------------|
-| SDL3-CS              | Core graphics, input, and windowing            | zlib          |
-| SkiaSharp            | Hardware-accelerated 2D rendering              | BSD-3-Clause  |
-| Svg.Skia             | Scalable vector graphics rendering             | MIT           |
-| LibHeifSharp         | HEIF/HEIC format decoding                      | LGPL-3.0      |
-| SixLabors.ImageSharp | Support for TGA, TIFF, and legacy formats      | Apache 2.0    |
-| MetadataExtractor    | Extracts EXIF & image metadata                 | Apache 2.0    |
-| OpenEXR              | High dynamic range (HDR) image decoding (.exr) | BSD-3-Clause  |
-| rgbe                 | Radiance HDR (.hdr) image decoding             | Public Domain |
+| Library              | Purpose                                                                | License       | Repository                                                        |
+|----------------------|------------------------------------------------------------------------|---------------|-------------------------------------------------------------------|
+| SDL3-CS              | Core graphics, input, and windowing                                    | zlib          | [github](https://github.com/ethereal-developers-club/SDL3-CS)     |
+| SkiaSharp            | Hardware-accelerated 2D rendering                                      | BSD-3-Clause  | [github](https://github.com/mono/SkiaSharp)                       |
+| Svg.Skia             | SVG parsing and rendering                                              | MIT           | [github](https://github.com/wieslawsoltes/Svg.Skia)               |
+| SixLabors.ImageSharp | Support for TGA, TIFF, and legacy formats                              | Apache 2.0    | [github](https://github.com/SixLabors/ImageSharp)                 |
+| LibHeifSharp         | HEIF / HEIC image decoding                                             | LGPL-3.0      | [github](https://github.com/0xC0000054/libheif-sharp)             |
+| OpenEXR              | High-dynamic-range OpenEXR (.exr) decoding                             | BSD-3-Clause  | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
+| rgbe                 | Radiance HDR (.hdr) image decoding                                     | Public Domain | [webpage](https://www.graphics.cornell.edu/~bjw/rgbe.html)        |
+| Unicolour            | Color space conversions & perceptual color math (used in PSD decoding) | MIT           | [github](https://github.com/waacton/Unicolour)                    |
+| MetadataExtractor    | EXIF metadata extraction                                               | Apache 2.0    | [github](https://github.com/drewnoakes/metadata-extractor-dotnet) |
 
-For more information, visit the relevant repositories:
+> _Native dependencies:_ Lyra does **not** bundle large native image libraries such as **libheif** or **OpenEXR**.
+> These are expected to be provided by the system package manager (e.g. **Homebrew** on macOS,
+> and other platform-specific package managers on Linux in the future).
+>
+> Lyra only ships **lightweight native interop wrappers** for HDR and EXR decoding.
 
-- [SDL3-CS](https://github.com/ethereal-developers-club/SDL3-CS)
-- [SkiaSharp](https://github.com/mono/SkiaSharp)
-- [Svg.Skia](https://github.com/wieslawsoltes/Svg.Skia)
-- [LibHeifSharp](https://github.com/0xC0000054/libheif-sharp)
-- [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp)
-- [MetadataExtractor](https://github.com/drewnoakes/metadata-extractor-dotnet)
-- [OpenEXR](https://github.com/AcademySoftwareFoundation/openexr)
-- [rgbe](https://www.graphics.cornell.edu/~bjw/rgbe.html)
+---
+
+## Installation
+
+Lyra Viewer is distributed via **Homebrew** on macOS.
+
+### macOS (Homebrew)
+
+```sh
+brew tap lyra-viewer/lyra
+brew install --cask lyra
+```
+
+### Linux
+
+Not available yet.
 
 ---
 
@@ -149,7 +162,6 @@ For more information, visit the relevant repositories:
 - Channel preview (R, G, B, A, RGB)
 - Histogram or levels display for HDR/EXR workflows
 - Support for multi-layer EXR and PSD navigation
-- Integration with asset management tools (e.g., Bridge folder syncing)
 - Image export or format conversion
 - Grid display
 

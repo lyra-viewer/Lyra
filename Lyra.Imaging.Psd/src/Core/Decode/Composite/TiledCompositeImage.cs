@@ -2,7 +2,7 @@ using Lyra.Imaging.Psd.Core.Decode.Pixel;
 
 namespace Lyra.Imaging.Psd.Core.Decode.Composite;
 
-public sealed class TiledCompositeImage : ICompositeImage
+public sealed class TiledCompositeImage : IDisposable
 {
     public int Width { get; }
     public int Height { get; }
@@ -62,13 +62,9 @@ public sealed class TiledCompositeImage : ICompositeImage
 
         var info = GetTileInfo(tileX, tileY);
 
-        // Validate that the provided surface matches the expected tile dimensions
         if (tile.Width != info.Width || tile.Height != info.Height)
-        {
             throw new InvalidOperationException($"Tile size mismatch for ({tileX},{tileY}). Expected {info.Width}x{info.Height}, got {tile.Width}x{tile.Height}.");
-        }
 
-        // Overwrite policy: dispose old tile if overwriting
         _tiles[info.Index]?.Dispose();
         _tiles[info.Index] = tile;
     }
