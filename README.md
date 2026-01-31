@@ -169,6 +169,4 @@ Not available yet.
 
 ## TODO
 
-- Drag & drop state + progress
-- Jump to first / last image within the current directory (when images from multiple directories are loaded)
 - Explain concept of Lyra's collections in the README.md

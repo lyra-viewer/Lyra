@@ -4,7 +4,7 @@ using SkiaSharp;
 
 namespace Lyra.Renderer.Overlay;
 
-public partial class ImageInfoOverlay : IOverlay<(Composite? composite, ViewerState states)>
+public partial class ImageInfoOverlay : IOverlay<(Composite? composite, ApplicationStates states)>
 {
     public float Scale { get; set; }
     public SKFont? Font { get; set; }
@@ -36,7 +36,7 @@ public partial class ImageInfoOverlay : IOverlay<(Composite? composite, ViewerSt
         Font = FontHelper.GetScaledMonoFont(14, Scale);
     }
 
-    public void Render(SKCanvas canvas, DrawableBounds drawableBounds, SKColor textPaint, (Composite? composite, ViewerState states) data)
+    public void Render(SKCanvas canvas, DrawableBounds drawableBounds, SKColor textPaint, (Composite? composite, ApplicationStates states) data)
     {
         if (Font == null || data.composite == null) return;
 

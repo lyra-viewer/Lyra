@@ -1,3 +1,4 @@
+using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.FileLoader;
 using Lyra.Imaging.Content;
@@ -33,8 +34,12 @@ public class SkiaOpenGlRenderer : IRenderer
     private SKPoint _offset = SKPoint.Empty;
     private DisplayMode _displayMode = DisplayMode.Undefined;
 
-    public SkiaOpenGlRenderer(IntPtr window)
+    private readonly IDropStatusProvider _dropStatusProvider;
+
+    public SkiaOpenGlRenderer(IntPtr window, IDropStatusProvider dropStatusProvider)
     {
+        _dropStatusProvider = dropStatusProvider;
+
         Subscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
 
         GLSetAttribute(GLAttr.ContextMajorVersion, 3);
@@ -144,9 +149,14 @@ public class SkiaOpenGlRenderer : IRenderer
         var textColor = _backgroundMode == BackgroundMode.White ? SKColors.Black : SKColors.White;
 
         if (_infoMode != InfoMode.None)
-            _imageInfoOverlay.Render(canvas, bounds, textColor, (_composite, GetViewerState()));
+            _imageInfoOverlay.Render(canvas, bounds, textColor, (_composite, GetApplicationStates()));
 
-        if (_composite is null || _composite.IsEmpty)
+        var drop = _dropStatusProvider.GetDropStatus();
+        if (drop is { Active: true, FilesEnumerated: > 300 })
+        {
+            _centeredOverlay.Render(canvas, bounds, textColor, $"{drop.FilesSupported} images found, {drop.FilesEnumerated} files scanned...");
+        }
+        else if (_composite is null || _composite.IsEmpty)
         {
             if (_composite?.State == CompositeState.Loading)
                 _centeredOverlay.Render(canvas, bounds, textColor, "Loading...");
@@ -175,11 +185,12 @@ public class SkiaOpenGlRenderer : IRenderer
         }
     }
 
-    private ViewerState GetViewerState()
+    private ApplicationStates GetApplicationStates()
     {
         var navigation = DirectoryNavigator.GetNavigation();
+        var drop = _dropStatusProvider.GetDropStatus();
 
-        return new ViewerState
+        return new ApplicationStates
         {
             CollectionType = DirectoryNavigator.GetCollectionType().Description(),
             CollectionIndex = navigation.CollectionIndex,
@@ -189,7 +200,12 @@ public class SkiaOpenGlRenderer : IRenderer
             Zoom = _zoomPercentage,
             DisplayMode = _displayMode.Description(),
             SamplingMode = GetSamplingModeDescription(),
-            ShowExif = _infoMode == InfoMode.WithExif
+            ShowExif = _infoMode == InfoMode.WithExif,
+            DropActive = drop.Active,
+            DropAborted = drop.Aborted,
+            DropPathsEnqueued   = drop.PathsEnqueued,
+            DropFilesEnumerated = drop.FilesEnumerated,
+            DropFilesSupported  = drop.FilesSupported,
         };
     }
 

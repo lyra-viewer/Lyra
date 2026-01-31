@@ -32,7 +32,6 @@ public sealed class RasterLargeContent : ICompositeContent
 
     private int _tilesReady;
     public int TilesReady => Volatile.Read(ref _tilesReady);
-    public bool PreferTiles { get; set; }
     public int? TilesTotal { get; private set; }
 
     public void SetTilesTotal(int total)

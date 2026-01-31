@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.Common", "Lyra.Common\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.Imaging.Psd", "Lyra.Imaging.Psd\Lyra.Imaging.Psd.csproj", "{C69F4058-5E16-4301-9F84-8DED57BD8368}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.Core.Tests", "Lyra.Core.Tests\Lyra.Core.Tests.csproj", "{58FBFD0E-366E-4AD5-8B38-5024FBF0A8B6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{C69F4058-5E16-4301-9F84-8DED57BD8368}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C69F4058-5E16-4301-9F84-8DED57BD8368}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C69F4058-5E16-4301-9F84-8DED57BD8368}.Release|Any CPU.Build.0 = Release|Any CPU
+		{58FBFD0E-366E-4AD5-8B38-5024FBF0A8B6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{58FBFD0E-366E-4AD5-8B38-5024FBF0A8B6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{58FBFD0E-366E-4AD5-8B38-5024FBF0A8B6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{58FBFD0E-366E-4AD5-8B38-5024FBF0A8B6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

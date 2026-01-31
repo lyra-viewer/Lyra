@@ -5,7 +5,7 @@ namespace Lyra.Renderer.Overlay;
 
 public partial class ImageInfoOverlay
 {
-    private static List<string> BuildLines(Composite composite, ViewerState states)
+    private static List<string> BuildLines(Composite composite, ApplicationStates states)
     {
         var fileInfo = composite.FileInfo;
         var fileSize = SizeToStr(fileInfo.Length);
@@ -27,7 +27,7 @@ public partial class ImageInfoOverlay
         };
 
 #if DEBUG
-        lines.AddRange(BuildDebugLines(composite));
+        lines.AddRange(BuildDebugLines(composite, states));
 #endif
 
         if (states.ShowExif)
@@ -39,8 +39,10 @@ public partial class ImageInfoOverlay
         return lines;
     }
 
-    private static IEnumerable<string> BuildDebugLines(Composite composite)
+    private static IEnumerable<string> BuildDebugLines(Composite composite, ApplicationStates states)
     {
+        var dropStatus = states.DropAborted ? "Aborted  |  " : (states.DropActive ? "Active  |  " : "");
+        
         yield return "";
         yield return "";
         yield return "";
@@ -49,6 +51,8 @@ public partial class ImageInfoOverlay
         yield return $"<d>[State]         {composite.State.Description()}</>";
         yield return $"<d>[Decoder]       {composite.DecoderName}</>";
         yield return $"<d>[Time (ms)]     Estimated: {MsToStr(composite.LoadTimeEstimated)}  |  Elapsed: {MsToStr(composite.LoadTimeComplete)}</>";
+        yield return "";
+        yield return $"<d>[Drag & Drop]   {dropStatus}Paths Enqueued: {states.DropPathsEnqueued}  |  All Files: {states.DropFilesEnumerated}  |  Supported: {states.DropFilesSupported}</>";
     }
 
     private static IEnumerable<string> BuildFormatSpecificLines(Composite composite)

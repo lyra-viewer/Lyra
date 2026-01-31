@@ -1,6 +1,4 @@
-using System.Runtime.InteropServices;
 using Lyra.Common;
-using Lyra.FileLoader;
 using static Lyra.Common.Events.EventManager;
 using static SDL3.SDL;
 
@@ -8,9 +6,6 @@ namespace Lyra.SdlCore;
 
 public partial class SdlCore
 {
-    private readonly List<string> _currentDroppedPaths = [];
-    private bool _collectingDrop = false; // TODO
-    
     private void HandleEvents()
     {
         while (PollEvent(out var e))
@@ -73,40 +68,6 @@ public partial class SdlCore
                     break;
             }
         }
-    }
-
-    private void OnDropBegin()
-    {
-        Logger.Info("[EventHandler] File drop started.");
-        _currentDroppedPaths.Clear();
-        _collectingDrop = true;
-    }
-
-    private void OnDropFile(Event e)
-    {
-        var droppedFilePtr = e.Drop.Data;
-        var droppedFilePath = Marshal.PtrToStringUTF8(droppedFilePtr);
-        if (droppedFilePath != null)
-            _currentDroppedPaths.Add(droppedFilePath);
-    }
-
-    private void OnDropComplete()
-    {
-        Logger.Info($"[EventHandler] File drop completed. Paths count: {_currentDroppedPaths.Count}");
-        _collectingDrop = false;
-
-        if (_currentDroppedPaths.Count == 0)
-            return;
-
-        if (_currentDroppedPaths.Count == 1)
-            DirectoryNavigator.SearchImages(_currentDroppedPaths[0]);
-        else
-            DirectoryNavigator.SearchImages(_currentDroppedPaths);
-
-        LoadImage();
-        _currentDroppedPaths.Clear();
-
-        DeferUntilWarm(() => RaiseWindow(_window));
     }
 
     private void OnWindowResized()

@@ -1,10 +1,10 @@
-using Lyra.Common;
+using Lyra.PathUtils;
 
 namespace Lyra.FileLoader;
 
 public static class DirectoryNavigator
 {
-    private static string? _anchorFile;
+    private static CollectionType _collectionType = CollectionType.Undefined;
 
     private static List<string> _imageList = [];
     private static int _currentIndex = -1;
@@ -12,69 +12,28 @@ public static class DirectoryNavigator
 
     private static string? _topDirectory;
 
-    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-
-    public static void SearchImages(string path)
+    public static void ApplyCollection(List<string> files, FileDropContext dropContext, bool? singleDirectory, string? topDirectory)
     {
-        if (string.IsNullOrWhiteSpace(path) || (!File.Exists(path) && !Directory.Exists(path)))
-            throw new ArgumentException("[DirectoryNavigator] Invalid path!", nameof(path));
+        _topDirectory = topDirectory;
+        _collectionType = DecideCollectionType(dropContext);
 
-        var isDir = (File.GetAttributes(path) & FileAttributes.Directory) != 0;
-
-        string currentDir;
-        string? anchorCandidate = null;
-
-        if (isDir)
-        {
-            currentDir = path;
-        }
-        else
-        {
-            currentDir = Path.GetDirectoryName(path) ?? throw new ArgumentException("[DirectoryNavigator] Invalid path!", nameof(path));
-            anchorCandidate = path;
-        }
-
-        var files = FilePathProcessor.ProcessImagePaths([currentDir], isDir, out var singleDirectory, out _topDirectory);
-        if (anchorCandidate is null && files.Count > 0)
-            anchorCandidate = files[0];
-
-        SetCollection(files, anchorCandidate, singleDirectory);
-
-        Logger.Info($"[DirectoryNavigator] {_imageList.Count} images in directory.");
+        ApplyCollectionInternal(files, dropContext.AnchorPath, singleDirectory);
     }
 
-    public static void SearchImages(List<string> paths)
-    {
-        if (paths is null || paths.Count == 0)
-            throw new ArgumentException("[DirectoryNavigator] Invalid path list!", nameof(paths));
-
-        var anchorCandidate = paths
-            .Where(File.Exists)
-            .FirstOrDefault(p => ImageFormat.IsSupported(Path.GetExtension(p)));
-
-        var files = FilePathProcessor.ProcessImagePaths(paths, recurseSubdirs: null, out var singleDirectory, out _topDirectory);
-
-        if (anchorCandidate is null && files.Count > 0)
-            anchorCandidate = files[0];
-
-        SetCollection(files, anchorCandidate, singleDirectory);
-
-        Logger.Info($"[DirectoryNavigator] {_imageList.Count} files in collection.");
-    }
-
-    private static void SetCollection(List<string> files, string? anchorCandidate, bool? singleDirectory)
+    private static void ApplyCollectionInternal(List<string> files, string? anchorCandidate, bool? singleDirectory)
     {
         string? newAnchor = null;
 
-        if (anchorCandidate != null)
+        if (!string.IsNullOrWhiteSpace(anchorCandidate))
             newAnchor = files.FirstOrDefault(f => PathComparer.Equals(f, anchorCandidate));
 
         newAnchor ??= files.Count > 0 ? files[0] : null;
 
-        var newIndex = (newAnchor != null) ? files.FindIndex(f => PathComparer.Equals(f, newAnchor)) : -1;
+        var newIndex = (newAnchor != null)
+            ? files.FindIndex(f => PathComparer.Equals(f, newAnchor))
+            : -1;
 
         _singleDirectory = singleDirectory;
-        _anchorFile = newAnchor;
         _imageList = files;
         _currentIndex = newIndex;
     }
@@ -121,6 +80,61 @@ public static class DirectoryNavigator
         _currentIndex = _imageList.Count - 1;
     }
 
+    public static void MoveToLeftEdge() => MoveToDirEdge(goToStart: true);
+    public static void MoveToRightEdge() => MoveToDirEdge(goToStart: false);
+
+    private static void MoveToDirEdge(bool goToStart)
+    {
+        if (_imageList.Count == 0 || (uint)_currentIndex >= (uint)_imageList.Count)
+            return;
+
+        if (_singleDirectory is true)
+        {
+            if (goToStart) MoveToFirst();
+            else MoveToLast();
+            return;
+        }
+
+        var currentDir = GetNormalizedDir(_imageList[_currentIndex]);
+        if (currentDir is null)
+            return;
+
+        var (start, end) = GetContiguousDirBounds(seedIndex: _currentIndex, normalizedDir: currentDir);
+
+        var edge = goToStart ? start : end;
+        if (_currentIndex != edge)
+        {
+            _currentIndex = edge;
+            return;
+        }
+
+        // Already at edge → jump to neighbor directory's opposite edge
+        var neighborProbe = goToStart ? start - 1 : end + 1;
+        if ((uint)neighborProbe >= (uint)_imageList.Count)
+        {
+            if (goToStart) MoveToFirst();
+            else MoveToLast();
+            return;
+        }
+
+        var neighborDir = GetNormalizedDir(_imageList[neighborProbe]);
+        if (neighborDir is null)
+            return;
+
+        var (ns, ne) = GetContiguousDirBounds(seedIndex: neighborProbe, normalizedDir: neighborDir);
+        _currentIndex = goToStart ? ne : ns;
+    }
+
+    private static string? GetNormalizedDir(string filePath)
+    {
+        var dir = Path.GetDirectoryName(filePath);
+        if (string.IsNullOrWhiteSpace(dir))
+            return null;
+
+        return Path.GetFullPath(dir)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
     public static bool HasNext()
     {
         return _imageList.Count > 0 && _currentIndex < _imageList.Count - 1;
@@ -156,23 +170,22 @@ public static class DirectoryNavigator
     /// </returns>
     public static string[] GetRange(int depth)
     {
-        List<string> paths = [];
-
-        if (depth < 0 || _imageList.Count == 0 || _currentIndex < 0)
-            return paths.ToArray();
+        if (depth < 0 || _imageList.Count == 0 || (uint)_currentIndex >= (uint)_imageList.Count)
+            return [];
 
         var start = Math.Max(0, _currentIndex - depth);
         var end = Math.Min(_imageList.Count - 1, _currentIndex + depth);
 
-        for (var i = start; i <= end; i++)
-            paths.Add(_imageList[i]);
+        var result = new string[end - start + 1];
+        for (int i = start, j = 0; i <= end; i++, j++)
+            result[j] = _imageList[i];
 
-        return paths.ToArray();
+        return result;
     }
 
     public static Navigation GetNavigation()
     {
-        var navigation = new Navigation()
+        var navigation = new Navigation
         {
             CollectionCount = _imageList.Count,
             CollectionIndex = _currentIndex + 1,
@@ -180,49 +193,71 @@ public static class DirectoryNavigator
             DirectoryIndex = null
         };
 
-        if (GetCollectionType() == CollectionType.MultiDirectorySelection &&
-            _currentIndex >= 0 &&
-            _currentIndex < _imageList.Count)
-        {
-            var currentFile = _imageList[_currentIndex];
-            var currentDir = Path.GetDirectoryName(currentFile);
+        if (GetCollectionType() != CollectionType.MultiDirectorySelection || _imageList.Count == 0 || (uint)_currentIndex >= (uint)_imageList.Count)
+            return navigation;
 
-            if (!string.IsNullOrEmpty(currentDir))
-            {
-                var normalizedCurrentDir = Path.GetFullPath(currentDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                var imagesInDir = _imageList
-                    .Select(f => new { File = f, Dir = Path.GetDirectoryName(f) })
-                    .Where(x =>
-                        !string.IsNullOrEmpty(x.Dir) &&
-                        PathComparer.Equals(
-                            Path.GetFullPath(x.Dir!).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                            normalizedCurrentDir))
-                    .Select(x => x.File)
-                    .ToList();
+        var currentDir = GetNormalizedDir(_imageList[_currentIndex]);
+        if (currentDir is null)
+            return navigation;
 
-                navigation.DirectoryCount = imagesInDir.Count;
-                navigation.DirectoryIndex = imagesInDir.FindIndex(f => PathComparer.Equals(f, currentFile)) + 1;
-            }
-        }
+        var (start, end) = GetContiguousDirBounds(_currentIndex, currentDir);
 
+        navigation.DirectoryCount = end - start + 1;
+        navigation.DirectoryIndex = _currentIndex - start + 1;
         return navigation;
     }
 
-    public static string? GetTopDirectory()
+    private static (int Start, int End) GetContiguousDirBounds(int seedIndex, string normalizedDir)
     {
-        return _topDirectory;
+        var start = seedIndex;
+        while (start > 0)
+        {
+            var dir = GetNormalizedDir(_imageList[start - 1]);
+            if (dir is null || !PathComparer.Equals(dir, normalizedDir))
+                break;
+
+            start--;
+        }
+
+        var end = seedIndex;
+        while (end < _imageList.Count - 1)
+        {
+            var dir = GetNormalizedDir(_imageList[end + 1]);
+            if (dir is null || !PathComparer.Equals(dir, normalizedDir))
+                break;
+
+            end++;
+        }
+
+        return (start, end);
     }
+
+    public static string? GetTopDirectory() => _topDirectory;
 
     public static CollectionType GetCollectionType()
     {
-        if (_imageList.Count == 0 || _singleDirectory is null)
-            return CollectionType.Undefined;
+        return _imageList.Count == 0 ? CollectionType.Undefined : _collectionType;
+    }
 
-        if (_singleDirectory == true)
-            return _anchorFile is not null
-                ? CollectionType.SingleDirectoryCollection
-                : CollectionType.SingleDirectorySelection;
+    private static CollectionType DecideCollectionType(FileDropContext ctx)
+    {
+        // SingleDirectoryCollection ("open with" semantics)
+        if (ctx.ExplicitFiles.Count == 1 && ctx.ExplicitDirectories.Count == 0 && ctx.IsSingleFileOpen)
+            return CollectionType.SingleDirectoryCollection;
 
+        // SingleDirectoryCollection (one directory if no subdirs, otherwise multi)
+        if (ctx.ExplicitDirectories.Count == 1 && ctx.ExplicitFiles.Count == 0)
+        {
+            return PathUtils.PathUtils.DirectoryHasSubdirectories(ctx.ExplicitDirectories[0])
+                ? CollectionType.MultiDirectorySelection
+                : CollectionType.SingleDirectoryCollection;
+        }
+
+        // SingleDirectorySelection (many files, same directory) 
+        if (ctx.ExplicitFiles.Count > 1 && ctx.ExplicitDirectories.Count == 0 && ctx.IsSameDirectoryGroup)
+            return CollectionType.SingleDirectorySelection;
+
+        // MultiDirectorySelection
         return CollectionType.MultiDirectorySelection;
     }
 

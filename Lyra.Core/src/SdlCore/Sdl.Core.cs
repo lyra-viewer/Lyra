@@ -15,6 +15,8 @@ public partial class SdlCore : IDisposable
     private readonly GpuBackend _backend;
     private bool _running = true;
 
+    private readonly DropStats _dropStats = new();
+
     // IMPORTANT: Certain window operations (bring-to-front, fullscreen) are
     // unreliable if performed too early, even when confirmed by SDL events.
     // To avoid unstable behavior, these actions are deferred until a few
@@ -56,7 +58,7 @@ public partial class SdlCore : IDisposable
         if (_backend == GpuBackend.OpenGL)
         {
             _window = CreateWindow("Lyra Viewer (OpenGL)", 0, 0, flags | WindowFlags.OpenGL);
-            _renderer = new SkiaOpenGlRenderer(_window);
+            _renderer = new SkiaOpenGlRenderer(_window, _dropStats);
         }
         else if (_backend == GpuBackend.Vulkan)
         {

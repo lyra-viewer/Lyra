@@ -61,6 +61,14 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
         if (composite.LogicalWidth <= 0 || composite.LogicalHeight <= 0)
             return;
 
+        // Safety: if there's no preview, rely on tiles.
+        if (!hasPreview)
+        {
+            foreach (var tile in rasterLarge.TileSource.GetTiles(visibleFullRect, new SKSize(composite.LogicalWidth, composite.LogicalHeight)))
+                canvas.DrawImage(tile.Image, tile.DestRect, sampling);
+            return;
+        }
+
         // Pixels-per-full-unit provided by preview
         var previewPpfuX = rasterLarge.PreviewImage.Width / composite.LogicalWidth;
         var previewPpfuY = rasterLarge.PreviewImage.Height / composite.LogicalHeight;
@@ -69,24 +77,12 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
         // Pixels-per-full-unit required by current view
         var screenPpfu = zoomScale * displayScale;
 
-        // Hysteresis:
-        // - below 0.95x -> definitely fits (preview only)
-        // - above 1.05x -> definitely doesn't fit (start tiles)
-        const float startTilesAt = 1.10f;
-        const float stopTilesAt = 1.00f;
+        // Start tiling when demand exceeds what the preview can provide (with a small tolerance).
+        // Example: 1.05 means it allows up to 5% upscale of the preview before switching to tiles.
+        const float tileThreshold = 1.05f;
 
-        if (!rasterLarge.PreferTiles)
-        {
-            if (screenPpfu > previewPpfu * startTilesAt)
-                rasterLarge.PreferTiles = true;
-        }
-        else
-        {
-            if (screenPpfu < previewPpfu * stopTilesAt)
-                rasterLarge.PreferTiles = false;
-        }
-
-        if (!rasterLarge.PreferTiles)
+        var useTiles = screenPpfu > previewPpfu * tileThreshold;
+        if (!useTiles)
             return;
 
         foreach (var tile in rasterLarge.TileSource.GetTiles(visibleFullRect, new SKSize(composite.LogicalWidth, composite.LogicalHeight))) 

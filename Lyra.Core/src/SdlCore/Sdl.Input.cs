@@ -23,7 +23,7 @@ public partial class SdlCore
     {
         _scanActions = new Dictionary<Scancode, Action>
         {
-            { Scancode.Escape, ExitApplication },
+            { Scancode.Escape, HandleEscape },
             { Scancode.Right, NextImage },
             { Scancode.Left, PreviousImage },
             { Scancode.Home, FirstImage },
@@ -42,7 +42,11 @@ public partial class SdlCore
 
     private void HandleScancode(Scancode scancode, Keymod mods)
     {
-        if ((mods & Keymod.Ctrl) != 0 || (mods & Keymod.GUI) != 0)
+        var command = (mods & (Keymod.Ctrl | Keymod.GUI)) != 0;
+        var option = (mods & Keymod.Alt) != 0;
+
+        if (command)
+        {
             switch (scancode)
             {
                 case Scancode.Left:
@@ -52,10 +56,34 @@ public partial class SdlCore
                     LastImage();
                     return;
             }
+        }
+        else if (option)
+        {
+            switch (scancode)
+            {
+                case Scancode.Left:
+                    MoveToLeftEdge();
+                    return;
+                case Scancode.Right:
+                    MoveToRightEdge();
+                    return;
+            }
+        }
         else if (_scanActions.TryGetValue(scancode, out var scanAction))
         {
             scanAction.Invoke();
         }
+    }
+    
+    private void HandleEscape()
+    {
+        if (_dropStats.GetDropStatus().Active)
+        {
+            CancelDrop();
+            return;
+        }
+
+        ExitApplication();
     }
 
     private void NextImage()
@@ -94,7 +122,25 @@ public partial class SdlCore
         }
     }
 
-    private int _lastWindowWidth;
+    private void MoveToLeftEdge()
+    {
+        if (!DirectoryNavigator.IsFirst())
+        {
+            DirectoryNavigator.MoveToLeftEdge();
+            LoadImage();
+        }
+    }
+
+    private void MoveToRightEdge()
+    {
+        if (!DirectoryNavigator.IsLast())
+        {
+            DirectoryNavigator.MoveToRightEdge();
+            LoadImage();
+        }
+    }
+
+private int _lastWindowWidth;
     private int _lastWindowHeight;
     private int _lastWindowX;
     private int _lastWindowY;

@@ -20,12 +20,17 @@ internal class HeifDecoder : IImageDecoder
 
         await Task.Run(() =>
         {
+            ct.ThrowIfCancellationRequested();
+
             try
             {
                 using var heifContext = new HeifContext(path);
                 using var imageHandle = heifContext.GetPrimaryImageHandle();
+
+                // Decode as 8-bit RGBA interleaved.
                 using var decodedImage = imageHandle.Decode(HeifColorspace.Rgb, HeifChroma.InterleavedRgba32);
 
+                // EXIF
                 var exifData = imageHandle.GetExifMetadata();
                 if (exifData != null)
                 {
@@ -36,28 +41,64 @@ internal class HeifDecoder : IImageDecoder
                 var width = decodedImage.Width;
                 var height = decodedImage.Height;
 
-                var planeData = decodedImage.GetPlane(HeifChannel.Interleaved);
-                var scan0 = planeData.Scan0;
+                var plane = decodedImage.GetPlane(HeifChannel.Interleaved);
+                var src = plane.Scan0;
+                if (src == IntPtr.Zero)
+                    throw new InvalidOperationException("HEIF decode returned null interleaved plane.");
+
+                var srcStride = plane.Stride;
 
                 var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-                var skiaBitmap = new SKBitmap(info);
+                using var bitmap = new SKBitmap(info);
 
                 unsafe
                 {
-                    fixed (void* dstPtr = &skiaBitmap.GetPixelSpan().GetPinnableReference())
+                    var dstSpan = bitmap.GetPixelSpan();
+                    fixed (void* dstBase = &dstSpan.GetPinnableReference())
                     {
-                        Buffer.MemoryCopy((void*)scan0, dstPtr, skiaBitmap.ByteCount, skiaBitmap.ByteCount);
+                        byte* srcBase = (byte*)src;
+                        byte* dst = (byte*)dstBase;
+
+                        var bytesPerPixel = 4;
+                        var rowBytes = width * bytesPerPixel;
+
+                        // Destination row stride
+                        var dstStride = bitmap.RowBytes;
+
+                        // Safety: never copy more than either row allows
+                        var copyBytes = Math.Min(rowBytes, Math.Min(srcStride, dstStride));
+
+                        for (var y = 0; y < height; y++)
+                        {
+                            ct.ThrowIfCancellationRequested();
+
+                            var srcRow = srcBase + (y * srcStride);
+                            var dstRow = dst + (y * dstStride);
+
+                            Buffer.MemoryCopy(srcRow, dstRow, dstStride, copyBytes);
+
+                            // If dstStride > copyBytes, the remaining bytes are left as-is.
+                            // That’s fine; Skia will ignore padding.
+                        }
                     }
                 }
 
-                composite.Content = new RasterContent(SKImage.FromBitmap(skiaBitmap));
-                return composite;
+                composite.Content = new RasterContent(SKImage.FromBitmap(bitmap));
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal cancel path; don't spam warnings.
+                throw;
+            }
+            catch (HeifException e)
+            {
+                // Important: this is expected for some libheif test images (e.g. 'unci').
+                Logger.Warning($"[HeifDecoder] Unsupported HEIF feature for file: {path}\n{e.Message}");
             }
             catch (Exception e)
             {
                 Logger.Warning($"[HeifDecoder] Image could not be loaded: {path}\n{e}");
-                return composite;
             }
-        });
+        }, ct);
     }
 }
