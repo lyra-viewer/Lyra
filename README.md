@@ -86,6 +86,60 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 
 ---
 
+## PSD / PSB Decoding Model
+
+Lyra currently focuses on decoding the flattened Image Data section of Photoshop files, rather than individual layers.
+This design choice prioritizes performance, and fast previewing.
+
+This is explicitly documented because the Image Data section is not strictly mandatory in the PSD specification and,
+in some edge cases, may be missing or may not fully represent the document as it appears when opened in Photoshop.
+
+![Photoshop file structure](docs/images/psd-file-structure.gif)
+
+[Adobe Photoshop File Format Specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/PhotoshopFileFormats.htm#50577409_pgfId-1036097)
+
+### Supported Color Modes
+
+At the moment, Lyra supports decoding the following Photoshop color modes from Image Data:
+
+- 8-bit RGB
+- 8-bit CMYK
+
+Support for other modes (16-bit, 32-bit, Lab, Grayscale, Indexed, Bitmap...) will be implemented.
+
+### PSB Support
+
+Lyra fully supports PSB (Photoshop Big Document Format) files.
+
+- Successfully tested with ~3 GB PSB files
+- Uses streaming / tiled decoding internally where possible to avoid loading entire images eagerly
+
+### ICC Color Profiles
+
+Lyra honors embedded ICC color profiles whenever they are present.
+If a PSD / PSB document does not contain an embedded profile - most notably in **CMYK** color modes — Lyra falls back to
+the system’s default color profile to produce a usable result.
+
+Without an explicit ICC profile, CMYK data has no well-defined color meaning.
+In such cases, different viewers may interpret the same document very differently, sometimes resulting in
+severely distorted or inverted-looking colors.
+
+Lyra’s fallback behavior is intended to be predictable and standards-compliant rather than attempting
+heuristic or hard-coded CMYK assumptions.
+
+> _Developer note:_ During development, Lyra was tested against several large CMYK PSB files from the NASA public image archive.
+> These documents did not contain embedded ICC profiles and produced drastically different results across common
+> image viewers - ranging from heavily shifted colors to near-inverted appearances.
+>
+> This behavior is not a defect of the files themselves, but a direct consequence of CMYK data being interpreted
+> without a defined color profile.
+
+### Future Direction
+
+The PSD decoder is intentionally structured to allow future expansion.
+
+---
+
 ## Keyboard Shortcuts & Controls
 
 | Key            | Action                                                |
@@ -109,15 +163,27 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 | `⌘ ←` / `⌘ →` | First / Last image                      |
 | `⌥ ←` / `⌥ →` | First / Last image within the directory |
 
-### Drag & Drop
+### Open With / Drag & Drop
 
-Open a file or directory by dragging it into Lyra Viewer.
+| Context                                    | How Lyra interprets it                   | Make a collection from files around | Recursion |
+|--------------------------------------------|------------------------------------------|-------------------------------------|-----------|
+| **Single file**                            | Anchor (Open / Open With / Double-click) | Yes                                 | No        |
+| **Multiple files (same directory)**        | Selection                                | No                                  | No        |
+| **Single directory**                       | Directory collection                     | No                                  | Yes       |
+| **Multiple directories**                   | Multi-directory collection               | No                                  | Yes       |
+| **Mixed files from different directories** | Multi-directory selection                | No                                  | No        |
+
+> Recursion applies only when directories are explicitly dropped.
+> Opening or dropping files never implicitly expands into subdirectories.
+
+> _Developer note:_ Lyra intentionally favors context-aware navigation.
+> Opening a single image always implies “show me this image in relation to its neighbors”, not isolation.
 
 ---
 
 ## Prerequisites & Dependencies
 
-Lyra Viewer is builton **.NET 9** and integrates several high-performance libraries designed to handle modern
+Lyra Viewer is built on **.NET 9** and integrates several high-performance libraries designed to handle modern
 image formats, accurate color processing, and GPU-accelerated rendering:
 
 | Library              | Purpose                                                                | License       | Repository                                                        |
@@ -166,7 +232,3 @@ Not available yet.
 - Grid display
 
 ---
-
-## TODO
-
-- Explain concept of Lyra's collections in the README.md
