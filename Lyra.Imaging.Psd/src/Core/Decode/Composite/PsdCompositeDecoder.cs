@@ -1,6 +1,6 @@
 using Lyra.Imaging.Psd.Core.Common;
-using Lyra.Imaging.Psd.Core.Decode.Color;
-using Lyra.Imaging.Psd.Core.Decode.Color.ColorCalibration;
+using Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
+using Lyra.Imaging.Psd.Core.Decode.ColorProcessors;
 using Lyra.Imaging.Psd.Core.Decode.Decompressors;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 using Lyra.Imaging.Psd.Core.Primitives;
@@ -122,6 +122,7 @@ public static class PsdCompositeDecoder
         var header = psdDocument.FileHeader;
         var imageResources = psdDocument.ImageResources;
         var imageData = psdDocument.ImageData;
+        var colorModeData = psdDocument.ColorModeData;
         var metadata = psdDocument.PsdMetadata;
 
         metadata.CompressionType = imageData.CompressionType.ToString();
@@ -166,7 +167,7 @@ public static class PsdCompositeDecoder
         );
 
         var processor = ColorModeProcessorFactory.GetProcessor(header.ColorMode);
-        var processedSurface = processor.Process(sink.Image, ctx, cancellationToken);
+        var processedSurface = processor.Process(sink.Image, ctx, colorModeData, cancellationToken);
 
         metadata.EmbeddedIccProfileName = IccProfileNameExtractor.GetProfileNameOrNull(iccProfile);
         metadata.EffectiveIccProfileName = processor.IccProfileUsed;
@@ -179,6 +180,7 @@ public static class PsdCompositeDecoder
         var header = psdDocument.FileHeader;
         var imageResources = psdDocument.ImageResources;
         var imageData = psdDocument.ImageData;
+        var colorModeData = psdDocument.ColorModeData;
         var metadata = psdDocument.PsdMetadata;
 
         metadata.CompressionType = imageData.CompressionType.ToString();
@@ -213,7 +215,7 @@ public static class PsdCompositeDecoder
         );
 
         var processor = ColorModeProcessorFactory.GetProcessor(header.ColorMode);
-        var processedSurface = processor.Process(planes, ctx, cancellationToken);
+        var processedSurface = processor.Process(planes, ctx, colorModeData, cancellationToken);
 
         metadata.EmbeddedIccProfileName = IccProfileNameExtractor.GetProfileNameOrNull(iccProfile);
         metadata.EffectiveIccProfileName = processor.IccProfileUsed;
@@ -226,6 +228,7 @@ public static class PsdCompositeDecoder
         var header = psdDocument.FileHeader;
         var imageResources = psdDocument.ImageResources;
         var imageData = psdDocument.ImageData;
+        var colorModeData = psdDocument.ColorModeData;
         var metadata = psdDocument.PsdMetadata;
 
         metadata.CompressionType = imageData.CompressionType.ToString();
@@ -266,7 +269,7 @@ public static class PsdCompositeDecoder
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var tileSurface = processor.Process(tilePlanes, ctx, cancellationToken);
+            var tileSurface = processor.Process(tilePlanes, ctx, colorModeData, cancellationToken);
             tiled.SetTile(tileX, tileY, tileSurface);
 
             sink!.ReleaseTilePlanes(tileX, tileY);
@@ -313,6 +316,7 @@ public static class PsdCompositeDecoder
         var header = psdDocument.FileHeader;
         var imageResources = psdDocument.ImageResources;
         var imageData = psdDocument.ImageData;
+        var colorModeData = psdDocument.ColorModeData;
         var metadata = psdDocument.PsdMetadata;
 
         metadata.CompressionType = imageData.CompressionType.ToString();
@@ -350,7 +354,7 @@ public static class PsdCompositeDecoder
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var tileSurface = processor.Process(tilePlanes, ctx, cancellationToken);
+            var tileSurface = processor.Process(tilePlanes, ctx, colorModeData, cancellationToken);
             tiled.SetTile(tileX, tileY, tileSurface);
 
             sink!.ReleaseTilePlanes(tileX, tileY);

@@ -1,4 +1,4 @@
-namespace Lyra.Imaging.Psd.Core.Decode.Color.ColorCalibration;
+namespace Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
 
 /// <summary>
 /// Per-channel 8-bit lookup tables used as a fast approximation of an ICC transform.

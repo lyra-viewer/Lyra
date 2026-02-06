@@ -74,7 +74,7 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 | Format          | Description                                        |
 |-----------------|----------------------------------------------------|
 | `.svg`          | Scalable vector graphics for masks or UI overlays. |
-| `.psd` / `.psb` | Photoshop files (preview-only support).            |
+| `.psd` / `.psb` | Photoshop document files.                          |
 
 ### Minor Formats
 
@@ -104,8 +104,9 @@ At the moment, Lyra supports decoding the following Photoshop color modes from I
 
 - 8-bit RGB
 - 8-bit CMYK
+- 8-bit Indexed
 
-Support for other modes (16-bit, 32-bit, Lab, Grayscale, Indexed, Bitmap...) will be implemented.
+Support for other modes (16-bit, 32-bit, Lab, Grayscale, Bitmap...) will be implemented.
 
 ### PSB Support
 
@@ -117,7 +118,7 @@ Lyra fully supports PSB (Photoshop Big Document Format) files.
 ### ICC Color Profiles
 
 Lyra honors embedded ICC color profiles whenever they are present.
-If a PSD / PSB document does not contain an embedded profile - most notably in **CMYK** color modes — Lyra falls back to
+If a PSD / PSB document does not contain an embedded profile - most notably in CMYK color modes - Lyra falls back to
 the system’s default color profile to produce a usable result.
 
 Without an explicit ICC profile, CMYK data has no well-defined color meaning.
@@ -127,7 +128,8 @@ severely distorted or inverted-looking colors.
 Lyra’s fallback behavior is intended to be predictable and standards-compliant rather than attempting
 heuristic or hard-coded CMYK assumptions.
 
-> _Developer note:_ During development, Lyra was tested against several large CMYK PSB files from the NASA public image archive.
+> _Developer note:_ During development, Lyra was tested against several large CMYK PSB files from the NASA public image
+> archive.
 > These documents did not contain embedded ICC profiles and produced drastically different results across common
 > image viewers - ranging from heavily shifted colors to near-inverted appearances.
 >
@@ -170,7 +172,7 @@ The PSD decoder is intentionally structured to allow future expansion.
 | **Single file**                            | Anchor (Open / Open With / Double-click) | Yes                                 | No        |
 | **Multiple files (same directory)**        | Selection                                | No                                  | No        |
 | **Single directory**                       | Directory collection                     | No                                  | Yes       |
-| **Multiple directories**                   | Multi-directory collection               | No                                  | Yes       |
+| **Multiple directories**                   | Multi-directory selection                | No                                  | Yes       |
 | **Mixed files from different directories** | Multi-directory selection                | No                                  | No        |
 
 > Recursion applies only when directories are explicitly dropped.

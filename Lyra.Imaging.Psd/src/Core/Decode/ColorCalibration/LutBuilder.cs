@@ -1,4 +1,4 @@
-namespace Lyra.Imaging.Psd.Core.Decode.Color.ColorCalibration;
+namespace Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
 
 public static class LutBuilder
 {

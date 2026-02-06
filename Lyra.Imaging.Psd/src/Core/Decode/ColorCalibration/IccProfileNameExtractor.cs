@@ -2,7 +2,7 @@ using System.Text;
 using Lyra.Imaging.Psd.Core.Primitives;
 using Lyra.Imaging.Psd.Core.Readers;
 
-namespace Lyra.Imaging.Psd.Core.Decode.Color.ColorCalibration;
+namespace Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
 
 /// <summary>
 /// Minimal, dependency-free ICC profile name extractor.

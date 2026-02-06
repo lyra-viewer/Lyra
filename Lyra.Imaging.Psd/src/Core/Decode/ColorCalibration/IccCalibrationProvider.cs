@@ -3,7 +3,7 @@ using Lyra.Imaging.Psd.Core.Common;
 using Wacton.Unicolour;
 using Wacton.Unicolour.Icc;
 
-namespace Lyra.Imaging.Psd.Core.Decode.Color.ColorCalibration;
+namespace Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
 
 public sealed class IccCalibrationProvider
 {

@@ -1,6 +1,6 @@
 using Lyra.Imaging.Psd.Core.Common;
 
-namespace Lyra.Imaging.Psd.Core.Decode.Color.ColorCalibration;
+namespace Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
 
 public sealed record ColorCalibrationRequest
 (

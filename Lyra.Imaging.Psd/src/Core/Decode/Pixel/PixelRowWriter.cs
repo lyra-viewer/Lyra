@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using Lyra.Imaging.Psd.Core.Decode.Color.ColorCalibration;
+using Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
 
 namespace Lyra.Imaging.Psd.Core.Decode.Pixel;
 

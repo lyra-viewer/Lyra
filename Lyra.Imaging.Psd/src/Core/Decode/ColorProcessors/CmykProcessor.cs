@@ -1,16 +1,16 @@
 using System.Buffers;
 using Lyra.Imaging.Psd.Core.Common;
-using Lyra.Imaging.Psd.Core.Decode.Color.ColorCalibration;
+using Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
+using Lyra.Imaging.Psd.Core.SectionData;
 using Wacton.Unicolour;
-using Wacton.Unicolour.Icc;
 
-namespace Lyra.Imaging.Psd.Core.Decode.Color;
+namespace Lyra.Imaging.Psd.Core.Decode.ColorProcessors;
 
 public sealed class CmykProcessor : IColorModeProcessor
 {
     public string? IccProfileUsed { get; private set; }
-    
+
     // Tuning knobs
     private const float OutputGamma = 0.95f;
     private const bool EnableNeutralBalance = true;
@@ -25,10 +25,10 @@ public sealed class CmykProcessor : IColorModeProcessor
     private const int NeutralBAdd = 0;
 
     private static readonly byte[] GammaLut = BuildGammaLut(OutputGamma);
-    
+
     private static readonly IccCalibrationProvider CalibrationProvider = new();
 
-    public RgbaSurface Process(PlaneImage src, ColorModeContext ctx, CancellationToken ct)
+    public RgbaSurface Process(PlaneImage src, ColorModeContext ctx, ColorModeData? colorModeData, CancellationToken ct)
     {
         if (src.BitsPerChannel != 8)
             throw new NotSupportedException($"CMYK processor currently supports only 8 bits/channel, got {src.BitsPerChannel}.");
@@ -52,7 +52,7 @@ public sealed class CmykProcessor : IColorModeProcessor
         var stride = checked(src.Width * 4);
         var size = checked(stride * src.Height);
 
-        var gridSize = ColorCalibrationDefaults.GridSize;
+        const int gridSize = ColorCalibrationDefaults.GridSize;
         var calibration = CalibrationProvider.GetCalibration(
             new ColorCalibrationRequest(
                 SourceColorMode: ColorMode.Cmyk,
@@ -65,7 +65,7 @@ public sealed class CmykProcessor : IColorModeProcessor
                 gridSize: gridSize,
                 ct), out var iccProfileUsed
         );
-        
+
         IccProfileUsed = iccProfileUsed;
 
         var useHeuristicTuning = !ctx.PreferColorManagement || calibration.IsIdentity;
@@ -203,7 +203,7 @@ public sealed class CmykProcessor : IColorModeProcessor
             for (var gx = 0; gx < gridSize; gx++)
             {
                 var col = (int)((gx + 0.5) * src.Width / gridSize);
-                if (col >= src.Width) 
+                if (col >= src.Width)
                     col = src.Width - 1;
 
                 var c0 = cRow[col];
@@ -215,8 +215,8 @@ public sealed class CmykProcessor : IColorModeProcessor
 
                 if (useInverted is null || !decidePolarityOnce)
                 {
-                    var rgbA = OracleIccRgb(config, c0, m0, y0, k0, invert: false);
-                    var rgbB = OracleIccRgb(config, c0, m0, y0, k0, invert: true);
+                    var rgbA = IccOracle.OracleIccRgb(config, c0, m0, y0, k0, invert: false);
+                    var rgbB = IccOracle.OracleIccRgb(config, c0, m0, y0, k0, invert: true);
 
                     // Choose the variant closest to the baseline output
                     var dA = DistSq(rgbA.r, rgbA.g, rgbA.b, r0, g0, b0);
@@ -225,7 +225,7 @@ public sealed class CmykProcessor : IColorModeProcessor
                     useInverted = dB < dA;
                 }
 
-                var rgb = OracleIccRgb(config, c0, m0, y0, k0, invert: useInverted.Value);
+                var rgb = IccOracle.OracleIccRgb(config, c0, m0, y0, k0, invert: useInverted.Value);
 
                 sumR[r0] += rgb.r;
                 cntR[r0]++;
@@ -237,21 +237,6 @@ public sealed class CmykProcessor : IColorModeProcessor
         }
 
         return LutBuilder.BuildRgbCurves(sumR, cntR, sumG, cntG, sumB, cntB);
-    }
-
-    private static (int r, int g, int b) OracleIccRgb(Configuration config, byte c, byte m, byte y, byte k, bool invert)
-    {
-        var c0 = invert ? (255 - c) / 255.0 : c / 255.0;
-        var m0 = invert ? (255 - m) / 255.0 : m / 255.0;
-        var y0 = invert ? (255 - y) / 255.0 : y / 255.0;
-        var k0 = invert ? (255 - k) / 255.0 : k / 255.0;
-
-        var u = new Unicolour(config, new Channels(c0, m0, y0, k0));
-        var rgb = u.Rgb.Byte255;
-
-        return (Clamp0To255(rgb.R), Clamp0To255(rgb.G), Clamp0To255(rgb.B));
-
-        static int Clamp0To255(int v) => v < 0 ? 0 : v > 255 ? 255 : v;
     }
 
     private static int DistSq(int r1, int g1, int b1, byte r0, byte g0, byte b0)

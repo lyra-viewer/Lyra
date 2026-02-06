@@ -1,6 +1,6 @@
 using Lyra.Imaging.Psd.Core.Common;
 
-namespace Lyra.Imaging.Psd.Core.Decode.Color;
+namespace Lyra.Imaging.Psd.Core.Decode.ColorProcessors;
 
 public static class ColorModeProcessorFactory
 {
@@ -8,10 +8,10 @@ public static class ColorModeProcessorFactory
     {
         ColorMode.Rgb => new RgbProcessor(),
         ColorMode.Cmyk => new CmykProcessor(),
+        ColorMode.Indexed => new IndexedProcessor(),
         // TODO:
         // ColorMode.Bitmap => new BitmapProcessor(),
         // ColorMode.Grayscale => new GrayscaleProcessor(),
-        // ColorMode.Indexed => new IndexedProcessor(),
         // ColorMode.Lab => new LabProcessor(),
         // ColorMode.Duotone => new DuotoneFallbackProcessor(),
         // ColorMode.Multichannel => new MultichannelFallbackProcessor(),

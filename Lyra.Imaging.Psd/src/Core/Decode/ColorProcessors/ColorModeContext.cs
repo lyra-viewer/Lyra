@@ -1,7 +1,7 @@
 using Lyra.Imaging.Psd.Core.Common;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 
-namespace Lyra.Imaging.Psd.Core.Decode.Color;
+namespace Lyra.Imaging.Psd.Core.Decode.ColorProcessors;
 
 public sealed record ColorModeContext(
     ColorMode ColorMode,
