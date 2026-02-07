@@ -216,7 +216,7 @@ Lyra Viewer is distributed via **Homebrew** on macOS.
 
 ```sh
 brew tap lyra-viewer/lyra
-brew install --cask lyra
+brew install --cask lyra-viewer
 ```
 
 ### Linux
