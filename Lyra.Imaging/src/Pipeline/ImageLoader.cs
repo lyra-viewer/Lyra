@@ -31,7 +31,7 @@ internal class ImageLoader
 
     #region Fields
 
-    private readonly ConcurrentDictionary<string, ImageJob> _images = new();
+    private readonly ConcurrentDictionary<string, Lazy<ImageJob>> _images = new();
     private readonly TaskFactory _preloadTaskFactory = new(new PreloadTaskScheduler(2));
     private volatile Composite? _currentImage;
 
@@ -42,7 +42,22 @@ internal class ImageLoader
     /// <summary>Returns a stable Composite immediately. Starts async load if needed (non-blocking).</summary>
     public Composite GetImage(string path)
     {
-        var job = _images.GetOrAdd(path, p => StartJob(p, isPreload: false));
+        var lazy = _images.GetOrAdd(
+            path,
+            p => CreateLazyJob(p, isPreload: false));
+
+        ImageJob job;
+        try
+        {
+            job = lazy.Value; // StartJob executes only once for the stored Lazy.
+        }
+        catch
+        {
+            // If StartJob throws synchronously, Lazy caches the exception; remove so callers can retry.
+            _images.TryRemove(new KeyValuePair<string, Lazy<ImageJob>>(path, lazy));
+            throw;
+        }
+
         _currentImage = job.Composite;
         return job.Composite;
     }
@@ -88,35 +103,27 @@ internal class ImageLoader
         };
     }
 
+    private Lazy<ImageJob> CreateLazyJob(string path, bool isPreload) =>
+        new(() => StartJob(path, isPreload), LazyThreadSafetyMode.ExecutionAndPublication);
+
     private void TryPreload(string path)
     {
         if (ImageFormat.IsPreloadDisabled(Path.GetExtension(path)))
             return;
 
-        if (_images.ContainsKey(path))
-            return;
+        var lazy = _images.GetOrAdd(
+            path,
+            p => CreateLazyJob(p, isPreload: true));
 
-        // Reserve slot first using a placeholder job with lazy start.
-        var composite = new Composite(new FileInfo(path));
-        var cts = new CancellationTokenSource();
-        var placeholder = new ImageJob { Composite = composite, Cts = cts, Task = Task.CompletedTask }; // temp
-
-        if (!_images.TryAdd(path, placeholder))
+        // Touching Value starts the preload (exactly once for the stored Lazy).
+        try
         {
-            cts.CancelAndDisposeSilently();
-            return;
+            _ = lazy.Value;
         }
-
-        // Now start the real task and swap it in.
-        var task = _preloadTaskFactory.StartNew(() => LoadImageAsync(composite, cts.Token), CancellationToken.None).Unwrap();
-        var job = new ImageJob { Composite = composite, Cts = cts, Task = task };
-        _images[path] = job; // safe replacement
-
-        // If removed, clean up.
-        if (!_images.ContainsKey(path))
+        catch
         {
-            cts.CancelSilently();
-            AttachCleanupContinuation(job, path, "Preload:");
+            // Remove poison entry so future attempts can retry.
+            _images.TryRemove(new KeyValuePair<string, Lazy<ImageJob>>(path, lazy));
         }
     }
 
@@ -147,7 +154,7 @@ internal class ImageLoader
                 composite.State = CompositeState.Failed;
                 return;
             }
-            
+
             composite.SignalReady();
 
             // Promote to Complete if:
@@ -157,7 +164,7 @@ internal class ImageLoader
                 composite.SignalComplete();
             else if (composite.State == CompositeState.Ready)
             {
-                if (composite.Content is not RasterLargeContent large || !large.HasTiles || (large.TilesTotal is int total && large.TilesReady >= total)) 
+                if (composite.Content is not RasterLargeContent large || !large.HasTiles || (large.TilesTotal is int total && large.TilesReady >= total))
                     composite.SignalComplete();
             }
         }
@@ -188,13 +195,18 @@ internal class ImageLoader
 
     private void RemoveMatching(Func<string, bool> predicate, string context)
     {
-        foreach (var (key, job) in _images.ToArray())
+        foreach (var (key, _) in _images.ToArray())
         {
             if (!predicate(key))
                 continue;
 
-            if (!_images.TryRemove(key, out var removed))
+            if (!_images.TryRemove(key, out var removedLazy))
                 continue;
+
+            if (!removedLazy.IsValueCreated)
+                continue; // nothing started => nothing to cancel/cleanup
+
+            var removed = removedLazy.Value;
 
             if (!removed.Task.IsCompleted)
             {

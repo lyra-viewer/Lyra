@@ -34,12 +34,14 @@ internal class ImageSharpDecoder : IImageDecoder
 
         try
         {
+            ct.ThrowIfCancellationRequested();
+
             using var image = await Image.LoadAsync<Rgba32>(path, ct);
 
             var width = image.Width;
             var height = image.Height;
 
-            var imageInfo = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            var imageInfo = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
             var bitmap = new SKBitmap(imageInfo);
 
             unsafe
@@ -49,11 +51,20 @@ internal class ImageSharpDecoder : IImageDecoder
                 image.CopyPixelDataTo(span);
             }
 
-            composite.Content = new RasterContent(SKImage.FromBitmap(bitmap));
+            ct.ThrowIfCancellationRequested();
+
+            bitmap.SetImmutable();
+            var skImage = SKImage.FromBitmap(bitmap);
+            composite.Content = new RasterContent(bitmap, skImage);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception e)
         {
-            Logger.Warning($"[ImageSharpDecoder] Image could not be loaded: {path} \n{e.Message}");
+            Logger.Warning($"[ImageSharpDecoder] Image could not be loaded: {path}\n{e}");
+            throw;
         }
     }
 }

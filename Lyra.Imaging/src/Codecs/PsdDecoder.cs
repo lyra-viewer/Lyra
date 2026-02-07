@@ -13,109 +13,96 @@ namespace Lyra.Imaging.Codecs;
 internal class PsdDecoder : IImageDecoder
 {
     private const float PreviewSizeMultiplier = 2.0f;
-    
+
     private readonly TileDecodeScheduler _tileDecodeScheduler = new();
-    
+
     public bool CanDecode(ImageFormatType format) => format is ImageFormatType.Psd or ImageFormatType.Psb;
 
-    public async Task DecodeAsync(Composite composite, CancellationToken ct)
+    public Task DecodeAsync(Composite composite, CancellationToken ct)
     {
         var path = composite.FileInfo.FullName;
         composite.DecoderName = GetType().Name;
         Logger.Debug($"[PsdDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
 
         ct.ThrowIfCancellationRequested();
-        
-        var fileStreamOptions = new FileStreamOptions
-        {
-            Mode = FileMode.Open,
-            Access = FileAccess.Read,
-            Share = FileShare.Read,
-            BufferSize = 4096,
-            Options = FileOptions.RandomAccess
-        };
-
-        await using var file = new FileStream(path, fileStreamOptions);
-
-        FileHeader header;
-        try
-        {
-            header = PsdDocument.ReadHeader(file);
-            ProcessHeader(header, composite);
-        }
-        catch (Exception e)
-        {
-            Logger.Warning($"[PsdDecoder] Header could not be read: {path}\n{e.Message}");
-            return;
-        }
-
-        // Heuristic: treat as "large" if RGBA8 would be big.
-        // (Starting point 256 MB.)
-        var rgbaBytes = (long)header.Width * header.Height * 4L;
-        var isLarge = rgbaBytes >= 256L * 1024 * 1024;
 
         try
         {
+            using var file = DecoderIO.OpenRandomAccessRead(path);
+
+            FileHeader header;
+            try
+            {
+                header = PsdDocument.ReadHeader(file);
+                ProcessHeader(header, composite);
+            }
+            catch (Exception e)
+            {
+                Logger.Warning($"[PsdDecoder] Header could not be read: {path}\n{e}");
+                throw;
+            }
+
+            // Heuristic: treat as "large" if RGBA8 would be big. (Starting point 256 MB.)
+            var rgbaBytes = (long)header.Width * header.Height * 4L;
+            var isLarge = rgbaBytes >= 256L * 1024 * 1024;
+
             if (!isLarge)
             {
                 // Small PSD: decode full surface -> SKImage.
-                var (skImage, metadata) = await Task.Run(() =>
-                {
-                    using var file1 = File.Open(path, fileStreamOptions);
-                    var psd = PsdDocument.ReadDocument(file1);
-                    using var surface = psd.Decode(file1, null, null, ct);
-                    return (ToImage(surface), psd.PsdMetadata);
-                }, ct);
+                using var file1 = DecoderIO.OpenRandomAccessRead(path);
+                var psd = PsdDocument.ReadDocument(file1);
 
-                ProcessMetadata(metadata, composite);
+                using var surface = psd.Decode(file1, null, null, ct);
+
+                var skImage = ToImage(surface);
+
+                ProcessMetadata(psd.PsdMetadata, composite);
                 composite.Content = new RasterContent(skImage);
-                return;
+                return Task.CompletedTask;
             }
 
+            // Large PSD: preview + tiles
             var rasterLarge = new RasterLargeContent(header.Width, header.Height);
             composite.Content = rasterLarge;
 
             // Read PSD document
-            var psdDocument = await Task.Run(() =>
-            {
-                ct.ThrowIfCancellationRequested();
-                
-                file.Position = 0;
-                return PsdDocument.ReadDocument(file);
-            }, ct);
-            
+            ct.ThrowIfCancellationRequested();
+            file.Position = 0;
+            var psdDocument = PsdDocument.ReadDocument(file);
+
             var constraints = DecodeConstraintsProvider.Current;
-            var previewImage = await Task.Run(() =>
+
+            ct.ThrowIfCancellationRequested();
+
+            // Decode preview
+            file.Position = 0;
+            using (var previewSurface = psdDocument.DecodePreview(
+                       file,
+                       maxWidth: (int)(constraints.Width * PreviewSizeMultiplier),
+                       maxHeight: (int)(constraints.Height * PreviewSizeMultiplier),
+                       outputFormat: null,
+                       maxSurfaceBytes: null,
+                       ct: ct))
             {
-                ct.ThrowIfCancellationRequested();
+                var previewImage = ToImage(previewSurface);
+                rasterLarge.SetPreview(previewImage);
+            }
 
-                file.Position = 0;
-                using var previewSurface = psdDocument.DecodePreview(
-                    file,
-                    maxWidth: (int)(constraints.Width * PreviewSizeMultiplier),
-                    maxHeight: (int)(constraints.Height * PreviewSizeMultiplier),
-                    outputFormat: null,
-                    maxSurfaceBytes: null,
-                    ct: ct);
-
-                return ToImage(previewSurface);
-            }, ct);
-
-            rasterLarge.SetPreview(previewImage);
             composite.SignalReady();
-            
+
             ProcessMetadata(psdDocument.PsdMetadata, composite);
 
             // Create tiled container (geometry only)
+            ct.ThrowIfCancellationRequested();
             file.Position = 0;
+
             var tiled = psdDocument.CreateTiledComposite(
                 file,
-                maxBytesPerTile: 256L * 1024 * 1024, // start safe; tune later
+                maxBytesPerTile: 256L * 1024 * 1024,
                 tileEdgeHint: null,
                 outputFormat: null,
                 ct: ct);
 
-            // Tile source stores SKImages.
             var tileSource = new RasterTileSource(
                 tilesX: tiled.TilesX,
                 tilesY: tiled.TilesY,
@@ -128,51 +115,68 @@ internal class PsdDecoder : IImageDecoder
             // Decode tiles on a background thread (keep DecodeAsync non-blocking for large images).
             _ = Task.Run(() =>
             {
-                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    ct.ThrowIfCancellationRequested();
 
-                using var tileFile = File.OpenRead(path);
-                tileFile.Position = 0;
+                    using var tileFile = DecoderIO.OpenSequentialRead(path);
+                    tileFile.Position = 0;
 
-                var bandOrder = _tileDecodeScheduler.BuildBandOrder(
-                    tiled.TilesX,
-                    tiled.TilesY,
-                    tiled.TileWidth,
-                    tiled.TileHeight);
+                    var bandOrder = _tileDecodeScheduler.BuildBandOrder(
+                        tiled.TilesX,
+                        tiled.TilesY,
+                        tiled.TileWidth,
+                        tiled.TileHeight);
 
-                Logger.Debug($"[PsdDecoder] Tiled: {tiled.TilesX}x{tiled.TilesY}, tile={tiled.TileWidth}x{tiled.TileHeight}");
-                Logger.Debug($"[PsdDecoder] Compression: {psdDocument.ImageData.CompressionType}");
-                Logger.Debug($"[PsdDecoder] BandOrder head: {string.Join(", ", bandOrder.Take(8))}...");
+                    Logger.Debug($"[PsdDecoder] Tiled: {tiled.TilesX}x{tiled.TilesY}, tile={tiled.TileWidth}x{tiled.TileHeight}");
+                    Logger.Debug($"[PsdDecoder] Compression: {psdDocument.ImageData.CompressionType}");
+                    Logger.Debug($"[PsdDecoder] BandOrder head: {string.Join(", ", bandOrder.Take(8))}...");
 
-                psdDocument.DecodeTiles(
-                    tileFile,
-                    tiled,
-                    bandOrder,
-                    outputFormat: null,
-                    maxSurfaceBytes: null,
-                    onTileReady: (x, y) =>
-                    {
-                        ct.ThrowIfCancellationRequested();
+                    psdDocument.DecodeTiles(
+                        tileFile,
+                        tiled,
+                        bandOrder,
+                        outputFormat: null,
+                        maxSurfaceBytes: null,
+                        onTileReady: (x, y) =>
+                        {
+                            ct.ThrowIfCancellationRequested();
 
-                        var tileSurface = tiled.TryGetTile(x, y);
-                        if (tileSurface is null)
-                            return;
+                            var tileSurface = tiled.TryGetTile(x, y);
+                            if (tileSurface is null)
+                                return;
 
-                        var tileImage = ToImage(tileSurface);
-                        tileSurface.Dispose();
+                            var tileImage = ToImage(tileSurface);
+                            tileSurface.Dispose();
 
-                        tileSource.SetTile(x, y, tileImage);
-                        rasterLarge.IncrementTileReady();
-                    }, ct);
+                            tileSource.SetTile(x, y, tileImage);
+                            rasterLarge.IncrementTileReady();
+                        },
+                        ct);
 
-                composite.SignalComplete();
+                    composite.SignalComplete();
+                }
+                catch (OperationCanceledException)
+                {
+                    composite.SignalComplete();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"[PsdDecoder] Tile decode failed: {path}\n{ex}");
+                    composite.SignalComplete();
+                }
             }, ct);
+
+            return Task.CompletedTask;
         }
         catch (OperationCanceledException)
         {
+            throw;
         }
         catch (Exception e)
         {
-            Logger.Warning($"[PsdDecoder] Image could not be loaded: {path} \n{e.Message}");
+            Logger.Warning($"[PsdDecoder] Image could not be loaded: {path} \n{e}");
+            throw;
         }
     }
 
@@ -194,10 +198,19 @@ internal class PsdDecoder : IImageDecoder
             composite.FormatSpecific.Add("Effective ICC Profile", $"{metadata.EffectiveIccProfileName ?? "none"}");
     }
 
+    private static readonly SKImageRasterReleaseDelegate ReleaseBitmapOnImageDispose = (_, ctx) =>
+    {
+        if (ctx is SKBitmap bmp && bmp.Handle != IntPtr.Zero)
+            bmp.Dispose();
+    };
+
     private static SKImage ToImage(RgbaSurface surface)
     {
-        using var bmp = ToBitmap(surface);
-        return SKImage.FromBitmap(bmp);
+        var bmp = ToBitmap(surface);
+        bmp.SetImmutable();
+        
+        using var pixmap = new SKPixmap(bmp.Info, bmp.GetPixels(), bmp.RowBytes);
+        return SKImage.FromPixels(pixmap, ReleaseBitmapOnImageDispose, bmp);
     }
 
     private static SKBitmap ToBitmap(RgbaSurface surface)

@@ -21,6 +21,5 @@ internal class HdrDecoder : FloatRgbaDecoderBase
         return result;
     }
 
-    protected override void FreePixels(IntPtr ptr)
-        => HdrNative.free_hdr_pixels(ptr);
+    protected override void FreePixels(IntPtr ptr) => HdrNative.free_hdr_pixels(ptr);
 }

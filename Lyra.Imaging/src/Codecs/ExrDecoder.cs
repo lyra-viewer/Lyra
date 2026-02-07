@@ -21,6 +21,5 @@ internal class ExrDecoder : FloatRgbaDecoderBase
         return result;
     }
 
-    protected override void FreePixels(IntPtr ptr)
-        => ExrNative.free_exr_pixels(ptr);
+    protected override void FreePixels(IntPtr ptr) => ExrNative.free_exr_pixels(ptr);
 }

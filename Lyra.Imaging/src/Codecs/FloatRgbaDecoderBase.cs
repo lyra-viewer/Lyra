@@ -12,63 +12,70 @@ internal abstract class FloatRgbaDecoderBase : IImageDecoder
     protected abstract bool LoadPixels(string path, out IntPtr ptr, out int width, out int height);
     protected abstract void FreePixels(IntPtr ptr);
 
-    public async Task DecodeAsync(Composite composite, CancellationToken ct)
+    public Task DecodeAsync(Composite composite, CancellationToken ct)
     {
         composite.DecoderName = GetType().Name;
         var path = composite.FileInfo.FullName;
         Logger.Debug($"[{GetType().Name}] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
 
         ct.ThrowIfCancellationRequested();
-        await Task.Run(() =>
+
+        var success = LoadPixels(path, out var ptr, out var width, out var height);
+        if (!success || ptr == IntPtr.Zero)
+            throw new InvalidOperationException($"[{GetType().Name}] Failed to load native pixels or got null pointer for: {path}");
+
+        try
         {
-            var success = LoadPixels(path, out var ptr, out var width, out var height);
-            if (!success || ptr == IntPtr.Zero)
+            ct.ThrowIfCancellationRequested();
+
+            var totalPixels = checked(width * height);
+            var floatCount = checked(totalPixels * 4);
+
+            var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+            var bitmap = new SKBitmap(info);
+
+            unsafe
             {
-                Logger.Warning($"[{GetType().Name}] Failed to load native pixels or got null pointer for: {path}");
-                return composite;
+                var floatSpan = new Span<float>((void*)ptr, floatCount);
+                var byteSpan = new Span<byte>((void*)bitmap.GetPixels(), checked(width * height * 4));
+
+                ConvertPixels(floatSpan, byteSpan, width, height, ct, out composite.IsGrayscale);
             }
 
-            try
-            {
-                var totalPixels = width * height;
-                var floatCount = totalPixels * 4;
-                var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-                using var bitmap = new SKBitmap(info);
+            ct.ThrowIfCancellationRequested();
 
-                unsafe
-                {
-                    var floatSpan = new Span<float>((void*)ptr, floatCount);
-                    var byteSpan = new Span<byte>((void*)bitmap.GetPixels(), width * height * 4);
+            bitmap.SetImmutable();
+            var image = SKImage.FromBitmap(bitmap);
 
-                    ConvertPixels(floatSpan, byteSpan, width, height, out composite.IsGrayscale);
-                }
+            composite.Content = new RasterContent(bitmap, image);
+        }
+        finally
+        {
+            FreePixels(ptr);
+        }
 
-                composite.Content = new RasterContent(SKImage.FromBitmap(bitmap));
-                return composite;
-            }
-            finally
-            {
-                if (ptr != IntPtr.Zero)
-                {
-                    FreePixels(ptr);
-                }
-            }
-        });
+        return Task.CompletedTask;
     }
 
-    private void ConvertPixels(Span<float> floatSpan, Span<byte> byteSpan, int width, int height, out bool isGrayscale)
+    private void ConvertPixels(Span<float> floatSpan, Span<byte> byteSpan, int width, int height, CancellationToken ct, out bool isGrayscale)
     {
         var totalPixels = width * height;
 
         isGrayscale = true;
         for (var i = 0; i < totalPixels && isGrayscale; i++)
         {
+            if ((i & 0xFFFF) == 0)
+                ct.ThrowIfCancellationRequested();
+
             if (floatSpan[i * 4 + 1] != 0f || floatSpan[i * 4 + 2] != 0f)
                 isGrayscale = false;
         }
 
         for (var i = 0; i < totalPixels; i++)
         {
+            if ((i & 0xFFFF) == 0)
+                ct.ThrowIfCancellationRequested();
+
             var r = floatSpan[i * 4 + 0];
             var g = isGrayscale ? r : floatSpan[i * 4 + 1];
             var b = isGrayscale ? r : floatSpan[i * 4 + 2];
