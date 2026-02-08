@@ -224,13 +224,3 @@ brew install --cask lyra-viewer
 Not available yet.
 
 ---
-
-## Future Ideas
-
-- Channel preview (R, G, B, A, RGB)
-- Histogram or levels display for HDR/EXR workflows
-- Support for multi-layer EXR and PSD navigation
-- Image export or format conversion
-- Grid display
-
----
