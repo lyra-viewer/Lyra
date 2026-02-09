@@ -37,58 +37,58 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 
 > _Note:_ Crossed-out formats are not implemented yet.
 
-### Common Texture Formats (Essential)
+### Common Raster Formats (Essential)
 
-| Format           | Description                                                                   |
-|------------------|-------------------------------------------------------------------------------|
-| `.png`           | Widely used lossless format, ideal for albedo, roughness, etc.                |
-| `.jpg` / `.jpeg` | Lossy format used for color/albedo maps or previews.                          |
-| `.jif` / `.jfif` | JPEG File Interchange Format — a JPEG variant seen in EXIF/exported previews. |
-| `.tga`           | Game engine-friendly format supporting alpha channels.                        |
-| `.tif` / `.tiff` | High-quality textures, often 16/32-bit, used in VFX.                          |
-| `.bmp`           | Rare but used in older or internal pipelines.                                 |
+| Format       | Description                                        | Extensions                    |
+| ------------ | -------------------------------------------------- | ----------------------------- |
+| PNG          | Lossless raster image format with optional alpha   | `.png`                        |
+| JPEG / JFIF  | Lossy raster image format (JPEG family)            | `.jpg` `.jpeg` `.jif` `.jfif` |
+| TIFF         | High-precision raster image container              | `.tif` `.tiff`                |
+| Targa        | Raster image format with optional alpha            | `.tga`                        |
+| BMP          | Uncompressed bitmap image format                   | `.bmp`                        |
 
 ### Modern / Web-Friendly Formats
 
-| Format                      | Description                                                              |
-|-----------------------------|--------------------------------------------------------------------------|
-| `.webp`                     | Lightweight format with alpha support, used for previews and thumbnails. |
-| `.heif` / `.heic` / `.avif` | High Efficiency format common on macOS/iOS systems.                      |
+| Format       | Description                                         | Extensions               |
+| ------------ | --------------------------------------------------- | ------------------------ |
+| WebP         | Compressed raster image format with optional alpha  | `.webp`                  |
+| HEIF / HEIC  | High-efficiency image container format (HEVC-based) | `.heif` `.heic`          |
+| AVIF         | High-efficiency image format based on AV1           | `.avif`                  |
 
 ### High Dynamic Range Formats
 
-| Format | Description                                                                |
-|--------|----------------------------------------------------------------------------|
-| `.exr` | OpenEXR format for HDR data (e.g. height, displacement, environment maps). |
-| `.hdr` | Radiance HDR format, used in lighting environments and skies.              |
+| Format       | Description                                           | Extensions               |
+| ------------ | ----------------------------------------------------- | ------------------------ |
+| OpenEXR      | High-dynamic range, multi-channel raster format       | `.exr`                   |
+| Radiance HDR | High-dynamic range RGBE format                        | `.hdr`                   |
 
-### Compressed / GPU-Friendly Formats
+### GPU Formats
 
-| Format               | Description                                                             |
-|----------------------|-------------------------------------------------------------------------|
-| ~~`.dds`~~           | ~~DirectDraw Surface, used in real-time engines (DXT/BC compression).~~ |
-| ~~`.ktx` / `.ktx2`~~ | ~~Modern GPU-optimized format for real-time textures.~~                 |
+| Format      | Description                                         | Extensions          |
+| ----------- | --------------------------------------------------- | ------------------- |
+| ~DDS~       | ~DirectDraw Surface~                                | `.dds`              |
+| ~KTX~       | ~GPU texture container format~                      | `.ktx` `.ktx2`      |
 
-### Vector / Specialized Formats
+### Document / Vector Formats
 
-| Format          | Description                                        |
-|-----------------|----------------------------------------------------|
-| `.svg`          | Scalable vector graphics for masks or UI overlays. |
-| `.psd` / `.psb` | Photoshop document files.                          |
+| Format       | Description                                         | Extensions                |
+| ------------ | --------------------------------------------------- | ------------------------- |
+| SVG          | Scalable Vector Graphics                            | `.svg`                    |
+| Photoshop    | Adobe Photoshop document                            | `.psd` `.psb`             |
 
 ### Minor Formats
 
-| Format      | Description                                                |
-|-------------|------------------------------------------------------------|
-| `.ico`      | Icon files, often part of UI asset packs.                  |
-| ~~`.icns`~~ | ~~macOS icon format, used in application packaging.~~      |
-| ~~`.jp2`~~  | ~~JPEG 2000, rare but sometimes seen in asset pipelines.~~ |
+| Format         | Description                                         | Extensions             |
+| -------------- | --------------------------------------------------- | ---------------------- |
+| ICO            | Icon container format                               | `.ico`                 |
+| ~ICNS~         | ~Apple icon container format~                       | `.icns`                |
+| ~JPEG 2000~    | ~Wavelet-based image format~                        | `.jp2` `.j2k` `.jpx`   |
 
 ---
 
 ## PSD / PSB Decoding Model
 
-Lyra currently focuses on decoding the flattened Image Data section of Photoshop files, rather than individual layers.
+Lyra currently focuses on decoding the flattened **Image Data** section of Photoshop files, rather than individual layers.
 This design choice prioritizes performance, and fast previewing.
 
 This is explicitly documented because the Image Data section is not strictly mandatory in the PSD specification and,
@@ -146,9 +146,9 @@ The PSD decoder is intentionally structured to allow future expansion.
 
 | Key            | Action                                                |
 |----------------|-------------------------------------------------------|
-| `←` / `→`      | Previous / Next image                                 |
-| `Home` / `End` | First / Last image                                    |
-| `+` / `-`      | Zoom in / Zoom out                                    |
+| `←` `→`        | Previous / Next image                                 |
+| `Home` `End`   | First / Last image                                    |
+| `+` `-`        | Zoom in / Zoom out                                    |
 | `Mouse Wheel`  | Zoom at cursor position                               |
 | `0`            | Toggle **Fit to Screen** / **Original Size**          |
 | `S`            | Toggle sampling mode                                  |
@@ -162,18 +162,18 @@ The PSD decoder is intentionally structured to allow future expansion.
 
 | Key           | Action                                  |
 |---------------|-----------------------------------------|
-| `⌘ ←` / `⌘ →` | First / Last image                      |
-| `⌥ ←` / `⌥ →` | First / Last image within the directory |
+| `⌘ ←` `⌘ →`   | First / Last image                      |
+| `⌥ ←` `⌥ →`   | First / Last image within the directory |
 
 ### Open With / Drag & Drop
 
 | Context                                    | How Lyra interprets it                   | Make a collection from files around | Recursion |
 |--------------------------------------------|------------------------------------------|-------------------------------------|-----------|
-| **Single file**                            | Anchor (Open / Open With / Double-click) | Yes                                 | No        |
-| **Multiple files (same directory)**        | Selection                                | No                                  | No        |
-| **Single directory**                       | Directory collection                     | No                                  | Yes       |
-| **Multiple directories**                   | Multi-directory selection                | No                                  | Yes       |
-| **Mixed files from different directories** | Multi-directory selection                | No                                  | No        |
+| Single file                                | Anchor (Open / Open With / Double-click) | Yes                                 | No        |
+| Multiple files (same directory)            | Selection                                | No                                  | No        |
+| Single directory                           | Directory collection                     | No                                  | Yes       |
+| Multiple directories                       | Multi-directory selection                | No                                  | Yes       |
+| Mixed files from different directories     | Multi-directory selection                | No                                  | No        |
 
 > Recursion applies only when directories are explicitly dropped.
 > Opening or dropping files never implicitly expands into subdirectories.
