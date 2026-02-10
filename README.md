@@ -35,60 +35,61 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 
 ## Supported Image Formats
 
-> _Note:_ Crossed-out formats are not implemented yet.
-
 ### Common Raster Formats (Essential)
 
-| Format       | Description                                        | Extensions                    |
-| ------------ | -------------------------------------------------- | ----------------------------- |
-| PNG          | Lossless raster image format with optional alpha   | `.png`                        |
-| JPEG / JFIF  | Lossy raster image format (JPEG family)            | `.jpg` `.jpeg` `.jif` `.jfif` |
-| TIFF         | High-precision raster image container              | `.tif` `.tiff`                |
-| Targa        | Raster image format with optional alpha            | `.tga`                        |
-| BMP          | Uncompressed bitmap image format                   | `.bmp`                        |
+| Format      | Description                                      | Extensions                    |
+|-------------|--------------------------------------------------|-------------------------------|
+| PNG         | Lossless raster image format with optional alpha | `.png`                        |
+| JPEG / JFIF | Lossy raster image format (JPEG family)          | `.jpg` `.jpeg` `.jif` `.jfif` |
+| TIFF        | High-precision raster image container            | `.tif` `.tiff`                |
+| Targa       | Raster image format with optional alpha          | `.tga`                        |
+| BMP         | Uncompressed bitmap image format                 | `.bmp`                        |
 
 ### Modern / Web-Friendly Formats
 
-| Format       | Description                                         | Extensions               |
-| ------------ | --------------------------------------------------- | ------------------------ |
-| WebP         | Compressed raster image format with optional alpha  | `.webp`                  |
-| HEIF / HEIC  | High-efficiency image container format (HEVC-based) | `.heif` `.heic`          |
-| AVIF         | High-efficiency image format based on AV1           | `.avif`                  |
+| Format      | Description                                         | Extensions      |
+|-------------|-----------------------------------------------------|-----------------|
+| WebP        | Compressed raster image format with optional alpha  | `.webp`         |
+| HEIF / HEIC | High-efficiency image container format (HEVC-based) | `.heif` `.heic` |
+| AVIF        | High-efficiency image format based on AV1           | `.avif`         |
 
 ### High Dynamic Range Formats
 
-| Format       | Description                                           | Extensions               |
-| ------------ | ----------------------------------------------------- | ------------------------ |
-| OpenEXR      | High-dynamic range, multi-channel raster format       | `.exr`                   |
-| Radiance HDR | High-dynamic range RGBE format                        | `.hdr`                   |
+| Format       | Description                                     | Extensions |
+|--------------|-------------------------------------------------|------------|
+| OpenEXR      | High-dynamic range, multi-channel raster format | `.exr`     |
+| Radiance HDR | High-dynamic range RGBE format                  | `.hdr`     |
 
 ### GPU Formats
 
-| Format      | Description                                         | Extensions          |
-| ----------- | --------------------------------------------------- | ------------------- |
-| ~DDS~       | ~DirectDraw Surface~                                | `.dds`              |
-| ~KTX~       | ~GPU texture container format~                      | `.ktx` `.ktx2`      |
+| Format | Description                    | Extensions     |
+|--------|--------------------------------|----------------|
+| ~DDS~  | ~DirectDraw Surface~           | `.dds`         |
+| ~KTX~  | ~GPU texture container format~ | `.ktx` `.ktx2` |
 
 ### Document / Vector Formats
 
-| Format       | Description                                         | Extensions                |
-| ------------ | --------------------------------------------------- | ------------------------- |
-| SVG          | Scalable Vector Graphics                            | `.svg`                    |
-| Photoshop    | Adobe Photoshop document                            | `.psd` `.psb`             |
+| Format    | Description              | Extensions    |
+|-----------|--------------------------|---------------|
+| SVG       | Scalable Vector Graphics | `.svg`        |
+| Photoshop | Adobe Photoshop document | `.psd` `.psb` |
 
 ### Minor Formats
 
-| Format         | Description                                         | Extensions             |
-| -------------- | --------------------------------------------------- | ---------------------- |
-| ICO            | Icon container format                               | `.ico`                 |
-| ~ICNS~         | ~Apple icon container format~                       | `.icns`                |
-| ~JPEG 2000~    | ~Wavelet-based image format~                        | `.jp2` `.j2k` `.jpx`   |
+| Format    | Description                   | Extensions                              | Notes                                                                                                                                                   |
+|-----------|-------------------------------|-----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ICO       | Icon container format         | `.ico`                                  |                                                                                                                                                         |
+| ~ICNS~    | ~Apple icon container format~ | `.icns`                                 |                                                                                                                                                         |
+| JPEG 2000 | Wavelet-based image format    | `.jp2` `.jpg2`<br/>`.j2k` `.j2c` `.jpc` | Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP) are intentionally not supported. |
+
+> _Note:_ Crossed-out formats are not implemented yet.
 
 ---
 
 ## PSD / PSB Decoding Model
 
-Lyra currently focuses on decoding the flattened **Image Data** section of Photoshop files, rather than individual layers.
+Lyra currently focuses on decoding the flattened **Image Data** section of Photoshop files, rather than individual
+layers.
 This design choice prioritizes performance, and fast previewing.
 
 This is explicitly documented because the Image Data section is not strictly mandatory in the PSD specification and,
@@ -144,43 +145,43 @@ The PSD decoder is intentionally structured to allow future expansion.
 
 ## JPEG 2000 Support
 
-Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP) 
+Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP)
 are intentionally not supported.
 
 ---
 
 ## Keyboard Shortcuts & Controls
 
-| Key            | Action                                                |
-|----------------|-------------------------------------------------------|
-| `←` `→`        | Previous / Next image                                 |
-| `Home` `End`   | First / Last image                                    |
-| `+` `-`        | Zoom in / Zoom out                                    |
-| `Mouse Wheel`  | Zoom at cursor position                               |
-| `0`            | Toggle **Fit to Screen** / **Original Size**          |
-| `S`            | Toggle sampling mode                                  |
-| `F`            | Toggle fullscreen                                     |
-| `B`            | Toggle background mode                                |
-| `I`            | Toggle image information overlay                      |
-| `Return`       | Reveal image / directory path in native file explorer |
-| `Esc`          | Exit application                                      |
+| Key           | Action                                                |
+|---------------|-------------------------------------------------------|
+| `←` `→`       | Previous / Next image                                 |
+| `Home` `End`  | First / Last image                                    |
+| `+` `-`       | Zoom in / Zoom out                                    |
+| `Mouse Wheel` | Zoom at cursor position                               |
+| `0`           | Toggle **Fit to Screen** / **Original Size**          |
+| `S`           | Toggle sampling mode                                  |
+| `F`           | Toggle fullscreen                                     |
+| `B`           | Toggle background mode                                |
+| `I`           | Toggle image information overlay                      |
+| `Return`      | Reveal image / directory path in native file explorer |
+| `Esc`         | Exit application                                      |
 
 ### MacOS Specific
 
-| Key           | Action                                  |
-|---------------|-----------------------------------------|
-| `⌘ ←` `⌘ →`   | First / Last image                      |
-| `⌥ ←` `⌥ →`   | First / Last image within the directory |
+| Key         | Action                                  |
+|-------------|-----------------------------------------|
+| `⌘ ←` `⌘ →` | First / Last image                      |
+| `⌥ ←` `⌥ →` | First / Last image within the directory |
 
 ### Open With / Drag & Drop
 
-| Context                                    | How Lyra interprets it                   | Make a collection from files around | Recursion |
-|--------------------------------------------|------------------------------------------|-------------------------------------|-----------|
-| Single file                                | Anchor (Open / Open With / Double-click) | Yes                                 | No        |
-| Multiple files (same directory)            | Selection                                | No                                  | No        |
-| Single directory                           | Directory collection                     | No                                  | Yes       |
-| Multiple directories                       | Multi-directory selection                | No                                  | Yes       |
-| Mixed files from different directories     | Multi-directory selection                | No                                  | No        |
+| Context                                | How Lyra interprets it                   | Make a collection from files around | Recursion |
+|----------------------------------------|------------------------------------------|-------------------------------------|-----------|
+| Single file                            | Anchor (Open / Open With / Double-click) | Yes                                 | No        |
+| Multiple files (same directory)        | Selection                                | No                                  | No        |
+| Single directory                       | Directory collection                     | No                                  | Yes       |
+| Multiple directories                   | Multi-directory selection                | No                                  | Yes       |
+| Mixed files from different directories | Multi-directory selection                | No                                  | No        |
 
 > Recursion applies only when directories are explicitly dropped.
 > Opening or dropping files never implicitly expands into subdirectories.
