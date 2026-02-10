@@ -6,6 +6,6 @@ add_library(hdr_native SHARED ${SOURCES})
 target_include_directories(hdr_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Cross-platform symbol visibility
-if (NOT WIN32)
+if(NOT WIN32)
     target_compile_options(hdr_native PRIVATE -fvisibility=hidden)
-endif ()
+endif()

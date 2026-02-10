@@ -1,8 +1,7 @@
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
-#include <unordered_set>
 #include <mutex>
+#include <unordered_set>
 #include "rgbe.h"
 
 #ifdef _WIN32
@@ -18,7 +17,7 @@
 #endif
 
 static THREAD_LOCAL char last_hdr_error[512] = "";
-static std::unordered_set<void*> hdr_allocated_ptrs;
+static std::unordered_set<void *> hdr_allocated_ptrs;
 static std::mutex hdr_alloc_mutex;
 
 extern "C" {

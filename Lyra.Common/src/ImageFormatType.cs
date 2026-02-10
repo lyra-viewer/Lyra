@@ -29,7 +29,7 @@ public enum ImageFormatType
     [FileExtension([".ico"])]
     [Description("Windows Icon")]
     Ico,
-    
+
     [DisabledType]
     [FileExtension([".icns"])]
     [Description("macOS Icon")]
@@ -39,10 +39,13 @@ public enum ImageFormatType
     [Description("JPEG File Interchange Format")]
     Jfif,
 
-    [DisabledType]
-    [FileExtension([".jp2"])]
-    [Description("JPEG 2000 Image")]
-    Jp2, // TODO
+    [FileExtension([".jp2", ".jpg2"])]
+    [Description("JPEG 2000 Container")]
+    Jp2,
+    
+    [FileExtension([".j2k", ".j2c", ".jpc"])]
+    [Description("JPEG 2000 Codestream")]
+    J2k,
 
     [FileExtension([".jpg", ".jpeg"])]
     [Description("JPEG Image")]
@@ -56,11 +59,11 @@ public enum ImageFormatType
     [FileExtension([".png"])]
     [Description("PNG Image")]
     Png,
-    
+
     [FileExtension([".psd"])]
     [Description("Adobe Photoshop Document")]
     Psd,
-    
+
     [FileExtension([".psb"])]
     [Description("Adobe Photoshop Document")]
     Psb,

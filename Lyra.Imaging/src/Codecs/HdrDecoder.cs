@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Lyra.Common;
 using Lyra.Imaging.Interop;
 
@@ -14,7 +13,7 @@ internal class HdrDecoder : FloatRgbaDecoderBase
         if (!result)
         {
             var errorPtr = HdrNative.get_last_hdr_error();
-            var error = Marshal.PtrToStringAnsi(errorPtr) ?? "<null>";
+            var error = NativeErrors.GetUtf8ZOrAnsiZ(errorPtr);
             Logger.Error($"[HdrDecoder] Native error: {error}");
         }
 
