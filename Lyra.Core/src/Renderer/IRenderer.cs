@@ -17,4 +17,5 @@ public interface IRenderer : IDisposable, IDrawableSizeAware
     void ToggleSampling();
     void ToggleBackground();
     void ToggleInfo();
+    void ToggleHelpBar();
 }

@@ -194,7 +194,7 @@ private int _lastWindowWidth;
 
     private void ToggleHelp()
     {
-        // TODO
+        _renderer.ToggleHelpBar();
     }
 
     private void OpenFileExplorer()

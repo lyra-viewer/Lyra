@@ -55,20 +55,37 @@ public partial class SdlCore : IDisposable
     private void InitializeWindowAndRenderer()
     {
         const WindowFlags flags = WindowFlags.Resizable | WindowFlags.Maximized | WindowFlags.HighPixelDensity;
+
+        var (w, h) = GetInitialWindowSize();
+
         if (_backend == GpuBackend.OpenGL)
         {
-            _window = CreateWindow("Lyra Viewer (OpenGL)", 0, 0, flags | WindowFlags.OpenGL);
+            _window = CreateWindow("Lyra Viewer (OpenGL)", w, h, flags | WindowFlags.OpenGL);
             _renderer = new SkiaOpenGlRenderer(_window, _dropStats);
         }
         else if (_backend == GpuBackend.Vulkan)
         {
-            _window = CreateWindow("Lyra Viewer (Vulkan)", 0, 0, flags | WindowFlags.Vulkan);
+            _window = CreateWindow("Lyra Viewer (Vulkan)", w, h, flags | WindowFlags.Vulkan);
             _renderer = new SkiaVulkanRenderer(_window);
         }
-
+        
+        SetWindowMinimumSize(_window, 640, 480);
         SetWindowFocusable(_window, true);
     }
 
+    private static (int w, int h) GetInitialWindowSize()
+    {
+        var display = GetPrimaryDisplay();
+        if (display != 0 && GetDisplayUsableBounds(display, out var r))
+        {
+            var w = Math.Max(900, r.W / 2);
+            var h = Math.Max(600, r.H / 2);
+            return (w, h);
+        }
+
+        return (1280, 800);
+    }
+    
     private void LoadImage()
     {
         var keepPaths = DirectoryNavigator.GetRange(CleanupSafeRange);
@@ -117,7 +134,7 @@ public partial class SdlCore : IDisposable
             }
         }
     }
-    
+
     private void DeferUntilWarm(Action action)
     {
         if (_coldStartSafe)
@@ -125,7 +142,7 @@ public partial class SdlCore : IDisposable
         else
             _deferredUntilWarm.Add(action);
     }
-    
+
     private void ColdStartReset()
     {
         _coldStartFramesPending = WindowWarmupFrames;

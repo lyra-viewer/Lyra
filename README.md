@@ -69,10 +69,10 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 
 ### Document / Vector Formats
 
-| Format    | Description              | Extensions    |
-|-----------|--------------------------|---------------|
-| SVG       | Scalable Vector Graphics | `.svg`        |
-| Photoshop | Adobe Photoshop document | `.psd` `.psb` |
+| Format    | Description              | Extensions    | Notes                                        |
+|-----------|--------------------------|---------------|----------------------------------------------|
+| SVG       | Scalable Vector Graphics | `.svg`        |                                              |
+| Photoshop | Adobe Photoshop document | `.psd` `.psb` | See *PSD / PSB Decoding Model* section below |
 
 ### Minor Formats
 
@@ -140,13 +140,6 @@ heuristic or hard-coded CMYK assumptions.
 ### Future Direction
 
 The PSD decoder is intentionally structured to allow future expansion.
-
----
-
-## JPEG 2000 Support
-
-Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP)
-are intentionally not supported.
 
 ---
 

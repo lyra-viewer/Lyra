@@ -1,33 +1,19 @@
+using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.SdlCore;
 using SkiaSharp;
 
 namespace Lyra.Renderer.Overlay;
 
-public partial class ImageInfoOverlay : IOverlay<(Composite? composite, ApplicationStates states)>
+public class ImageInfoOverlay : IOverlay<(Composite? composite, ApplicationStates states)>
 {
     public float Scale { get; set; }
     public SKFont? Font { get; set; }
 
-    private readonly SKPaint _textPaint = new() { Color = SKColors.White, IsAntialias = true };
-    private readonly SKPaint _extrasPaint = new() { Color = SKColors.Goldenrod, IsAntialias = true };
-    private readonly SKPaint _failedPaint = new() { Color = SKColors.Firebrick, IsAntialias = true };
-    private readonly SKPaint _debugPaint = new() { Color = SKColors.SeaGreen, IsAntialias = true };
-
-    private readonly Dictionary<char, SKPaint> _tagToPaint;
-
-    private const int BasePadding = 13;
-    private const int BaseLineHeight = 7;
+    private readonly TaggedTextRenderer _text = new();
 
     public ImageInfoOverlay()
     {
-        _tagToPaint = new Dictionary<char, SKPaint>
-        {
-            ['e'] = _extrasPaint,
-            ['f'] = _failedPaint,
-            ['d'] = _debugPaint
-        };
-
         ReloadFont();
     }
 
@@ -38,74 +24,134 @@ public partial class ImageInfoOverlay : IOverlay<(Composite? composite, Applicat
 
     public void Render(SKCanvas canvas, DrawableBounds drawableBounds, SKColor textPaint, (Composite? composite, ApplicationStates states) data)
     {
-        if (Font == null || data.composite == null) return;
+        if (Font == null || data.composite == null)
+            return;
 
-        _textPaint.Color = textPaint;
+        _text.SetTextColor(textPaint);
 
-        var padding = BasePadding * Scale;
-        var lineHeight = Font.Size + (BaseLineHeight * Scale);
+        var padding = OverlayTextMetrics.Padding(Scale);
+        var lineHeight = OverlayTextMetrics.LineHeight(Font, Scale);
         var textY = padding + Font.Size;
 
         foreach (var line in BuildLines(data.composite, data.states))
         {
-            DrawTaggedLine(canvas, line, padding, textY);
+            _text.Draw(canvas, line, padding, textY, Font);
             textY += lineHeight;
         }
     }
 
-    private void DrawTaggedLine(SKCanvas canvas, string line, float xStart, float y)
+    private static List<string> BuildLines(Composite composite, ApplicationStates states)
     {
-        if (Font == null)
-            return;
+        var fileInfo = composite.FileInfo;
+        var fileSize = SizeToStr(fileInfo.Length);
 
-        var x = xStart;
-        var i = 0;
-        var paint = _textPaint;
+        var width = composite.LogicalWidth;
+        var height = composite.LogicalHeight;
 
-        while (i < line.Length)
+        var dirNav = string.Empty;
+        if (states is { DirectoryCount: not null, DirectoryIndex: not null })
+            dirNav = $" <e>({states.DirectoryIndex}/{states.DirectoryCount})</>";
+
+        var lines = new List<string>
         {
-            var tag = TryParseTag(line, i);
-            if (tag.HasValue)
-            {
-                if (tag.Value == '/')
-                    paint = _textPaint;
-                else if (_tagToPaint.TryGetValue(tag.Value, out var mapped))
-                    paint = mapped;
+            $"[Collection]    {states.CollectionType}  |  Dir: {composite.FileInfo.DirectoryName}/",
+            $"[File]          {states.CollectionIndex}/{states.CollectionCount}{dirNav}  |  {fileInfo.Name}  |  {fileSize}",
+            $"[Image]         {composite.ImageFormatType.Description()}  |  {width}x{height}" + (composite.IsGrayscale ? "  |  Greyscale" : ""),
+            $"[Displaying]    Zoom: {states.Zoom}%  |  Display Mode: {states.DisplayMode}",
+            $"[System]        Graphics API: OpenGL  |  Sampling: {states.SamplingMode}"
+        };
 
-                i += 3; // advance over "<x>"
-                continue;
-            }
+#if DEBUG
+        lines.AddRange(BuildDebugLines(composite, states));
+#endif
 
-            var nextTagIdx = line.IndexOf('<', i);
-            if (nextTagIdx == i)
-            {
-                const string literal = "<";
-                canvas.DrawText(literal, x, y, SKTextAlign.Left, Font, paint);
-                x += Font.MeasureText(literal, paint);
-                i += 1;
-                continue;
-            }
+        if (states.ShowExif)
+        {
+            lines.AddRange(BuildFormatSpecificLines(composite));
+            lines.AddRange(BuildExifLines(composite));
+        }
 
-            var end = nextTagIdx == -1 ? line.Length : nextTagIdx;
-            if (end > i)
-            {
-                var chunk = line[i..end];
-                canvas.DrawText(chunk, x, y, SKTextAlign.Left, Font, paint);
-                x += Font.MeasureText(chunk, paint);
-                i = end;
-            }
+        return lines;
+    }
+
+    private static IEnumerable<string> BuildDebugLines(Composite composite, ApplicationStates states)
+    {
+        var dropStatus = states.DropAborted ? "Aborted  |  " : (states.DropActive ? "Active  |  " : "");
+
+        yield return "";
+        yield return "";
+        yield return "";
+        yield return "<d>[Debug]</>";
+        yield return "";
+        yield return $"<d>[State]         {composite.State.Description()}</>";
+        yield return $"<d>[Decoder]       {composite.DecoderName}</>";
+        yield return $"<d>[Time (ms)]     Estimated: {MsToStr(composite.LoadTimeEstimated)}  |  Elapsed: {MsToStr(composite.LoadTimeComplete)}</>";
+        yield return "";
+        yield return $"<d>[Drag & Drop]   {dropStatus}Paths Enqueued: {states.DropPathsEnqueued}  |  All Files: {states.DropFilesEnumerated}  |  Supported: {states.DropFilesSupported}</>";
+    }
+
+    private static IEnumerable<string> BuildFormatSpecificLines(Composite composite)
+    {
+        if (composite.FormatSpecific.Count == 0)
+        {
+            yield break;
+        }
+
+        yield return "";
+        yield return "";
+        yield return "";
+        foreach (var line in composite.FormatSpecific)
+            yield return $"{line.Key}: {line.Value}";
+    }
+
+    private static IEnumerable<string> BuildExifLines(Composite composite)
+    {
+        yield return "";
+        yield return "";
+        yield return "";
+        yield return "[EXIF ↯]";
+        yield return "";
+
+        if (composite.ExifInfo == null)
+        {
+            yield return "<f>No EXIF metadata</>";
+        }
+        else if (!composite.ExifInfo.IsValid())
+        {
+            yield return "<f>Failed to parse EXIF metadata.</>";
+        }
+        else if (!composite.ExifInfo.HasData())
+        {
+            yield return "<f>No recognized EXIF metadata</>";
+        }
+        else
+        {
+            foreach (var line in composite.ExifInfo.ToLines())
+                yield return line;
         }
     }
 
-    private static char? TryParseTag(string line, int index)
+    private static string SizeToStr(long bytes)
     {
-        if (index + 2 >= line.Length || line[index] != '<')
-            return null;
+        const long kB = 1024;
+        const long MB = kB * 1024;
 
-        var middle = line[index + 1];
-        if (line[index + 2] != '>')
-            return null;
+        return bytes switch
+        {
+            >= 100 * MB => $"{bytes / MB} MB",
+            >= 2 * MB => $"{Math.Round(bytes / (double)MB, 1)} MB",
+            >= kB => $"{bytes / kB} kB",
+            _ => $"{bytes} bytes"
+        };
+    }
 
-        return middle is 'e' or 'f' or 'd' or '/' ? middle : null;
+    private static string MsToStr(double? ms)
+    {
+        return ms switch
+        {
+            null => "n/a",
+            < 10 => ms.Value.ToString("0.00"),
+            _ => ms.Value.ToString("0")
+        };
     }
 }

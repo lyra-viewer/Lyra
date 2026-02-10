@@ -23,10 +23,12 @@ public class SkiaOpenGlRenderer : IRenderer
     private int _zoomPercentage = 100;
 
     private readonly ImageInfoOverlay _imageInfoOverlay;
+    private readonly HelpBarOverlay _helpBarOverlay;
     private readonly CenteredTextOverlay _centeredOverlay;
     private SamplingMode _samplingMode = SamplingMode.Cubic;
     private BackgroundMode _backgroundMode = BackgroundMode.Black;
     private InfoMode _infoMode = InfoMode.Basic;
+    private bool _helpBarVisible = true;
 
     private readonly ICompositeContentDrawer _contentDrawer;
 
@@ -54,6 +56,7 @@ public class SkiaOpenGlRenderer : IRenderer
         _grContext = GRContext.CreateGl(glInterface);
 
         _imageInfoOverlay = new ImageInfoOverlay().WithScaleSubscription();
+        _helpBarOverlay =  new HelpBarOverlay().WithScaleSubscription();
         _centeredOverlay = new CenteredTextOverlay().WithScaleSubscription();
 
         _contentDrawer = new SkiaCompositeContentDrawer();
@@ -150,6 +153,9 @@ public class SkiaOpenGlRenderer : IRenderer
 
         if (_infoMode != InfoMode.None)
             _imageInfoOverlay.Render(canvas, bounds, textColor, (_composite, GetApplicationStates()));
+        
+        if(_helpBarVisible)
+            _helpBarOverlay.Render(canvas, bounds, textColor, (_composite, GetApplicationStates()));
 
         var drop = _dropStatusProvider.GetDropStatus();
         if (drop is { Active: true, FilesEnumerated: > 300 })
@@ -239,6 +245,9 @@ public class SkiaOpenGlRenderer : IRenderer
 
     public void ToggleInfo()
         => _infoMode = (InfoMode)(((int)_infoMode + 1) % System.Enum.GetValues<InfoMode>().Length);
+
+    public void ToggleHelpBar() 
+        => _helpBarVisible = !_helpBarVisible;
 
     public void Dispose()
     {
