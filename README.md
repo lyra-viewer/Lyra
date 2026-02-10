@@ -142,6 +142,13 @@ The PSD decoder is intentionally structured to allow future expansion.
 
 ---
 
+## JPEG 2000 Support
+
+Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP) 
+are intentionally not supported.
+
+---
+
 ## Keyboard Shortcuts & Controls
 
 | Key            | Action                                                |

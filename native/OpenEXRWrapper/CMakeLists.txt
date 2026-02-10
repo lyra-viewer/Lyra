@@ -21,6 +21,6 @@ if(APPLE)
 endif()
 
 # Set export visibility for non-Windows
-if (NOT WIN32)
-    target_compile_options(exr_native PRIVATE -fvisibility=hidden)
-endif ()
+if(NOT WIN32)
+  target_compile_options(exr_native PRIVATE -fvisibility=hidden)
+endif()

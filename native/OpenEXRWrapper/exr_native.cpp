@@ -3,9 +3,7 @@
 #include <OpenEXR/ImfRgbaFile.h>
 #include <OpenEXR/ImfThreading.h>
 #include <cstdio>
-#include <cstring>
 #include <mutex>
-#include <thread>
 #include <unordered_set>
 
 #ifdef _WIN32

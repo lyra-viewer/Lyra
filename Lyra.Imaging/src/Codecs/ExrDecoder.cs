@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Lyra.Common;
 using Lyra.Imaging.Interop;
 
@@ -14,7 +13,7 @@ internal class ExrDecoder : FloatRgbaDecoderBase
         if (!result)
         {
             var errorPtr = ExrNative.get_last_exr_error();
-            var error = Marshal.PtrToStringAnsi(errorPtr) ?? "<null>";
+            var error = NativeErrors.GetUtf8ZOrAnsiZ(errorPtr);
             Logger.Error($"[ExrDecoder] Native error: {error}");
         }
 
