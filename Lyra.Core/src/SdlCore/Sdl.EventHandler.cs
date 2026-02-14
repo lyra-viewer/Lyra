@@ -89,7 +89,7 @@ public partial class SdlCore
         
         var displayId = GetDisplayForWindow(_window);
         GetDisplayBounds(displayId, out var displayBounds);
-        Publish(new DisplayBoundsChangedEvent(displayBounds.W, displayBounds.H, displayScale, displayId));
+        Publish(new DisplayBoundsChangedEvent((int)(displayBounds.W * displayScale), (int)(displayBounds.H * displayScale), displayId));
     }
 
     private void OnMouseButtonDown(Event e)

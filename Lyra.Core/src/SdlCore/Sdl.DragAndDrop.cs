@@ -8,14 +8,22 @@ namespace Lyra.SdlCore;
 
 public partial class SdlCore
 {
+    private sealed class DropSession : IDisposable
+    {
+        public readonly CancellationTokenSource Cts = new();
+
+        public volatile bool InProgress;
+        public volatile bool AcceptFiles = true;
+
+        public Task? Worker;
+
+        public void Dispose() => Cts.Dispose();
+    }
+
+    private DropSession? _drop;
+    
     // Drop queue fed by SDL thread
     private readonly ConcurrentQueue<string> _dropQueue = new();
-
-    private CancellationTokenSource? _dropCts;
-    private Task? _dropTask; // keep
-
-    private volatile bool _dropInProgress;  // between DropBegin..DropComplete
-    private volatile bool _dropIgnore;      // set when cancelling to ignore remaining DropFile spam
 
     private const int BatchSize = 256;
     private const int DropStatsUpdateIntervalMs = 250;
@@ -24,20 +32,36 @@ public partial class SdlCore
     {
         Logger.Info("[DragAndDrop] File drop started.");
 
-        CancelDropInternal(resetProgress: true, markAborted: false);
+        // Cancel and replace any existing session (defensive).
+        if (_drop is not null)
+        {
+            Logger.Info("[DragAndDrop] Cancelling previous drop session.");
+            CancelDropInternal(_drop, resetProgress: true, markAborted: false);
+            _drop.Dispose();
+            _drop = null;
+        }
+        else
+        {
+            ClearDropQueue();
+            _dropStats.Reset();
+        }
 
         _dropStats.Start();
 
-        _dropCts = new CancellationTokenSource();
-        _dropIgnore = false;
-        _dropInProgress = true;
+        var session = new DropSession
+        {
+            InProgress = true,
+            AcceptFiles = true
+        };
 
-        _dropTask = Task.Run(() => ProcessDropAsync(_dropCts.Token));
+        _drop = session;
+        session.Worker = Task.Run(() => ProcessDropAsync(session));
     }
 
     private void OnDropFile(Event e)
     {
-        if (_dropIgnore)
+        var session = _drop;
+        if (session is null || !session.AcceptFiles)
             return;
 
         var droppedFilePtr = e.Drop.Data;
@@ -52,7 +76,13 @@ public partial class SdlCore
     private void OnDropComplete()
     {
         Logger.Info("[DragAndDrop] File drop completed.");
-        _dropInProgress = false;
+
+        var session = _drop;
+        if (session is null)
+            return;
+
+        session.InProgress = false;
+        session.AcceptFiles = false; // ignore any late DROPFILE spam after complete
     }
 
     private void CancelDrop()
@@ -60,19 +90,30 @@ public partial class SdlCore
         if (!_dropStats.GetDropStatus().Active)
             return;
 
+        var session = _drop;
+        if (session is null)
+            return;
+
         Logger.Info("[DragAndDrop] Cancelling drop.");
-        CancelDropInternal(resetProgress: false, markAborted: true);
+        CancelDropInternal(session, resetProgress: false, markAborted: true);
     }
 
-    private void CancelDropInternal(bool resetProgress, bool markAborted)
+    private void CancelDropInternal(DropSession session, bool resetProgress, bool markAborted)
     {
-        _dropIgnore = true;
-        _dropCts?.Cancel();
+        session.AcceptFiles = false;
+        session.InProgress = false;
+
+        try
+        {
+            session.Cts.Cancel();
+        }
+        catch
+        {
+            // ignored
+        }
 
         if (resetProgress)
-            while (_dropQueue.TryDequeue(out _))
-            {
-            }
+            ClearDropQueue();
 
         if (markAborted)
             _dropStats.MarkAborted();
@@ -81,7 +122,14 @@ public partial class SdlCore
             _dropStats.Reset();
     }
 
-    private async Task ProcessDropAsync(CancellationToken ct)
+    private void ClearDropQueue()
+    {
+        while (_dropQueue.TryDequeue(out _))
+        {
+        }
+    }
+
+    private async Task ProcessDropAsync(DropSession session)
     {
         // Debounce a bit so it's being processed in batches, not per path.
         // Not cancellable: on cancel flush/apply whatever is processed.
@@ -104,10 +152,10 @@ public partial class SdlCore
                 if (batch.Count == 0)
                 {
                     // If cancelled and nothing to process, we're done.
-                    if (ct.IsCancellationRequested)
+                    if (session.Cts.IsCancellationRequested)
                         break;
 
-                    if (!_dropInProgress)
+                    if (!session.InProgress && _dropQueue.IsEmpty)
                         break;
 
                     await Task.Delay(10);
@@ -122,7 +170,7 @@ public partial class SdlCore
                     out var singleDirectory,
                     out var topDirectory,
                     out var dropContext,
-                    cancellationToken: ct,
+                    cancellationToken: session.Cts.Token,
                     onFileEnumerated: () =>
                     {
                         Interlocked.Increment(ref pendingFiles);
@@ -139,23 +187,23 @@ public partial class SdlCore
                 // reconcile here (should normally be zero).
                 var missingSupported = files.Count - batchSupportedAdded;
                 if (missingSupported > 0)
-                    System.Threading.Interlocked.Add(ref pendingSupported, missingSupported);
+                    Interlocked.Add(ref pendingSupported, missingSupported);
 
                 FlushStatsIfDue(force: true);
 
                 // Apply results back on the main thread
-                DeferUntilWarm(() =>
+                DispatchToMain(() =>
                 {
                     DirectoryNavigator.ApplyCollection(files, dropContext, singleDirectory, topDirectory);
                     LoadImage();
-                    DeferUntilWarm(() => RaiseWindow(_window));
-                });
+                    RaiseWindow(_window);
+                }, requireWarm: true);
 
                 batch.Clear();
                 await Task.Yield();
 
                 // If cancellation was requested, do one last processed batch (above) and exit.
-                if (ct.IsCancellationRequested)
+                if (session.Cts.IsCancellationRequested)
                     break;
             }
         }
@@ -170,9 +218,14 @@ public partial class SdlCore
         }
         finally
         {
-            _dropInProgress = false;
             FlushStatsIfDue(force: true);
             _dropStats.Finish();
+
+            // Clear the session only if it's still the current one.
+            if (ReferenceEquals(_drop, session))
+                _drop = null;
+
+            session.Dispose();
         }
 
         return;

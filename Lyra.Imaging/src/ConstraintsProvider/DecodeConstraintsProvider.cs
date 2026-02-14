@@ -4,9 +4,9 @@ namespace Lyra.Imaging.ConstraintsProvider;
 
 public static class DecodeConstraintsProvider
 {
-    public sealed record DisplaySnapshot(uint? DisplayId, int Width, int Height, float Scale);
+    public sealed record DisplaySnapshot(int LogicalWidth, int LogicalHeight, uint? DisplayId);
 
-    public static DisplaySnapshot Current { get; private set; } = new(null, 0, 0, 1f);
+    public static DisplaySnapshot Current { get; private set; } = new(0, 0, null);
 
     static DecodeConstraintsProvider()
     {
@@ -15,6 +15,6 @@ public static class DecodeConstraintsProvider
 
     private static void OnDisplayBoundsChanged(DisplayBoundsChangedEvent e)
     {
-        Current = new DisplaySnapshot(e.DisplayId, e.Width, e.Height, e.Scale);
+        Current = new DisplaySnapshot(e.LogicalWidth, e.LogicalHeight, e.DisplayId);
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Lyra.Common;
 using Lyra.FileLoader;
 using Lyra.Imaging;
@@ -11,7 +12,7 @@ namespace Lyra.SdlCore;
 public partial class SdlCore : IDisposable
 {
     private IntPtr _window;
-    private IRenderer _renderer = null!;
+    private SkiaRendererBase _renderer = null!;
     private readonly GpuBackend _backend;
     private bool _running = true;
 
@@ -25,6 +26,7 @@ public partial class SdlCore : IDisposable
     private int _coldStartFramesPending;
     private const int WindowWarmupFrames = 3;
     private readonly List<Action> _deferredUntilWarm = [];
+    private readonly ConcurrentQueue<Action> _mainThreadQueue = new();
 
     private Composite? _composite;
     private int _zoomPercentage = 100;
@@ -58,15 +60,18 @@ public partial class SdlCore : IDisposable
 
         var (w, h) = GetInitialWindowSize();
 
-        if (_backend == GpuBackend.OpenGL)
+        switch (_backend)
         {
-            _window = CreateWindow("Lyra Viewer (OpenGL)", w, h, flags | WindowFlags.OpenGL);
-            _renderer = new SkiaOpenGlRenderer(_window, _dropStats);
-        }
-        else if (_backend == GpuBackend.Vulkan)
-        {
-            _window = CreateWindow("Lyra Viewer (Vulkan)", w, h, flags | WindowFlags.Vulkan);
-            _renderer = new SkiaVulkanRenderer(_window);
+            case GpuBackend.OpenGL:
+                _window = CreateWindow("Lyra Viewer (OpenGL)", w, h, flags | WindowFlags.OpenGL);
+                _renderer = new SkiaOpenGlBenchmarkRenderer(_window, _dropStats);
+                break;
+            case GpuBackend.Metal:
+                _window = CreateWindow("Lyra Viewer (Metal)", w, h, flags | WindowFlags.Metal);
+                _renderer = new SkiaMetalBenchmarkRenderer(_window, _dropStats);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
         }
         
         SetWindowMinimumSize(_window, 640, 480);
@@ -116,6 +121,7 @@ public partial class SdlCore : IDisposable
     {
         while (_running)
         {
+            DrainMainThreadQueue();
             HandleEvents();
             RecalculateDisplayModeIfNecessary();
             _renderer.Render();
@@ -126,15 +132,39 @@ public partial class SdlCore : IDisposable
                 if (--_coldStartFramesPending <= 0)
                 {
                     _coldStartSafe = true;
-                    foreach (var action in _deferredUntilWarm)
-                        action();
-
-                    _deferredUntilWarm.Clear();
+                    // Deferred actions will be flushed by DrainMainThreadQueue once warm.
                 }
             }
         }
     }
+    
+    private void DrainMainThreadQueue()
+    {
+        while (_mainThreadQueue.TryDequeue(out var a))
+            a();
 
+        if (_coldStartSafe && _deferredUntilWarm.Count > 0)
+        {
+            foreach (var a in _deferredUntilWarm)
+                a();
+            _deferredUntilWarm.Clear();
+        }
+    }
+    
+    private void DispatchToMain(Action action, bool requireWarm = false)
+    {
+        _mainThreadQueue.Enqueue(() =>
+        {
+            if (requireWarm && !_coldStartSafe)
+            {
+                _deferredUntilWarm.Add(action);
+                return;
+            }
+
+            action();
+        });
+    }
+    
     private void DeferUntilWarm(Action action)
     {
         if (_coldStartSafe)
@@ -194,6 +224,6 @@ public partial class SdlCore : IDisposable
     public enum GpuBackend
     {
         OpenGL,
-        Vulkan
+        Metal
     }
 }

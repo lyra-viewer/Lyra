@@ -71,6 +71,7 @@ internal class PsdDecoder : IImageDecoder
             var psdDocument = PsdDocument.ReadDocument(file);
 
             var constraints = DecodeConstraintsProvider.Current;
+            Logger.Debug($"[PsdDecoder] Preview size: {constraints.LogicalWidth * PreviewSizeMultiplier}x{constraints.LogicalHeight * PreviewSizeMultiplier}");
 
             ct.ThrowIfCancellationRequested();
 
@@ -78,8 +79,8 @@ internal class PsdDecoder : IImageDecoder
             file.Position = 0;
             using (var previewSurface = psdDocument.DecodePreview(
                        file,
-                       maxWidth: (int)(constraints.Width * PreviewSizeMultiplier),
-                       maxHeight: (int)(constraints.Height * PreviewSizeMultiplier),
+                       maxWidth: (int)(constraints.LogicalWidth * PreviewSizeMultiplier),
+                       maxHeight: (int)(constraints.LogicalHeight * PreviewSizeMultiplier),
                        outputFormat: null,
                        maxSurfaceBytes: null,
                        ct: ct))
@@ -98,7 +99,7 @@ internal class PsdDecoder : IImageDecoder
 
             var tiled = psdDocument.CreateTiledComposite(
                 file,
-                maxBytesPerTile: 256L * 1024 * 1024,
+                maxBytesPerTile: 64L * 1024 * 1024,
                 tileEdgeHint: null,
                 outputFormat: null,
                 ct: ct);

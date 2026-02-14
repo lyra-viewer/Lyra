@@ -20,7 +20,7 @@ static class Program
         }
         catch (Exception ex)
         {
-            Logger.Error($"[Unhandled Exception]: {ex.Message}\n{ex.StackTrace}");
+            Logger.Error($"[Unhandled Exception]: {ex}");
         }
     }
 

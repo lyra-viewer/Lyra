@@ -41,5 +41,5 @@ public static class EventManager
     
     public readonly record struct DrawableSizeChangedEvent(int Width, int Height, float Scale);
     
-    public readonly record struct DisplayBoundsChangedEvent(int Width, int Height, float Scale, uint? DisplayId = null);
+    public readonly record struct DisplayBoundsChangedEvent(int LogicalWidth, int LogicalHeight, uint? DisplayId = null);
 }
