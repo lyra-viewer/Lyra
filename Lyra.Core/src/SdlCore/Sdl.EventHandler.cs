@@ -57,10 +57,12 @@ public partial class SdlCore
 
                 case EventType.WindowEnterFullscreen:
                     _isFullscreen = true;
+                    Logger.Debug($"[EventHandler] Fullscreen: {_isFullscreen}");
                     break;
 
                 case EventType.WindowLeaveFullscreen:
                     _isFullscreen = false;
+                    Logger.Debug($"[EventHandler] Fullscreen: {_isFullscreen}");
                     break;
 
                 case EventType.Quit:
@@ -72,21 +74,20 @@ public partial class SdlCore
 
     private void OnWindowResized()
     {
-        var bounds = DimensionHelper.GetDrawableSize(_window, out var scale);
-        Logger.Debug($"[EventHandler] Drawable size changed: {bounds.Width}x{bounds.Height}; Scale: x{scale}");
+        var bounds = DimensionHelper.GetDrawableSize(_window);
+        Logger.Debug($"[EventHandler] Drawable size changed: {bounds.PixelWidth}x{bounds.PixelHeight}; Scale: x{bounds.Scale}");
 
         if (_displayMode == DisplayMode.FitToScreen && _composite != null)
             UpdateFitToScreen();
 
-        Publish(new DrawableSizeChangedEvent(bounds.Width, bounds.Height, scale));
+        Publish(new DrawableSizeChangedEvent(bounds.PixelWidth, bounds.PixelHeight, bounds.Scale));
     }
 
     private void RefreshDisplayInfo()
     {
         Logger.Info("[EventHandler] Refreshing display info.");
-        var displayScale = GetWindowDisplayScale(_window);
-        Publish(new DisplayScaleChangedEvent(displayScale));
         
+        var displayScale = GetWindowDisplayScale(_window);
         var displayId = GetDisplayForWindow(_window);
         GetDisplayBounds(displayId, out var displayBounds);
         Publish(new DisplayBoundsChangedEvent((int)(displayBounds.W * displayScale), (int)(displayBounds.H * displayScale), displayId));

@@ -2,7 +2,7 @@ namespace Lyra.Common;
 
 public static class Logger
 {
-    private static readonly string LogFilePath = Path.Combine(LyraDataDirectory.GetDataDirectory(), "log.txt");
+    private static readonly string LogFilePath = LyraIO.GetLogFile();
     private const long MaxLogFileSize = 5 * 1024 * 1024; // 5 MB max log size
 
     private static readonly Lock Lock = new();

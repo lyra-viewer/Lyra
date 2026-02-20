@@ -24,7 +24,7 @@ public class CenteredTextOverlay : IOverlay<string>
         Font = FontHelper.GetScaledMonoFont(22, Scale);
     }
 
-    public void Render(SKCanvas canvas, DrawableBounds drawableBounds, SKColor textPaint, string text)
+    public void Render(SKCanvas canvas, PixelSize drawableBounds, SKColor textPaint, string text)
     {
         if (Font == null)
             return;
@@ -33,8 +33,8 @@ public class CenteredTextOverlay : IOverlay<string>
 
         Font.MeasureText(text, out var imageBounds, _textPaint);
 
-        var x = (drawableBounds.Width - imageBounds.Width) / 2;
-        var y = (drawableBounds.Height + imageBounds.Height) / 2;
+        var x = (drawableBounds.PixelWidth - imageBounds.Width) / 2;
+        var y = (drawableBounds.PixelHeight + imageBounds.Height) / 2;
 
         canvas.DrawText(text, x, y, SKTextAlign.Left, Font, _textPaint);
     }

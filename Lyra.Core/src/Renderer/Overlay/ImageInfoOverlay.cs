@@ -22,7 +22,7 @@ public class ImageInfoOverlay : IOverlay<(Composite? composite, ApplicationState
         Font = FontHelper.GetScaledMonoFont(14, Scale);
     }
 
-    public void Render(SKCanvas canvas, DrawableBounds drawableBounds, SKColor textPaint, (Composite? composite, ApplicationStates states) data)
+    public void Render(SKCanvas canvas, PixelSize drawableBounds, SKColor textPaint, (Composite? composite, ApplicationStates states) data)
     {
         if (Font == null || data.composite == null)
             return;

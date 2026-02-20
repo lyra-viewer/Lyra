@@ -18,19 +18,19 @@ public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
 
     public void Start(float rawX, float rawY)
     {
-        var (_, _, _, scale) = GetZoomedContentAndBounds();
+        var scale = GetDrawableSize(window).Scale;
         _lastMousePosition = new SKPoint(rawX * scale, rawY * scale);
     }
 
     public bool CanPan()
     {
-        var (contentW, contentH, bounds, scale) = GetZoomedContentAndBounds();
-        return contentW * scale > bounds.Width || contentH * scale > bounds.Height;
+        var (contentW, contentH, bounds) = GetZoomedContentAndBounds();
+        return contentW * bounds.Scale > bounds.PixelWidth || contentH * bounds.Scale > bounds.PixelHeight;
     }
 
     public void Move(float rawX, float rawY)
     {
-        var (_, _, _, scale) = GetZoomedContentAndBounds();
+        var scale = GetDrawableSize(window).Scale;
 
         var current = new SKPoint(rawX * scale, rawY * scale);
         var delta = current - _lastMousePosition;
@@ -42,16 +42,16 @@ public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
 
     public void Clamp()
     {
-        var (contentW, contentH, bounds, scale) = GetZoomedContentAndBounds();
+        var (contentW, contentH, bounds) = GetZoomedContentAndBounds();
 
-        if (contentW * scale <= bounds.Width && contentH * scale <= bounds.Height)
+        if (contentW * bounds.Scale <= bounds.PixelWidth && contentH * bounds.Scale <= bounds.PixelHeight)
         {
             CurrentOffset = SKPoint.Empty;
             return;
         }
 
-        var maxOffsetX = Math.Max(0, (contentW * scale - bounds.Width) / 2);
-        var maxOffsetY = Math.Max(0, (contentH * scale - bounds.Height) / 2);
+        var maxOffsetX = Math.Max(0, (contentW * bounds.Scale - bounds.PixelWidth) / 2);
+        var maxOffsetY = Math.Max(0, (contentH * bounds.Scale - bounds.PixelHeight) / 2);
 
         CurrentOffset = new SKPoint(
             Math.Clamp(CurrentOffset.X, -maxOffsetX, maxOffsetX),
@@ -70,11 +70,11 @@ public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
         var imageDrawSizeOld = new SKSize(composite.LogicalWidth * oldScale, composite.LogicalHeight * oldScale);
         var imageDrawSizeNew = new SKSize(composite.LogicalWidth * newScale, composite.LogicalHeight * newScale);
 
-        var (_, _, bounds, _) = GetZoomedContentAndBounds();
+        var (_, _, bounds) = GetZoomedContentAndBounds();
 
         var imageTopLeftOld = new SKPoint(
-            (bounds.Width - imageDrawSizeOld.Width) / 2 + CurrentOffset.X,
-            (bounds.Height - imageDrawSizeOld.Height) / 2 + CurrentOffset.Y
+            (bounds.PixelWidth - imageDrawSizeOld.Width) / 2 + CurrentOffset.X,
+            (bounds.PixelHeight - imageDrawSizeOld.Height) / 2 + CurrentOffset.Y
         );
 
         var cursorToImage = mouse - imageTopLeftOld;
@@ -89,25 +89,25 @@ public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
         );
 
         return imageTopLeftNew - new SKPoint(
-            (bounds.Width - imageDrawSizeNew.Width) / 2,
-            (bounds.Height - imageDrawSizeNew.Height) / 2
+            (bounds.PixelWidth - imageDrawSizeNew.Width) / 2,
+            (bounds.PixelHeight - imageDrawSizeNew.Height) / 2
         );
     }
 
-    private (int scaledWidth, int scaledHeight, DrawableBounds bounds, float scale) GetZoomedContentAndBounds()
+    private (int scaledWidth, int scaledHeight, PixelSize bounds) GetZoomedContentAndBounds()
     {
-        var bounds = GetDrawableSize(window, out var scale);
+        var drawableSize = GetDrawableSize(window);
 
         var width = composite.LogicalWidth;
         var height = composite.LogicalHeight;
 
         if (width <= 0 || height <= 0)
-            return (0, 0, bounds, scale);
+            return (0, 0, drawableSize);
 
         var zoomScale = _zoomPercentage / 100f;
         var scaledWidth = (int)(width * zoomScale);
         var scaledHeight = (int)(height * zoomScale);
 
-        return (scaledWidth, scaledHeight, bounds, scale);
+        return (scaledWidth, scaledHeight, drawableSize);
     }
 }

@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 using Lyra.Common;
-using Lyra.Imaging;
+using Lyra.Common.Settings;
 
 namespace Lyra;
 
@@ -12,10 +12,14 @@ static class Program
         Logger.Info($"[Application] Application started on {RuntimeInformation.RuntimeIdentifier}");
 
         NativeLibraryLoader.Initialize();
+        var appSettings = SettingsManager.LoadAppSettings();
+        var userSettings = appSettings.PreserveUiSettings
+            ? SettingsManager.LoadUiSettings()
+            : UiSettings.DefaultUiSettings;
 
         try
         {
-            using var viewer = new SdlCore.SdlCore();
+            using var viewer = new SdlCore.SdlCore(appSettings, userSettings);
             viewer.Run();
         }
         catch (Exception ex)
@@ -26,7 +30,6 @@ static class Program
 
     private static void LogSetup()
     {
-        
 #if DEBUG
         Logger.SetLogDebugMode(true);
         Logger.SetLogStrategy(Logger.LogStrategy.Both);

@@ -12,7 +12,17 @@ public static class EnumExtensions
                    .GetField(value.ToString())?
                    .GetCustomAttribute<DescriptionAttribute>()?
                    .Description
-               ?? ToDisplayString(value);
+               ?? value.ToDisplayString();
+    }
+
+    public static string Alias(this Enum value)
+    {
+        return value
+                   .GetType()
+                   .GetField(value.ToString())?
+                   .GetCustomAttribute<AliasAttribute>()?
+                   .Alias
+               ?? value.ToDisplayString();
     }
 
     public static string ToDisplayString(this Enum value)
@@ -20,4 +30,11 @@ public static class EnumExtensions
         return System.Text.RegularExpressions.Regex
             .Replace(value.ToString(), "(\\B[A-Z])", " $1");
     }
+}
+
+[AttributeUsage(AttributeTargets.Field)]
+public class AliasAttribute(string aliasValue) : Attribute
+{
+    public string Alias => AliasValue;
+    private string AliasValue { get; set; } = aliasValue;
 }

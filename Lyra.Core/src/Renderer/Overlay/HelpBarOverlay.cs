@@ -23,7 +23,7 @@ public class HelpBarOverlay : IOverlay<(Composite? composite, ApplicationStates 
         Font.Subpixel = false;
     }
 
-    public void Render(SKCanvas canvas, DrawableBounds drawableBounds, SKColor textColor, (Composite? composite, ApplicationStates states) data)
+    public void Render(SKCanvas canvas, PixelSize drawableBounds, SKColor textColor, (Composite? composite, ApplicationStates states) data)
     {
         if (Font == null || data.composite == null)
             return;
@@ -31,7 +31,7 @@ public class HelpBarOverlay : IOverlay<(Composite? composite, ApplicationStates 
         var padding = OverlayTextMetrics.Padding(Scale);
 
         // Two-line help bar pinned to the bottom of the drawable area.
-        var line2Y = drawableBounds.Height - padding - (OverlayTextMetrics.BaseLineGap * Scale);
+        var line2Y = drawableBounds.PixelHeight - padding - (OverlayTextMetrics.BaseLineGap * Scale);
         var line1Y = line2Y - OverlayTextMetrics.LineHeight(Font, Scale);
 
         var anyInfoHidden = !data.states.ShowExif && data.composite.ExifInfo != null && (data.composite.FormatSpecific.Count > 0 || data.composite.ExifInfo.HasData());
@@ -89,7 +89,7 @@ public class HelpBarOverlay : IOverlay<(Composite? composite, ApplicationStates 
 
             x += colWidth + gap;
 
-            if (x > drawableBounds.Width - padding)
+            if (x > drawableBounds.PixelWidth - padding)
                 break;
         }
     }

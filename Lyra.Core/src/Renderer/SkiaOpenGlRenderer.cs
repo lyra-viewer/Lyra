@@ -1,4 +1,5 @@
-using Lyra.Common;
+using Lyra.DropStatusProvider;
+using Lyra.SdlCore;
 using SkiaSharp;
 using static SDL3.SDL;
 
@@ -10,8 +11,8 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
     private readonly IntPtr _glContext;
     private readonly GRContext _grContext;
 
-    public SkiaOpenGlRenderer(IntPtr window, IDropStatusProvider dropStatusProvider)
-        : base(dropStatusProvider)
+    public SkiaOpenGlRenderer(IntPtr window, PixelSize drawableSize, IDropStatusProvider dropStatusProvider)
+        : base(drawableSize, dropStatusProvider)
     {
         _window = window;
 

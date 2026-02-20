@@ -1,4 +1,4 @@
-namespace Lyra.Common;
+namespace Lyra.DropStatusProvider;
 
 public sealed class DropStats : IDropStatusProvider
 {

@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace Lyra.Renderer.Enum;
+namespace Lyra.Common.Settings.Enums;
 
 public enum SamplingMode
 {

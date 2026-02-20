@@ -12,10 +12,7 @@ public static class DimensionHelper
         if (composite == null || composite.IsEmpty)
             return DisplayMode.Undefined;
 
-        var drawableBounds = GetDrawableSize(window, out var displayScale);
-
-        var windowLogicalWidth = drawableBounds.Width / displayScale;
-        var windowLogicalHeight = drawableBounds.Height / displayScale;
+        GetWindowSize(window, out var windowLogicalWidth, out var windowLogicalHeight);
 
         var compositeLogicalWidth = composite.LogicalWidth;
         var compositeLogicalHeight = composite.LogicalHeight;
@@ -27,19 +24,19 @@ public static class DimensionHelper
         return DisplayMode.FitToScreen;
     }
 
-    public static DrawableBounds GetDrawableSize(IntPtr window, out float displayScale)
+    public static PixelSize GetDrawableSize(IntPtr window)
     {
-        GetWindowSize(window, out var logicalW, out var logicalH);
-        displayScale = GetWindowDisplayScale(window);
-        return new DrawableBounds((int)(logicalW * displayScale), (int)(logicalH * displayScale));
+        GetWindowSize(window, out var logicalWidth, out var logicalHeight);
+        var displayScale = GetWindowDisplayScale(window);
+        return new PixelSize((int)(logicalWidth * displayScale), (int)(logicalHeight * displayScale), displayScale);
     }
 
     public static int GetZoomToFitScreen(IntPtr window, float imageWidth, float imageHeight)
     {
-        var drawableBounds = GetDrawableSize(window, out _);
+        var drawableBounds = GetDrawableSize(window);
         var displayScale = GetWindowDisplayScale(window);
 
-        var physicalZoomFactor = MathF.Min(drawableBounds.Width / imageWidth, drawableBounds.Height / imageHeight);
+        var physicalZoomFactor = MathF.Min(drawableBounds.PixelWidth / imageWidth, drawableBounds.PixelHeight / imageHeight);
 
         return (int)MathF.Round((physicalZoomFactor * 100f) / displayScale);
     }

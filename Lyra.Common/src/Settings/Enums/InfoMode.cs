@@ -1,4 +1,4 @@
-namespace Lyra.Renderer.Enum;
+namespace Lyra.Common.Settings.Enums;
 
 public enum InfoMode
 {

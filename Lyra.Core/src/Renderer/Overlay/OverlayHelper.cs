@@ -5,9 +5,9 @@ namespace Lyra.Renderer.Overlay;
 
 public static class OverlayHelper
 {
-    public static T WithScaleSubscription<T>(this T overlay) where T : IDisplayScaleAware
+    public static T WithDrawableSizeSubscription<T>(this T overlay) where T : IDrawableSizeAware
     {
-        Subscribe<DisplayScaleChangedEvent>(overlay.OnDisplayScaleChanged);
+        Subscribe<DrawableSizeChangedEvent>(overlay.OnDrawableSizeChanged);
         return overlay;
     }
 }

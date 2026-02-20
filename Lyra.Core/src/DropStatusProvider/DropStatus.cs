@@ -1,4 +1,4 @@
-namespace Lyra.Common;
+namespace Lyra.DropStatusProvider;
 
 public readonly record struct DropStatus(
     bool Active,

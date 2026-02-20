@@ -15,6 +15,6 @@ public static class DecodeConstraintsProvider
 
     private static void OnDisplayBoundsChanged(DisplayBoundsChangedEvent e)
     {
-        Current = new DisplaySnapshot(e.LogicalWidth, e.LogicalHeight, e.DisplayId);
+        Current = new DisplaySnapshot(e.PixelWidth, e.PixelHeight, e.DisplayId);
     }
 }

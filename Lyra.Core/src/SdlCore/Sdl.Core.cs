@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
 using Lyra.Common;
+using Lyra.Common.Settings;
+using Lyra.Common.Settings.Enums;
+using Lyra.DropStatusProvider;
 using Lyra.FileLoader;
 using Lyra.Imaging;
 using Lyra.Imaging.Content;
@@ -13,7 +16,6 @@ public partial class SdlCore : IDisposable
 {
     private IntPtr _window;
     private SkiaRendererBase _renderer = null!;
-    private readonly GpuBackend _backend;
     private bool _running = true;
 
     private readonly DropStats _dropStats = new();
@@ -24,7 +26,7 @@ public partial class SdlCore : IDisposable
     // frames have been rendered.
     private bool _coldStartSafe;
     private int _coldStartFramesPending;
-    private const int WindowWarmupFrames = 3;
+    private const int WindowWarmupFrames = 30;
     private readonly List<Action> _deferredUntilWarm = [];
     private readonly ConcurrentQueue<Action> _mainThreadQueue = new();
 
@@ -32,12 +34,14 @@ public partial class SdlCore : IDisposable
     private int _zoomPercentage = 100;
     private DisplayMode _displayMode = DisplayMode.Undefined;
 
+    private readonly AppSettings _appSettings;
+
     private const int PreloadDepth = 3;
     private const int CleanupSafeRange = 4;
 
-    public SdlCore(GpuBackend backend = GpuBackend.OpenGL)
+    public SdlCore(AppSettings appSettings, UiSettings uiSettings)
     {
-        _backend = backend;
+        _appSettings = appSettings;
 
         if (!Init(InitFlags.Video))
         {
@@ -46,7 +50,7 @@ public partial class SdlCore : IDisposable
         }
 
         ColdStartReset();
-        InitializeWindowAndRenderer();
+        InitializeWindowAndRenderer(_appSettings.Renderer, _appSettings.WindowStateOnStart, uiSettings);
         InitializeInput();
         ImageStore.Initialize();
 
@@ -54,28 +58,37 @@ public partial class SdlCore : IDisposable
         // LoadImage();
     }
 
-    private void InitializeWindowAndRenderer()
+    private void InitializeWindowAndRenderer(Backend backend, WindowState windowStateOnStart, UiSettings uiSettings)
     {
-        const WindowFlags flags = WindowFlags.Resizable | WindowFlags.Maximized | WindowFlags.HighPixelDensity;
+        var flags = WindowFlags.Resizable | WindowFlags.HighPixelDensity;
+
+        if (windowStateOnStart != WindowState.Normal)
+            flags |= WindowFlags.Maximized;
 
         var (w, h) = GetInitialWindowSize();
 
-        switch (_backend)
+        switch (backend)
         {
-            case GpuBackend.OpenGL:
+            case Backend.OpenGL:
                 _window = CreateWindow("Lyra Viewer (OpenGL)", w, h, flags | WindowFlags.OpenGL);
-                _renderer = new SkiaOpenGlBenchmarkRenderer(_window, _dropStats);
+                _renderer = new SkiaOpenGlRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropStats);
                 break;
-            case GpuBackend.Metal:
+            case Backend.Metal:
                 _window = CreateWindow("Lyra Viewer (Metal)", w, h, flags | WindowFlags.Metal);
-                _renderer = new SkiaMetalBenchmarkRenderer(_window, _dropStats);
+                _renderer = new SkiaMetalRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropStats);
                 break;
             default:
                 throw new ArgumentOutOfRangeException();
         }
         
+        _renderer.ApplyUserSettings(uiSettings);
+
         SetWindowMinimumSize(_window, 640, 480);
         SetWindowFocusable(_window, true);
+        RefreshDisplayInfo();
+
+        if (windowStateOnStart == WindowState.Fullscreen)
+            SetFullscreen(true);
     }
 
     private static (int w, int h) GetInitialWindowSize()
@@ -90,7 +103,7 @@ public partial class SdlCore : IDisposable
 
         return (1280, 800);
     }
-    
+
     private void LoadImage()
     {
         var keepPaths = DirectoryNavigator.GetRange(CleanupSafeRange);
@@ -137,7 +150,7 @@ public partial class SdlCore : IDisposable
             }
         }
     }
-    
+
     private void DrainMainThreadQueue()
     {
         while (_mainThreadQueue.TryDequeue(out var a))
@@ -150,7 +163,7 @@ public partial class SdlCore : IDisposable
             _deferredUntilWarm.Clear();
         }
     }
-    
+
     private void DispatchToMain(Action action, bool requireWarm = false)
     {
         _mainThreadQueue.Enqueue(() =>
@@ -164,7 +177,7 @@ public partial class SdlCore : IDisposable
             action();
         });
     }
-    
+
     private void DeferUntilWarm(Action action)
     {
         if (_coldStartSafe)
@@ -209,6 +222,12 @@ public partial class SdlCore : IDisposable
     {
         Logger.Info("[Core] Disposing...");
 
+        if (_appSettings.PreserveUiSettings)
+        {
+            var userSettings = _renderer.ExportUiSettings();
+            SettingsManager.SaveUiSettings(userSettings);
+        }
+
         _renderer.Dispose();
         ImageStore.SaveAndDispose();
         _composite?.Dispose();
@@ -219,11 +238,5 @@ public partial class SdlCore : IDisposable
         Quit();
 
         Logger.Info("[Core] Dispose finished.");
-    }
-
-    public enum GpuBackend
-    {
-        OpenGL,
-        Metal
     }
 }

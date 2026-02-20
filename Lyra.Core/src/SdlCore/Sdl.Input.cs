@@ -1,4 +1,3 @@
-using Lyra.Common;
 using Lyra.FileLoader;
 using Lyra.SystemUtils;
 using SkiaSharp;
@@ -139,17 +138,20 @@ public partial class SdlCore
             LoadImage();
         }
     }
-
-private int _lastWindowWidth;
+    
+    private int _lastWindowWidth;
     private int _lastWindowHeight;
     private int _lastWindowX;
     private int _lastWindowY;
-
-    private void ToggleFullscreen()
+    
+    private void ToggleFullscreen() => SetFullscreen(!_isFullscreen);
+    
+    private void SetFullscreen(bool fullscreen)
     {
-        _isFullscreen = !_isFullscreen;
-
-        if (_isFullscreen)
+        if (fullscreen == _isFullscreen)
+            return;
+        
+        if (fullscreen)
         {
             GetWindowSize(_window, out _lastWindowWidth, out _lastWindowHeight);
             GetWindowPosition(_window, out _lastWindowX, out _lastWindowY);
@@ -173,8 +175,6 @@ private int _lastWindowWidth;
                 SetWindowPosition(_window, _lastWindowX, _lastWindowY);
             });
         }
-
-        Logger.Debug($"[Input] Fullscreen: {_isFullscreen}");
     }
 
     private void ToggleSampling()
@@ -243,7 +243,7 @@ private int _lastWindowWidth;
         if (newZoom == _zoomPercentage)
             return;
 
-        DimensionHelper.GetDrawableSize(_window, out var scale);
+        var scale = GetWindowDisplayScale(_window);
         var mouse = new SKPoint(mouseX * scale, mouseY * scale);
 
         _panHelper.UpdateZoom(_zoomPercentage);
