@@ -1,6 +1,6 @@
 namespace Lyra.DropStatusProvider;
 
-public sealed class DropStats : IDropStatusProvider
+public sealed class DropProgressTracker : IDropProgressProvider
 {
     // 0/1
     private int _active; 
@@ -39,7 +39,7 @@ public sealed class DropStats : IDropStatusProvider
     public void AddFiles(long count = 1) { if (count > 0) Interlocked.Add(ref _files, count); }
     public void AddSupported(long count = 1) { if (count > 0) Interlocked.Add(ref _supported, count); }
 
-    public DropStatus GetDropStatus()
+    public DropProgress GetDropStatus()
         => new(
             Active: Volatile.Read(ref _active) == 1,
             Aborted: Volatile.Read(ref _aborted) == 1,

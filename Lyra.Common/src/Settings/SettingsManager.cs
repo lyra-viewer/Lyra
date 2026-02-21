@@ -43,6 +43,7 @@ public static class SettingsManager
         public int Version { get; set; } = CurrentVersion;
         public string Renderer { get; set; } = DefaultAppSettings.Renderer.Alias();
         public string WindowStateOnStart { get; set; } = DefaultAppSettings.WindowStateOnStart.Alias();
+        public string MidMouseButtonFunction { get; set; } = DefaultAppSettings.MidMouseButtonFunction.Alias();
         public bool PreserveUiSettings { get; set; } = DefaultAppSettings.PreserveUiSettings;
     }
 
@@ -52,13 +53,20 @@ public static class SettingsManager
                 # Lyra Application Settings
                 version = {CurrentVersion}
 
+                # Renderer used:
                 # "opengl", "metal"
                 renderer = "{s.Renderer.Alias()}"
 
+                # Window state on application start:
                 # "maximized", "normal", "fullscreen"
                 window_state_on_start = "{s.WindowStateOnStart.Alias()}"
+                
+                # Function of middle mouse button click:
+                # "pan", "exit", "none"
+                mid_mouse_button_function = "{s.MidMouseButtonFunction.Alias()}"
 
-                # load last ui settings on start and overwrite on exit
+                # If true, restore last UI settings on start and save on exit.
+                # If false, always use defaults.
                 preserve_ui_settings = {s.PreserveUiSettings.ToString().ToLowerInvariant()}
 
                 """;
@@ -82,8 +90,12 @@ public static class SettingsManager
         var windowState = DefaultAppSettings.WindowStateOnStart;
         if (TryParseByAlias(dto.WindowStateOnStart, out WindowState parsedWindowState))
             windowState = parsedWindowState;
+        
+        var midMouseButton = DefaultAppSettings.MidMouseButtonFunction;
+        if (TryParseByAlias(dto.MidMouseButtonFunction, out MidMouseButtonFunction parsedMidMouseButton))
+            midMouseButton = parsedMidMouseButton;
 
-        return new AppSettings(renderer, windowState, dto.PreserveUiSettings);
+        return new AppSettings(renderer, windowState, midMouseButton, dto.PreserveUiSettings);
     }
 
     public static UiSettings LoadUiSettings()

@@ -43,10 +43,10 @@ public partial class SdlCore
         else
         {
             ClearDropQueue();
-            _dropStats.Reset();
+            _dropProgressTracker.Reset();
         }
 
-        _dropStats.Start();
+        _dropProgressTracker.Start();
 
         var session = new DropSession
         {
@@ -70,7 +70,7 @@ public partial class SdlCore
             return;
 
         _dropQueue.Enqueue(path);
-        _dropStats.AddPaths(1);
+        _dropProgressTracker.AddPaths(1);
     }
 
     private void OnDropComplete()
@@ -87,7 +87,7 @@ public partial class SdlCore
 
     private void CancelDrop()
     {
-        if (!_dropStats.GetDropStatus().Active)
+        if (!_dropProgressTracker.GetDropStatus().Active)
             return;
 
         var session = _drop;
@@ -116,10 +116,10 @@ public partial class SdlCore
             ClearDropQueue();
 
         if (markAborted)
-            _dropStats.MarkAborted();
+            _dropProgressTracker.MarkAborted();
 
         if (resetProgress)
-            _dropStats.Reset();
+            _dropProgressTracker.Reset();
     }
 
     private void ClearDropQueue()
@@ -219,7 +219,7 @@ public partial class SdlCore
         finally
         {
             FlushStatsIfDue(force: true);
-            _dropStats.Finish();
+            _dropProgressTracker.Finish();
 
             // Clear the session only if it's still the current one.
             if (ReferenceEquals(_drop, session))
@@ -240,11 +240,11 @@ public partial class SdlCore
 
             var filesToAdd = Interlocked.Exchange(ref pendingFiles, 0);
             if (filesToAdd > 0)
-                _dropStats.AddFiles(filesToAdd);
+                _dropProgressTracker.AddFiles(filesToAdd);
 
             var supportedToAdd = Interlocked.Exchange(ref pendingSupported, 0);
             if (supportedToAdd > 0)
-                _dropStats.AddSupported(supportedToAdd);
+                _dropProgressTracker.AddSupported(supportedToAdd);
         }
     }
 }

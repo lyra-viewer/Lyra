@@ -18,7 +18,7 @@ public partial class SdlCore : IDisposable
     private SkiaRendererBase _renderer = null!;
     private bool _running = true;
 
-    private readonly DropStats _dropStats = new();
+    private readonly DropProgressTracker _dropProgressTracker = new();
 
     // IMPORTANT: Certain window operations (bring-to-front, fullscreen) are
     // unreliable if performed too early, even when confirmed by SDL events.
@@ -71,11 +71,11 @@ public partial class SdlCore : IDisposable
         {
             case Backend.OpenGL:
                 _window = CreateWindow("Lyra Viewer (OpenGL)", w, h, flags | WindowFlags.OpenGL);
-                _renderer = new SkiaOpenGlRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropStats);
+                _renderer = new SkiaOpenGlRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropProgressTracker);
                 break;
             case Backend.Metal:
                 _window = CreateWindow("Lyra Viewer (Metal)", w, h, flags | WindowFlags.Metal);
-                _renderer = new SkiaMetalRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropStats);
+                _renderer = new SkiaMetalRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropProgressTracker);
                 break;
             default:
                 throw new ArgumentOutOfRangeException();

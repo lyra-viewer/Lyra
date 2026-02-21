@@ -28,8 +28,8 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     // MTLPixelFormatBGRA8Unorm (stable value)
     private const ulong MTLPixelFormatBGRA8Unorm = 80;
 
-    public SkiaMetalRenderer(IntPtr window, PixelSize drawableSize, IDropStatusProvider dropStatusProvider)
-        : base(drawableSize, dropStatusProvider)
+    public SkiaMetalRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider)
+        : base(drawableSize, dropProgressProvider)
     {
         _metalView = MetalCreateView(window);
         if (_metalView == IntPtr.Zero)

@@ -1,6 +1,6 @@
 namespace Lyra.DropStatusProvider;
 
-public readonly record struct DropStatus(
+public readonly record struct DropProgress(
     bool Active,
     bool Aborted,
     long PathsEnqueued,

@@ -1,4 +1,5 @@
 using Lyra.Common;
+using Lyra.Common.Settings.Enums;
 using static Lyra.Common.Events.EventManager;
 using static SDL3.SDL;
 
@@ -95,14 +96,27 @@ public partial class SdlCore
 
     private void OnMouseButtonDown(Event e)
     {
-        if (e.Button.Button == ButtonLeft)
-            StartPanning(e.Motion.X, e.Motion.Y);
+        switch (e.Button.Button)
+        {
+            case ButtonLeft:
+            case ButtonMiddle when _appSettings.MidMouseButtonFunction == MidMouseButtonFunction.Pan:
+                StartPanning(e.Motion.X, e.Motion.Y);
+                break;
+        }
     }
 
     private void OnMouseButtonUp(Event e)
     {
-        if (e.Button.Button == ButtonLeft)
-            StopPanning();
+        switch (e.Button.Button)
+        {
+            case ButtonLeft:
+            case ButtonMiddle when _appSettings.MidMouseButtonFunction == MidMouseButtonFunction.Pan:
+                StopPanning();
+                break;
+            case ButtonMiddle when _appSettings.MidMouseButtonFunction == MidMouseButtonFunction.Exit:
+                HandleEscape();
+                break;
+        }
     }
 
     private void OnMouseMotion(Event e)

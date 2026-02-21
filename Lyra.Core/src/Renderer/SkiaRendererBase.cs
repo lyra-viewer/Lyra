@@ -29,19 +29,19 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     private bool _helpBarVisible = true;
 
     private readonly ICompositeContentDrawer _contentDrawer;
-    private readonly IDropStatusProvider _dropStatusProvider;
+    private readonly IDropProgressProvider _dropProgressProvider;
 
     private readonly ImageInfoOverlay _imageInfoOverlay;
     private readonly HelpBarOverlay _helpBarOverlay;
     private readonly CenteredTextOverlay _centeredOverlay;
 
-    protected SkiaRendererBase(PixelSize drawableSize, IDropStatusProvider dropStatusProvider)
+    protected SkiaRendererBase(PixelSize drawableSize, IDropProgressProvider dropProgressProvider)
     {
         WindowWidth = drawableSize.PixelWidth;
         WindowHeight = drawableSize.PixelHeight;
         DisplayScale = drawableSize.Scale;
         
-        _dropStatusProvider = dropStatusProvider;
+        _dropProgressProvider = dropProgressProvider;
         
         Subscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
 
@@ -164,7 +164,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         if (_helpBarVisible)
             _helpBarOverlay.Render(canvas, bounds, textColor, (_composite, GetApplicationStates()));
 
-        var drop = _dropStatusProvider.GetDropStatus();
+        var drop = _dropProgressProvider.GetDropStatus();
         if (drop is { Active: true, FilesEnumerated: > 300 })
         {
             _centeredOverlay.Render(canvas, bounds, textColor, $"{drop.FilesSupported} images found, {drop.FilesEnumerated} files scanned...");
@@ -201,7 +201,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     private ApplicationStates GetApplicationStates()
     {
         var navigation = DirectoryNavigator.GetNavigation();
-        var drop = _dropStatusProvider.GetDropStatus();
+        var drop = _dropProgressProvider.GetDropStatus();
 
         return new ApplicationStates
         {

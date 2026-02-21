@@ -11,8 +11,8 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
     private readonly IntPtr _glContext;
     private readonly GRContext _grContext;
 
-    public SkiaOpenGlRenderer(IntPtr window, PixelSize drawableSize, IDropStatusProvider dropStatusProvider)
-        : base(drawableSize, dropStatusProvider)
+    public SkiaOpenGlRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider)
+        : base(drawableSize, dropProgressProvider)
     {
         _window = window;
 

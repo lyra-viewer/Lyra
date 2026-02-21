@@ -145,21 +145,22 @@ The PSD decoder is intentionally structured to allow future expansion.
 
 ## Keyboard Shortcuts & Controls
 
-| Key           | Action                                                |
-|---------------|-------------------------------------------------------|
-| `←` `→`       | Previous / Next image                                 |
-| `Home` `End`  | First / Last image                                    |
-| `+` `-`       | Zoom in / Zoom out                                    |
-| `Mouse Wheel` | Zoom at cursor position                               |
-| `0`           | Toggle **Fit to Screen** / **Original Size**          |
-| `S`           | Toggle sampling mode                                  |
-| `F`           | Toggle fullscreen                                     |
-| `B`           | Toggle background mode                                |
-| `I`           | Toggle image information overlay                      |
-| `Return`      | Reveal image / directory path in native file explorer |
-| `Esc`         | Exit application                                      |
+| Key                   | Action                                            |
+|-----------------------|---------------------------------------------------|
+| `←` `→`               | Previous / Next image                             |
+| `Home` `End`          | First / Last image                                |
+| `+` `-`               | Zoom in / Zoom out                                |
+| `Mouse Wheel`         | Zoom at cursor position                           |
+| `Middle Mouse Button` | Customizable (see `app-settings.toml`)            |
+| `0`                   | Toggle **Fit to Screen** / **Original Size**      |
+| `S`                   | Toggle sampling mode                              |
+| `F`                   | Toggle fullscreen                                 |
+| `B`                   | Toggle background mode                            |
+| `I`                   | Toggle image information overlay                  |
+| `Return`              | Reveal image or directory in native file explorer |
+| `Esc`                 | Exit application                                  |
 
-### MacOS Specific
+### macOS Specific
 
 | Key         | Action                                  |
 |-------------|-----------------------------------------|

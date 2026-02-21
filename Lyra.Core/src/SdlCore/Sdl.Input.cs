@@ -76,7 +76,7 @@ public partial class SdlCore
     
     private void HandleEscape()
     {
-        if (_dropStats.GetDropStatus().Active)
+        if (_dropProgressTracker.GetDropStatus().Active)
         {
             CancelDrop();
             return;
