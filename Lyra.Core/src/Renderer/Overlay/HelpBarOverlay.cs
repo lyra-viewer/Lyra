@@ -34,7 +34,7 @@ public class HelpBarOverlay : IOverlay<(Composite? composite, ApplicationStates 
         var line2Y = drawableBounds.PixelHeight - padding - (OverlayTextMetrics.BaseLineGap * Scale);
         var line1Y = line2Y - OverlayTextMetrics.LineHeight(Font, Scale);
 
-        var anyInfoHidden = !data.states.ShowExif && data.composite.ExifInfo != null && (data.composite.FormatSpecific.Count > 0 || data.composite.ExifInfo.HasData());
+        var anyInfoHidden = !data.states.ShowExif && (data.composite.ExifInfo != null && data.composite.ExifInfo.HasData() || data.composite.FormatSpecific.Count > 0);
         var multiDir = data.states is { DirectoryCount: not null, DirectoryIndex: not null };
 
         var column1 = (

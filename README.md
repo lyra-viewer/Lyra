@@ -103,11 +103,11 @@ in some edge cases, may be missing or may not fully represent the document as it
 
 At the moment, Lyra supports decoding the following Photoshop color modes from Image Data:
 
-- 8-bit RGB
-- 8-bit CMYK
-- 8-bit Indexed
+- RGB
+- CMYK
+- Indexed
 
-Support for other modes (16-bit, 32-bit, Lab, Grayscale, Bitmap...) will be implemented.
+Support for other modes (Lab, Grayscale, Bitmap...) will be implemented.
 
 ### PSB Support
 

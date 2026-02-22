@@ -7,11 +7,14 @@ namespace Lyra.Imaging.Psd.Core.Readers;
 public sealed class PsdBigEndianReader(Stream stream)
 {
     public Stream BaseStream { get; } = stream ?? throw new ArgumentNullException(nameof(stream));
-    
+
+    // Reusable scratch avoids repeated stackalloc in hot paths.
+    private readonly byte[] _scratch8 = new byte[8];
+
     #region Stream Helpers
-    
+
     public bool CanSeek => BaseStream.CanSeek;
-    
+
     public long Position
     {
         get => BaseStream.CanSeek ? BaseStream.Position : throw new NotSupportedException("Stream is not seekable.");
@@ -27,84 +30,71 @@ public sealed class PsdBigEndianReader(Stream stream)
     public long Length => BaseStream.CanSeek ? BaseStream.Length : throw new NotSupportedException("Stream does not support seeking.");
 
     #endregion
-    
+
     #region Low-Level Primitives
+
+    public void ReadExactly(Span<byte> buffer) => BaseStream.ReadExactly(buffer);
 
     public byte ReadByte()
     {
-        int b = BaseStream.ReadByte();
-        if (b < 0) throw new EndOfStreamException();
+        var b = BaseStream.ReadByte();
+        if (b < 0) 
+            throw new EndOfStreamException();
+        
         return (byte)b;
-    }
-
-    public void ReadExactly(Span<byte> buffer)
-    {
-        var total = 0;
-        while (total < buffer.Length)
-        {
-            var n = BaseStream.Read(buffer[total..]);
-            if (n == 0) throw new EndOfStreamException();
-            total += n;
-        }
     }
 
     public ushort ReadUInt16()
     {
-        Span<byte> tmp = stackalloc byte[2];
-        ReadExactly(tmp);
-        return BinaryPrimitives.ReadUInt16BigEndian(tmp);
+        ReadExactly(_scratch8.AsSpan(0, 2));
+        return BinaryPrimitives.ReadUInt16BigEndian(_scratch8.AsSpan(0, 2));
     }
 
     public short ReadInt16()
     {
-        Span<byte> tmp = stackalloc byte[2];
-        ReadExactly(tmp);
-        return BinaryPrimitives.ReadInt16BigEndian(tmp);
+        ReadExactly(_scratch8.AsSpan(0, 2));
+        return BinaryPrimitives.ReadInt16BigEndian(_scratch8.AsSpan(0, 2));
     }
 
     public uint ReadUInt32()
     {
-        Span<byte> tmp = stackalloc byte[4];
-        ReadExactly(tmp);
-        return BinaryPrimitives.ReadUInt32BigEndian(tmp);
+        ReadExactly(_scratch8.AsSpan(0, 4));
+        return BinaryPrimitives.ReadUInt32BigEndian(_scratch8.AsSpan(0, 4));
     }
 
     public int ReadInt32()
     {
-        Span<byte> tmp = stackalloc byte[4];
-        ReadExactly(tmp);
-        return BinaryPrimitives.ReadInt32BigEndian(tmp);
+        ReadExactly(_scratch8.AsSpan(0, 4));
+        return BinaryPrimitives.ReadInt32BigEndian(_scratch8.AsSpan(0, 4));
     }
 
     public ulong ReadUInt64()
     {
-        Span<byte> tmp = stackalloc byte[8];
-        ReadExactly(tmp);
-        return BinaryPrimitives.ReadUInt64BigEndian(tmp);
+        ReadExactly(_scratch8.AsSpan(0, 8));
+        return BinaryPrimitives.ReadUInt64BigEndian(_scratch8.AsSpan(0, 8));
     }
 
-    public long ReadInt64()
+    public byte[] ReadBytes(int count)
     {
-        Span<byte> tmp = stackalloc byte[8];
-        ReadExactly(tmp);
-        return BinaryPrimitives.ReadInt64BigEndian(tmp);
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        if (count == 0)
+            return [];
+
+        var data = new byte[count];
+        ReadExactly(data);
+        return data;
     }
 
     public void Skip(long bytes)
     {
-        if (bytes < 0)
-            throw new ArgumentOutOfRangeException(nameof(bytes));
+        ArgumentOutOfRangeException.ThrowIfNegative(bytes);
 
         if (bytes == 0)
             return;
 
         if (BaseStream.CanSeek)
         {
-            var newPos = BaseStream.Position + bytes;
-            if (newPos < 0)
-                throw new IOException("Stream seek overflow.");
-
-            BaseStream.Position = newPos;
+            BaseStream.Seek(bytes, SeekOrigin.Current);
             return;
         }
 
@@ -118,7 +108,7 @@ public sealed class PsdBigEndianReader(Stream stream)
             remaining -= toRead;
         }
     }
-    
+
     public bool TryPeekUInt32(out uint value)
     {
         value = 0;
@@ -131,19 +121,18 @@ public sealed class PsdBigEndianReader(Stream stream)
         Position = pos;
         return true;
     }
-    
+
     #endregion
 
     #region PSD Helpers
-    
+
     public void ExpectSignature(uint expectedFourCC)
     {
         var got = ReadUInt32();
         if (got != expectedFourCC)
-            throw new InvalidDataException(
-                $"Invalid signature. Expected '{FourCC.ToString(expectedFourCC)}' but got '{FourCC.ToString(got)}'.");
+            throw new InvalidDataException($"Invalid signature. Expected '{FourCC.ToString(expectedFourCC)}' but got '{FourCC.ToString(got)}'.");
     }
-    
+
     public bool TryPeekSignature(uint expected) => TryPeekUInt32(out var got) && got == expected;
 
     public string ReadPascalString(int padTo)
@@ -151,10 +140,8 @@ public sealed class PsdBigEndianReader(Stream stream)
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(padTo);
 
         var len = ReadByte();
-        var data = new byte[len];
-        ReadExactly(data);
+        var data = ReadBytes(len);
 
-        // Skip padding: total includes length byte
         var total = 1 + len;
         var padded = ((total + (padTo - 1)) / padTo) * padTo;
         Skip(padded - total);
@@ -165,11 +152,14 @@ public sealed class PsdBigEndianReader(Stream stream)
     public string ReadUnicodeString()
     {
         var charCount = ReadInt32();
-        if (charCount <= 0) return string.Empty;
+        if (charCount == 0)
+            return string.Empty;
+
+        if (charCount < 0)
+            throw new InvalidDataException($"Invalid unicode string length: {charCount}.");
 
         var byteCount = checked(charCount * 2);
-        var bytes = new byte[byteCount];
-        ReadExactly(bytes);
+        var bytes = ReadBytes(byteCount);
 
         // PSD uses big-endian UTF-16
         return Encoding.BigEndianUnicode.GetString(bytes);

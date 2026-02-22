@@ -101,8 +101,7 @@ internal class PsdDecoder : IImageDecoder
                 file,
                 maxBytesPerTile: 64L * 1024 * 1024,
                 tileEdgeHint: null,
-                outputFormat: null,
-                ct: ct);
+                outputFormat: null);
 
             var tileSource = new RasterTileSource(
                 tilesX: tiled.TilesX,

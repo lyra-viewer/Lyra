@@ -90,14 +90,14 @@ public sealed class PsdDocument
     /// <summary>
     /// Create a tiled composite container (geometry only). Does NOT decode tiles.
     /// </summary>
-    public TiledCompositeImage CreateTiledComposite(Stream stream, long maxBytesPerTile, int? tileEdgeHint = null, SurfaceFormat? outputFormat = null, CancellationToken ct = default)
+    public TiledCompositeImage CreateTiledComposite(Stream stream, long maxBytesPerTile, int? tileEdgeHint = null, SurfaceFormat? outputFormat = null)
     {
         ArgumentNullException.ThrowIfNull(stream);
 
         if (stream.CanSeek)
             stream.Position = ImageData.PayloadOffset;
 
-        return PsdCompositeDecoder.DecodeCompositeTiled(this, stream, outputFormat ?? SurfaceFormat.Default, maxBytesPerTile, tileEdgeHint, ct);
+        return PsdCompositeDecoder.DecodeCompositeTiled(this, stream, outputFormat ?? SurfaceFormat.Default, maxBytesPerTile, tileEdgeHint);
     }
 
     /// <summary>

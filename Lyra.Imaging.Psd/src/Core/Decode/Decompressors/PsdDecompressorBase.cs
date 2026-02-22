@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Runtime.InteropServices;
+using Lyra.Imaging.Psd.Core.Common;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 using Lyra.Imaging.Psd.Core.Readers;
 using Lyra.Imaging.Psd.Core.SectionData;
@@ -12,6 +14,7 @@ public abstract class PsdDecompressorBase : IPsdDecompressor
     public PlaneImage DecompressPreview(PsdBigEndianReader reader, FileHeader header, int width, int height, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(reader);
+        
         ct.ThrowIfCancellationRequested();
 
         ValidateCommonInputs(header);
@@ -23,11 +26,13 @@ public abstract class PsdDecompressorBase : IPsdDecompressor
             throw new InvalidOperationException($"Scaled dimensions {width}x{height} exceed source {header.Width}x{header.Height}.");
 
         var roles = CompositePlaneRoles.Get(header.ColorMode, header.NumberOfChannels);
-        return header.Depth switch
+        var depth = PsdDepthUtil.FromBitsPerChannel(header.Depth);
+
+        return depth switch
         {
-            8 => Decompress8Preview(reader, header, roles, width, height, ct),
-            16 => Decompress16Preview(reader, header, roles, width, height, ct),
-            32 => Decompress32Preview(reader, header, roles, width, height, ct),
+            PsdDepth.Bit8 => Decompress8Preview(reader, header, roles, width, height, ct),
+            PsdDepth.Bit16 => Decompress16Preview(reader, header, roles, width, height, ct),
+            PsdDepth.Bit32 => Decompress32Preview(reader, header, roles, width, height, ct),
             _ => throw new NotSupportedException($"PSD composite decompress: Depth {header.Depth} not supported. Expected 8, 16, or 32.")
         };
     }
@@ -38,19 +43,31 @@ public abstract class PsdDecompressorBase : IPsdDecompressor
         ArgumentNullException.ThrowIfNull(consumer);
 
         ct.ThrowIfCancellationRequested();
+        
         ValidateCommonInputs(header);
 
         if ((uint)yStart > (uint)header.Height || (uint)yEnd > (uint)header.Height || yStart > yEnd)
             throw new ArgumentOutOfRangeException(nameof(yStart), $"Invalid row region [{yStart}, {yEnd}) for height {header.Height}.");
 
         var roles = CompositePlaneRoles.Get(header.ColorMode, header.NumberOfChannels);
+        var depth = PsdDepthUtil.FromBitsPerChannel(header.Depth);
 
-        if (header.Depth != 8)
-            throw new NotSupportedException("Row-region decode is currently implemented only for 8-bit. (16/32 will come later.)");
-
-        Decompress8RowRegion(reader, header, roles, yStart, yEnd, consumer, ct);
+        switch (depth)
+        {
+            case PsdDepth.Bit8:
+                Decompress8RowRegion(reader, header, roles, yStart, yEnd, consumer, ct);
+                return;
+            case PsdDepth.Bit16:
+                Decompress16RowRegion(reader, header, roles, yStart, yEnd, consumer, ct);
+                return;
+            case PsdDepth.Bit32:
+                Decompress32RowRegion(reader, header, roles, yStart, yEnd, consumer, ct);
+                return;
+            default:
+                throw new NotSupportedException($"Row-region decode: Depth {header.Depth} not supported. Expected 8, 16, or 32.");
+        }
     }
-    
+
     #endregion
 
     #region Helpers
@@ -68,31 +85,37 @@ public abstract class PsdDecompressorBase : IPsdDecompressor
 
     protected abstract PlaneImage Decompress8(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, CancellationToken ct);
 
-    protected virtual PlaneImage Decompress16(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, CancellationToken ct)
-        => throw new NotSupportedException($"PSD composite decompress ({GetType().Name}): 16-bit depth not implemented.");
+    protected abstract PlaneImage Decompress16(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, CancellationToken ct);
 
-    protected virtual PlaneImage Decompress32(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, CancellationToken ct)
-        => throw new NotSupportedException($"PSD composite decompress ({GetType().Name}): 32-bit depth not implemented.");
+    protected abstract PlaneImage Decompress32(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, CancellationToken ct);
 
-    protected virtual PlaneImage Decompress8Preview(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int width, int height, CancellationToken ct)
-        => throw new NotSupportedException($"PSD composite decompress ({GetType().Name}): scaled 8-bit decode not implemented.");
+    protected abstract PlaneImage Decompress8Preview(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int width, int height, CancellationToken ct);
 
-    protected virtual PlaneImage Decompress16Preview(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int width, int height, CancellationToken ct)
-        => throw new NotSupportedException($"PSD composite decompress ({GetType().Name}): scaled 16-bit decode not implemented.");
+    protected abstract PlaneImage Decompress16Preview(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int width, int height, CancellationToken ct);
 
-    protected virtual PlaneImage Decompress32Preview(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int width, int height, CancellationToken ct)
-        => throw new NotSupportedException($"PSD composite decompress ({GetType().Name}): scaled 32-bit decode not implemented.");
+    protected abstract PlaneImage Decompress32Preview(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int width, int height, CancellationToken ct);
 
     protected virtual void Decompress8RowRegion(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int yStart, int yEnd, IPlaneRowConsumer consumer, CancellationToken ct)
     {
-        // Fallback implementation for ALL decompressors:
-        // decode full planes once, then emit only the requested region in row-major order.
-        // This is correct and enables the new pipeline immediately.
-        // Later, each decompressor can override for true streaming/seeked region decode.
         var full = Decompress8(reader, header, roles, ct);
+        EmitRowRegion(full, roles.Length, yStart, yEnd, consumer, ct);
+    }
 
-        var width = full.Width;
-        var planeCount = roles.Length;
+    protected virtual void Decompress16RowRegion(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int yStart, int yEnd, IPlaneRowConsumer consumer, CancellationToken ct)
+    {
+        var full = Decompress16(reader, header, roles, ct);
+        EmitRowRegion(full, roles.Length, yStart, yEnd, consumer, ct);
+    }
+
+    protected virtual void Decompress32RowRegion(PsdBigEndianReader reader, FileHeader header, PlaneRole[] roles, int yStart, int yEnd, IPlaneRowConsumer consumer, CancellationToken ct)
+    {
+        var full = Decompress32(reader, header, roles, ct);
+        EmitRowRegion(full, roles.Length, yStart, yEnd, consumer, ct);
+    }
+
+    private static void EmitRowRegion(PlaneImage full, int planeCount, int yStart, int yEnd, IPlaneRowConsumer consumer, CancellationToken ct)
+    {
+        var rowBytes = full.Planes[0].BytesPerRow;
 
         for (var y = yStart; y < yEnd; y++)
         {
@@ -101,70 +124,76 @@ public abstract class PsdDecompressorBase : IPsdDecompressor
             for (var p = 0; p < planeCount; p++)
             {
                 var plane = full.Planes[p];
-                var row = plane.Data.AsSpan(y * plane.BytesPerRow, width);
+                var row = plane.Data.AsSpan(y * plane.BytesPerRow, rowBytes);
                 consumer.ConsumeRow(p, y, row);
             }
         }
     }
-    
+
     #endregion
 
     #region Scaled Decode Logic
 
-    /// <summary>
-    /// Reads the next decoded source row for the current plane into <paramref name="rowBuffer"/>.
-    /// Implementations must fully fill the span, and advance the underlying input stream accordingly.
-    /// </summary>
     protected delegate void ReadNextSourceRow(Span<byte> rowBuffer);
 
-    /// <summary>
-    /// Shared helper for 8-bit planar sources:
-    /// <list type="bullet">
-    ///   <item><description>Allocates scaled output planes (<c>outWidth × outHeight</c>).</description></item>
-    ///   <item><description>Uses row-by-row decoded input via <paramref name="readNextRow"/>.</description></item>
-    ///   <item><description>Performs nearest-neighbor downsampling into destination planes.</description></item>
-    /// </list>
-    /// </summary>
-    protected static PlaneImage DecodeScaled8PlanesByRows(
+    protected static PlaneImage DecodeScaledPlanesByRows(
         int srcWidth,
         int srcHeight,
         int outWidth,
         int outHeight,
+        int depthBits,
         PlaneRole[] roles,
         CancellationToken ct,
         Func<ReadNextSourceRow> createPlaneRowReader)
     {
-        var planes = AllocatePlanes(outWidth, outHeight, 8, roles);
+        var depth = PsdDepthUtil.FromBitsPerChannel(depthBits);
+        return DecodeScaledPlanesByRows(srcWidth, srcHeight, outWidth, outHeight, depth, roles, ct, createPlaneRowReader);
+    }
+
+    protected static PlaneImage DecodeScaledPlanesByRows(
+        int srcWidth,
+        int srcHeight,
+        int outWidth,
+        int outHeight,
+        PsdDepth depth,
+        PlaneRole[] roles,
+        CancellationToken ct,
+        Func<ReadNextSourceRow> createPlaneRowReader)
+    {
+        var bpc = depth.BytesPerChannel();
+
+        var planes = AllocatePlanes(outWidth, outHeight, (int)depth, roles);
 
         var xMap = BuildXMap(srcWidth, outWidth);
         var yMap = BuildYMap(srcHeight, outHeight);
 
-        var rentedSrcRow = ArrayPool<byte>.Shared.Rent(srcWidth);
+        var srcRowBytes = depth.RowBytes(srcWidth);
+        var rentedSrcRow = ArrayPool<byte>.Shared.Rent(srcRowBytes);
+
         try
         {
+            var srcRow = rentedSrcRow.AsSpan(0, srcRowBytes);
+
             for (var p = 0; p < roles.Length; p++)
             {
                 ct.ThrowIfCancellationRequested();
 
                 var readNextRow = createPlaneRowReader();
-                var srcRow = rentedSrcRow.AsSpan(0, srcWidth);
 
                 var plane = planes[p];
-                var nextOutY = 0; // next output row to write
+                var nextOutY = 0;
                 var targetYSrc = yMap[nextOutY];
 
                 for (var ySrc = 0; ySrc < srcHeight; ySrc++)
                 {
                     ct.ThrowIfCancellationRequested();
 
-                    // Always consume the next source row to keep alignment correct
                     readNextRow(srcRow);
 
-                    // If this source row is used for one or more output rows, write them
                     while (nextOutY < outHeight && ySrc == targetYSrc)
                     {
-                        var dstRow = plane.Data.AsSpan(nextOutY * plane.BytesPerRow, outWidth);
-                        SampleRowNearest(srcRow, dstRow, xMap);
+                        var dstRow = plane.Data.AsSpan(nextOutY * plane.BytesPerRow, outWidth * bpc);
+                        SampleRowNearestBytes(srcRow, dstRow, xMap, bpc);
 
                         nextOutY++;
                         if (nextOutY >= outHeight) break;
@@ -172,12 +201,11 @@ public abstract class PsdDecompressorBase : IPsdDecompressor
                     }
                 }
 
-                // Sanity: should have produced all output rows
                 if (nextOutY != outHeight)
                     throw new InvalidOperationException($"Scaled decode bug: produced {nextOutY} rows out of {outHeight}.");
             }
 
-            return new PlaneImage(outWidth, outHeight, 8, planes);
+            return new PlaneImage(outWidth, outHeight, (int)depth, planes);
         }
         finally
         {
@@ -190,6 +218,7 @@ public abstract class PsdDecompressorBase : IPsdDecompressor
         var map = new int[dstWidth];
         for (var x = 0; x < dstWidth; x++)
             map[x] = (int)((long)x * srcWidth / dstWidth);
+        
         return map;
     }
 
@@ -198,13 +227,35 @@ public abstract class PsdDecompressorBase : IPsdDecompressor
         var map = new int[dstHeight];
         for (var y = 0; y < dstHeight; y++)
             map[y] = (int)((long)y * srcHeight / dstHeight);
+        
         return map;
     }
 
-    protected static void SampleRowNearest(ReadOnlySpan<byte> srcRow, Span<byte> dstRow, int[] xMap)
+    protected static void SampleRowNearestBytes(ReadOnlySpan<byte> srcRow, Span<byte> dstRow, int[] xMap, int bpc)
     {
-        for (var xOut = 0; xOut < dstRow.Length; xOut++)
-            dstRow[xOut] = srcRow[xMap[xOut]];
+        if (bpc == 1)
+        {
+            for (var xOut = 0; xOut < xMap.Length; xOut++)
+                dstRow[xOut] = srcRow[xMap[xOut]];
+        }
+        else if (bpc == 2)
+        {
+            var src16 = MemoryMarshal.Cast<byte, ushort>(srcRow);
+            var dst16 = MemoryMarshal.Cast<byte, ushort>(dstRow);
+            for (var xOut = 0; xOut < xMap.Length; xOut++)
+                dst16[xOut] = src16[xMap[xOut] >> 1];
+        }
+        else if (bpc == 4)
+        {
+            var src32 = MemoryMarshal.Cast<byte, uint>(srcRow);
+            var dst32 = MemoryMarshal.Cast<byte, uint>(dstRow);
+            for (var xOut = 0; xOut < xMap.Length; xOut++)
+                dst32[xOut] = src32[xMap[xOut] >> 2];
+        }
+        else
+        {
+            throw new NotSupportedException($"Unsupported bpc: {bpc}.");
+        }
     }
 
     #endregion
@@ -225,15 +276,8 @@ public abstract class PsdDecompressorBase : IPsdDecompressor
 
     protected static Plane[] AllocatePlanes(int width, int height, int depthBits, PlaneRole[] roles)
     {
-        var bpc = depthBits switch
-        {
-            8 => 1,
-            16 => 2,
-            32 => 4,
-            _ => throw new NotSupportedException($"Depth {depthBits} not supported for plane allocation.")
-        };
-
-        var bytesPerRow = checked(width * bpc);
+        var depth = PsdDepthUtil.FromBitsPerChannel(depthBits);
+        var bytesPerRow = depth.RowBytes(width);
         var planeSize = checked(bytesPerRow * height);
 
         var planes = new Plane[roles.Length];

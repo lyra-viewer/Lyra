@@ -5,19 +5,24 @@ public static class LutBuilder
     public static RgbLuts BuildRgbCurves(int[] sumR, int[] cntR, int[] sumG, int[] cntG, int[] sumB, int[] cntB)
         => new(BuildCurve(sumR, cntR), BuildCurve(sumG, cntG), BuildCurve(sumB, cntB));
 
-    public static byte[] BuildCurve(int[] sum, int[] cnt)
+    private static byte[] BuildCurve(int[] sum, int[] cnt)
     {
+        var total = 0;
+        for (var i = 0; i < 256; i++)
+            total += cnt[i];
+
+        if (total == 0)
+            return RgbLuts.Identity.R;
+
         var lut = new byte[256];
+
         for (var i = 0; i < 256; i++)
         {
-            if (cnt[i] > 0)
+            var c = cnt[i];
+            if (c > 0)
             {
-                var v = sum[i] / cnt[i];
+                var v = (sum[i] + (c / 2)) / c; // rounded average
                 lut[i] = (byte)Math.Clamp(v, 0, 255);
-            }
-            else
-            {
-                lut[i] = 0;
             }
         }
 
@@ -34,11 +39,10 @@ public static class LutBuilder
             }
             else
             {
-                int a = last, b = i;
-                for (var j = a + 1; j < b; j++)
+                for (var j = last + 1; j < i; j++)
                 {
-                    var t = (j - a) / (float)(b - a);
-                    var v = lut[a] + (lut[b] - lut[a]) * t;
+                    var t = (j - last) / (float)(i - last);
+                    var v = lut[last] + (lut[i] - lut[last]) * t;
                     lut[j] = (byte)(v + 0.5f);
                 }
             }
@@ -47,12 +51,10 @@ public static class LutBuilder
         }
 
         if (last >= 0 && last < 255)
+        {
             for (var j = last + 1; j < 256; j++)
                 lut[j] = lut[last];
-
-        if (last < 0)
-            for (var i = 0; i < 256; i++)
-                lut[i] = (byte)i;
+        }
 
         return lut;
     }

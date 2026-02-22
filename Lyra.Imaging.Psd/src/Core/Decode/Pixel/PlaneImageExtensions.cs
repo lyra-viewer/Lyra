@@ -5,13 +5,13 @@ public static class PlaneImageExtensions
     public static bool TryGetPlane(this in PlaneImage img, PlaneRole role, out Plane plane)
     {
         // Avoid LINQ
-        foreach (var p in img.Planes)
+        for (var i = 0; i < img.Planes.Count; i++)
         {
-            if (p.Role != role)
-                continue;
-
-            plane = p;
-            return true;
+            if (img.Planes[i].Role == role)
+            {
+                plane = img.Planes[i];
+                return true;
+            }
         }
 
         plane = default;
@@ -20,8 +20,6 @@ public static class PlaneImageExtensions
 
     public static Plane GetPlaneOrThrow(this in PlaneImage img, PlaneRole role)
     {
-        return !img.TryGetPlane(role, out var p)
-            ? throw new InvalidOperationException($"Missing required plane: {role}")
-            : p;
+        return img.TryGetPlane(role, out var p) ? p : throw new InvalidOperationException($"Missing required plane: {role}");
     }
 }

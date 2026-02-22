@@ -12,8 +12,8 @@ public interface IColorModeProcessor
     string? IccProfileUsed { get; }
 
     /// <summary>
-    // Takes decompressed planes + optional metadata (palette, ICC, etc.)
-    // Produces RGBA8888 (or BGRA depending on renderer)
+    /// Takes decompressed planes + optional metadata (palette, ICC, etc.)
+    /// Produces RGBA (format is decided by <see cref="ColorModeContext.OutputFormat"/>).
     /// </summary>
     RgbaSurface Process(PlaneImage src, ColorModeContext ctx, ColorModeData? colorModeData, CancellationToken ct);
 }

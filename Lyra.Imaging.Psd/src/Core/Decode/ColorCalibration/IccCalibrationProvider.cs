@@ -17,7 +17,7 @@ public sealed class IccCalibrationProvider
         iccProfileUsed = null;
         
         if (!req.PreferColorManagement)
-            return RgbLuts.Identity();
+            return RgbLuts.Identity;
 
         string profileKey;
         Configuration config;
@@ -34,11 +34,11 @@ public sealed class IccCalibrationProvider
             // Only CMYK has a reasonable OS-default profile fallback at the moment.
             // For RGB, if there's no embedded profile, treat it as already in output space (identity).
             if (req.SourceColorMode != ColorMode.Cmyk)
-                return RgbLuts.Identity();
+                return RgbLuts.Identity;
 
             var path = OsCmykProfileLocator.TryGetDefaultCmykIccPath();
             if (path == null)
-                return RgbLuts.Identity();
+                return RgbLuts.Identity;
 
             profileKey = path;
             config = new Configuration(iccConfig: new IccConfiguration(path, Intent.RelativeColorimetric));

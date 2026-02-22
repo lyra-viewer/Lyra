@@ -16,7 +16,7 @@ public readonly record struct RgbLuts(byte[] R, byte[] G, byte[] B)
     private static readonly byte[] IdentityArray = BuildIdentityArray();
     private static readonly RgbLuts IdentityLuts = new(IdentityArray, IdentityArray, IdentityArray);
 
-    public static RgbLuts Identity() => IdentityLuts;
+    public static RgbLuts Identity { get; } = IdentityLuts;
 
     public bool IsIdentity => ReferenceEquals(R, IdentityArray) && ReferenceEquals(G, IdentityArray) && ReferenceEquals(B, IdentityArray);
 
