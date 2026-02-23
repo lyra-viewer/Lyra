@@ -1,4 +1,4 @@
-using Lyra.Imaging.Psd.Core.Primitives;
+using Lyra.Imaging.Psd.Core.Common;
 
 namespace Lyra.Imaging.Psd.Core.SectionData;
 

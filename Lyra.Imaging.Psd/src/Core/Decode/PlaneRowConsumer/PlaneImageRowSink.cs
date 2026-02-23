@@ -1,6 +1,6 @@
-using Lyra.Imaging.Psd.Core.Decode.Decompressors;
+using Lyra.Imaging.Psd.Core.Decode.Pixel;
 
-namespace Lyra.Imaging.Psd.Core.Decode.Pixel;
+namespace Lyra.Imaging.Psd.Core.Decode.PlaneRowConsumer;
 
 /// <summary>
 /// Row sink that collects planar rows into a PlaneImage (full width, full height).

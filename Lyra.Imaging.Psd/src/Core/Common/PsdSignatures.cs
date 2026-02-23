@@ -1,4 +1,4 @@
-namespace Lyra.Imaging.Psd.Core.Primitives;
+namespace Lyra.Imaging.Psd.Core.Common;
 
 public static class PsdSignatures
 {

@@ -1,4 +1,4 @@
-using Lyra.Imaging.Psd.Core.Primitives;
+using Lyra.Imaging.Psd.Core.Common;
 using Lyra.Imaging.Psd.Core.Readers;
 using Lyra.Imaging.Psd.Core.SectionData;
 
@@ -6,7 +6,7 @@ namespace Lyra.Imaging.Psd.Core.SectionReaders;
 
 internal static class AdditionalLayerInformationReader
 {
-    public static AdditionalLayerInformation[] ReadAll(PsdBigEndianReader reader, long sectionEnd, bool isPsb)
+    public static AdditionalLayerInformation[] ReadAll(PsdBigEndianReader reader, long sectionEnd, bool isPsb, bool strict = false)
     {
         var blocks = new List<AdditionalLayerInformation>();
 
@@ -21,11 +21,8 @@ internal static class AdditionalLayerInformationReader
                 break;
             }
 
-            if (!reader.TryPeekSignature(PsdSignatures.PhotoshopBlock) &&
-                !reader.TryPeekSignature(PsdSignatures.PhotoshopLargeBlock))
-            {
+            if (!reader.TryPeekSignature(PsdSignatures.PhotoshopBlock) && !reader.TryPeekSignature(PsdSignatures.PhotoshopLargeBlock))
                 break;
-            }
 
             var signature = ReadPhotoshopBlockSignature(reader);
             var key = reader.ReadUInt32();
@@ -34,18 +31,22 @@ internal static class AdditionalLayerInformationReader
 
             remaining = sectionEnd - reader.Position;
             if (remaining < lenFieldSize)
-                throw new InvalidDataException($"Truncated AdditionalLayerInformation length field for '{FourCC.ToString(key)}'.");
+            {
+                if (strict)
+                    throw new InvalidDataException($"Truncated AdditionalLayerInformation length field for '{FourCC.ToString(key)}'.");
 
-            var payloadLength = lenFieldSize == 4
-                ? reader.ReadUInt32()
-                : checked((long)reader.ReadUInt64());
+                break;
+            }
 
+            var payloadLength = lenFieldSize == 4 ? reader.ReadUInt32() : checked((long)reader.ReadUInt64());
             var payloadOffset = reader.Position;
 
-            if (payloadOffset + payloadLength > sectionEnd)
+            if (payloadLength < 0 || payloadLength > sectionEnd - payloadOffset)
             {
-                var errorInfo = new AdditionalLayerInformation(signature, key, payloadOffset, payloadLength);
-                throw new InvalidDataException($"AdditionalLayerInformation '{errorInfo.KeyFourCC}' exceeds section bounds.");
+                if (strict)
+                    throw new InvalidDataException($"AdditionalLayerInformation '{FourCC.ToString(key)}' exceeds section bounds.");
+
+                break;
             }
 
             reader.Skip(payloadLength);
@@ -54,7 +55,10 @@ internal static class AdditionalLayerInformationReader
             if ((payloadLength & 1) == 1)
             {
                 if (reader.Position >= sectionEnd)
-                    throw new InvalidDataException("AdditionalLayerInformation padding exceeds section bounds.");
+                    if (strict)
+                        throw new InvalidDataException("AdditionalLayerInformation padding exceeds section bounds.");
+                    else
+                        break;
 
                 reader.Skip(1);
             }
@@ -70,9 +74,8 @@ internal static class AdditionalLayerInformationReader
         var pos = reader.Position;
         var sig = reader.ReadUInt32();
 
-        if (PsdSignatures.IsPhotoshopBlock(sig))
-            return sig;
-
-        throw new InvalidDataException($"Invalid Photoshop block signature '{FourCC.ToString(sig)}' (0x{sig:X8}) at 0x{pos:X}.");
+        return PsdSignatures.IsPhotoshopBlock(sig)
+            ? sig
+            : throw new InvalidDataException($"Invalid Photoshop block signature '{FourCC.ToString(sig)}' (0x{sig:X8}) at 0x{pos:X}.");
     }
 }

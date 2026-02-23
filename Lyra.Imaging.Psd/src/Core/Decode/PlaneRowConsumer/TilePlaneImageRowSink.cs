@@ -1,8 +1,8 @@
 using Lyra.Imaging.Psd.Core.Common;
 using Lyra.Imaging.Psd.Core.Decode.Composite;
-using Lyra.Imaging.Psd.Core.Decode.Decompressors;
+using Lyra.Imaging.Psd.Core.Decode.Pixel;
 
-namespace Lyra.Imaging.Psd.Core.Decode.Pixel;
+namespace Lyra.Imaging.Psd.Core.Decode.PlaneRowConsumer;
 
 public sealed class TilePlaneImageRowSink : IPlaneRowConsumer
 {

@@ -1,5 +1,4 @@
 using Lyra.Imaging.Psd.Core.Common;
-using Lyra.Imaging.Psd.Core.Primitives;
 using Lyra.Imaging.Psd.Core.Readers;
 using Lyra.Imaging.Psd.Core.SectionData;
 

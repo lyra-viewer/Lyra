@@ -1,5 +1,5 @@
 using System.Text;
-using Lyra.Imaging.Psd.Core.Primitives;
+using Lyra.Imaging.Psd.Core.Common;
 using Lyra.Imaging.Psd.Core.Readers;
 
 namespace Lyra.Imaging.Psd.Core.Decode.ColorCalibration;

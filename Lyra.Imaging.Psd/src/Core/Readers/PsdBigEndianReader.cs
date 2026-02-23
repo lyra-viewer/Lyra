@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
-using Lyra.Imaging.Psd.Core.Primitives;
+using Lyra.Imaging.Psd.Core.Common;
 
 namespace Lyra.Imaging.Psd.Core.Readers;
 

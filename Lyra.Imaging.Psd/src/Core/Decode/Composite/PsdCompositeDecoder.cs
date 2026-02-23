@@ -3,7 +3,7 @@ using Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
 using Lyra.Imaging.Psd.Core.Decode.ColorProcessors;
 using Lyra.Imaging.Psd.Core.Decode.Decompressors;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
-using Lyra.Imaging.Psd.Core.Primitives;
+using Lyra.Imaging.Psd.Core.Decode.PlaneRowConsumer;
 using Lyra.Imaging.Psd.Core.Readers;
 using Lyra.Imaging.Psd.Core.SectionData;
 

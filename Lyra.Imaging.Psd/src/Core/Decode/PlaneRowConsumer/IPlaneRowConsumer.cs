@@ -1,4 +1,4 @@
-namespace Lyra.Imaging.Psd.Core.Decode.Decompressors;
+namespace Lyra.Imaging.Psd.Core.Decode.PlaneRowConsumer;
 
 /// <summary>
 /// Receives decoded planar rows (one plane at a time).

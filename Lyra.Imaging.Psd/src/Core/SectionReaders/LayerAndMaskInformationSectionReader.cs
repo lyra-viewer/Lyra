@@ -24,18 +24,32 @@ internal static class LayerAndMaskInformationSectionReader
             return LayerAndMaskInformation.Empty;
 
         var layerInfoSummary = LayerInfoReader.Read(reader, end, isPsb, header);
+
         GlobalLayerMaskSummary globalMask = default;
         AdditionalLayerInformation[] additional = [];
 
         if (reader.Position < end)
         {
-            globalMask = GlobalLayerMaskInfoReader.Read(reader, end);
+            // Align to 2 bytes if possible (defensive tolerance)
+            if (((reader.Position - start) & 1) != 0 && reader.Position + 1 <= end)
+                reader.Skip(1);
+
+            if (GlobalLayerMaskInfoReader.TryRead(reader, end, out var gm))
+                globalMask = gm;
+
             additional = AdditionalLayerInformationReader.ReadAll(reader, end, isPsb);
         }
 
-        // Jump to end if small padding remains
-        if (reader.Position != end)
+        // Jump to end if padding remains (safe)
+        if (reader.Position < end)
             reader.Skip(end - reader.Position);
+        else if (reader.Position > end)
+        {
+            if (reader.CanSeek)
+                reader.Position = end;
+            else
+                throw new InvalidDataException($"LayerAndMask parsing overran section end by {reader.Position - end} bytes.");
+        }
 
         return new LayerAndMaskInformation(length, layerInfoSummary, globalMask, additional);
     }
