@@ -51,18 +51,13 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
         var decodedPlaneCount = roles.Length;
 
         var rowWidthBytes = depth.RowBytes(width);
-        
         var rowByteCounts = ReadAndValidateRowByteCounts(reader, header, fileChannelCount, height, ct);
-
         var planes = AllocatePlanes(width, height, (int)depth, roles);
 
-        var packedRent = ArrayPool<byte>.Shared.Rent(64 * 1024);
-        var unpackedRent = ArrayPool<byte>.Shared.Rent(rowWidthBytes);
-        var state = new RleRowDecodeState(packedRent);
+        var state = new RleRowDecodeState(ArrayPool<byte>.Shared.Rent(64 * 1024));
 
         try
         {
-            // decode only the first decodedPlaneCount channels (assumes composite channels are first)
             for (var p = 0; p < decodedPlaneCount; p++)
             {
                 var plane = planes[p];
@@ -73,9 +68,8 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
                 {
                     ct.ThrowIfCancellationRequested();
 
-                    DecodeNextUnpackedRow(reader, rowWidthBytes, rowByteCounts, state, unpackedRent, ct);
-                    unpackedRent.AsSpan(0, rowWidthBytes)
-                        .CopyTo(plane.Data.AsSpan(y * plane.BytesPerRow, rowWidthBytes));
+                    var dstRow = plane.Data.AsSpan(y * plane.BytesPerRow, rowWidthBytes);
+                    DecodeNextUnpackedRow(reader, rowByteCounts, state, dstRow, ct);
                 }
             }
 
@@ -84,7 +78,6 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
         finally
         {
             ArrayPool<byte>.Shared.Return(state.PackedBuffer);
-            ArrayPool<byte>.Shared.Return(unpackedRent);
         }
     }
 
@@ -106,9 +99,8 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
         var xMap = BuildXMap(srcWidth, outWidth);
         var yMap = BuildYMap(srcHeight, outHeight);
 
-        var packedRent = ArrayPool<byte>.Shared.Rent(64 * 1024);
+        var state = new RleRowDecodeState(ArrayPool<byte>.Shared.Rent(64 * 1024));
         var unpackedRent = ArrayPool<byte>.Shared.Rent(srcRowBytes);
-        var state = new RleRowDecodeState(packedRent);
 
         try
         {
@@ -137,12 +129,14 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
                         continue;
                     }
 
-                    DecodeNextUnpackedRow(reader, srcRowBytes, rowByteCounts, state, unpackedRent, ct);
+                    // decode into temp row (preview needs it for sampling)
+                    var tmpRow = unpackedRent.AsSpan(0, srcRowBytes);
+                    DecodeNextUnpackedRow(reader, rowByteCounts, state, tmpRow, ct);
 
                     while (nextOutY < outHeight && ySrc == targetYSrc)
                     {
                         var dstRow = plane.Data.AsSpan(nextOutY * plane.BytesPerRow, outWidth * bpc);
-                        SampleRowNearestBytes(unpackedRent.AsSpan(0, srcRowBytes), dstRow, xMap, bpc);
+                        SampleRowNearestBytes(tmpRow, dstRow, xMap, bpc);
 
                         nextOutY++;
                         if (nextOutY >= outHeight)
@@ -196,8 +190,9 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
         var prefix = _cachedPrefixSum!;
         var packedDataStart = _cachedPackedDataStart;
 
-        var packedRent = ArrayPool<byte>.Shared.Rent(64 * 1024);
         var unpackedRent = ArrayPool<byte>.Shared.Rent(rowBytes);
+
+        var state = new RleRowDecodeState(ArrayPool<byte>.Shared.Rent(64 * 1024));
 
         try
         {
@@ -206,6 +201,7 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
                 ct.ThrowIfCancellationRequested();
 
                 var rowIndexBase = p * height;
+                state.RowIndex = rowIndexBase + yStart;
 
                 var packedOffset = prefix[rowIndexBase + yStart];
                 reader.BaseStream.Position = packedDataStart + packedOffset;
@@ -214,26 +210,14 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
                 {
                     ct.ThrowIfCancellationRequested();
 
-                    var packedLen = rowByteCounts[rowIndexBase + y];
-                    if (packedLen < 0)
-                        throw new InvalidOperationException($"Negative PackBits row length: {packedLen}.");
-
-                    if (packedLen > packedRent.Length)
-                    {
-                        ArrayPool<byte>.Shared.Return(packedRent);
-                        packedRent = ArrayPool<byte>.Shared.Rent(packedLen);
-                    }
-
-                    reader.ReadExactly(packedRent.AsSpan(0, packedLen));
-                    PackBitsDecode(packedRent.AsSpan(0, packedLen), unpackedRent.AsSpan(0, rowBytes));
-
+                    DecodeNextUnpackedRow(reader, rowByteCounts, state, unpackedRent.AsSpan(0, rowBytes), ct);
                     consumer.ConsumeRow(p, y, unpackedRent.AsSpan(0, rowBytes));
                 }
             }
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(packedRent);
+            ArrayPool<byte>.Shared.Return(state.PackedBuffer);
             ArrayPool<byte>.Shared.Return(unpackedRent);
         }
     }
@@ -258,7 +242,7 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
         return rowByteCounts;
     }
 
-    private static void DecodeNextUnpackedRow(PsdBigEndianReader reader, int rowWidthBytes, int[] rowByteCounts, RleRowDecodeState state, byte[] unpackedRent, CancellationToken ct)
+    private static void DecodeNextUnpackedRow(PsdBigEndianReader reader, int[] rowByteCounts, RleRowDecodeState state, Span<byte> dstRow, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
@@ -276,23 +260,21 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
         }
 
         reader.ReadExactly(state.PackedBuffer.AsSpan(0, packedLen));
-        PackBitsDecode(state.PackedBuffer.AsSpan(0, packedLen), unpackedRent.AsSpan(0, rowWidthBytes));
+        PackBitsDecodeChecked(state.PackedBuffer.AsSpan(0, packedLen), dstRow);
     }
 
-    private static void PackBitsDecode(ReadOnlySpan<byte> src, Span<byte> dst)
+    private static void PackBitsDecodeChecked(ReadOnlySpan<byte> src, Span<byte> dst)
     {
-        var si = 0;
-        var di = 0;
-        while (di < dst.Length)
+        int si = 0, di = 0;
+        while ((uint)di < (uint)dst.Length)
         {
-            if (si >= src.Length)
+            if ((uint)si >= (uint)src.Length)
                 throw new InvalidOperationException("PackBits source exhausted.");
 
-            var n = unchecked((sbyte)src[si++]);
+            sbyte n = unchecked((sbyte)src[si++]);
             if (n >= 0)
             {
-                var count = n + 1;
-
+                int count = n + 1;
                 if (si + count > src.Length)
                     throw new InvalidOperationException("PackBits literal overruns source.");
 
@@ -305,15 +287,14 @@ internal sealed class PsdRleDecompressor : PsdDecompressorBase
             }
             else if (n != -128)
             {
-                var count = 1 - n;
-
-                if (si >= src.Length)
+                int count = 1 - n;
+                if ((uint)si >= (uint)src.Length)
                     throw new InvalidOperationException("PackBits replicate missing byte.");
 
                 if (di + count > dst.Length)
                     throw new InvalidOperationException("PackBits replicate overruns destination.");
 
-                var val = src[si++];
+                byte val = src[si++];
                 dst.Slice(di, count).Fill(val);
                 di += count;
             }

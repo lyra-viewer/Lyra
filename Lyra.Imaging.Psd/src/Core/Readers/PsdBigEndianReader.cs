@@ -4,6 +4,39 @@ using Lyra.Imaging.Psd.Core.Common;
 
 namespace Lyra.Imaging.Psd.Core.Readers;
 
+// ============================================================================
+//  PERFORMANCE CRITICAL – PSD BIG-ENDIAN BINARY READER
+// ----------------------------------------------------------------------------
+//  Provides low-level big-endian reading primitives for PSD/PSB parsing.
+//  This reader is used throughout section parsing and plane decoding.
+//
+//  Hot Path Characteristics:
+//    - Called repeatedly during layer, resource, and image data parsing.
+//    - Must not allocate.
+//    - Must avoid unnecessary buffer copies.
+//    - Must avoid redundant bounds checks.
+//    - Must keep position tracking lightweight.
+//
+//  Design Goals:
+//    - Sequential forward reading optimized.
+//    - Safe, predictable behavior for malformed files.
+//    - Zero hidden allocations.
+//    - Explicit error reporting on corruption.
+//
+//  PERFORMANCE CONTRACT:
+//    This class underpins the entire PSD parser.
+//    Changes must preserve:
+//      - Correct big-endian semantics
+//      - Strict bounds validation
+//      - Zero-allocation behavior
+//    Any structural changes must be benchmarked and validated
+//    against large PSB files and malformed input samples.
+//
+//  Verified against:
+//    - Reference PSD/PSB corpus
+//    - Corrupt/truncated file handling tests
+//    - Large file decode benchmarks
+// ============================================================================
 public sealed class PsdBigEndianReader(Stream stream)
 {
     public Stream BaseStream { get; } = stream ?? throw new ArgumentNullException(nameof(stream));

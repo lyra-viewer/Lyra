@@ -1,8 +1,48 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
 
 namespace Lyra.Imaging.Psd.Core.Decode.Pixel;
 
+// ============================================================================
+//  PERFORMANCE CRITICAL – PIXEL ROW WRITER
+// ----------------------------------------------------------------------------
+//  Converts decoded plane data into final RGBA/BGRA surface rows.
+//  This is one of the hottest loops in the entire PSD decode pipeline.
+//
+//  Hot Path Characteristics:
+//    - Executes once per output pixel.
+//    - Responsible for:
+//      - Channel packing
+//      - Alpha handling
+//      - Premultiplication
+//      - ICC calibration LUT application
+//      - CMYK approximation / tuning
+//    - Must remain allocation-free.
+//    - Must minimize branching inside inner loops.
+//    - Must not mix heuristic tuning and ICC LUT paths incorrectly.
+//
+//  Critical Invariants:
+//    - Calibration LUTs are keyed by baseline approximation output.
+//    - LUT application MUST occur on baseline RGB values.
+//    - Heuristic tuning and ICC calibration are mutually exclusive paths.
+//    - Indexed palette layout must match PSD Color Mode Data interpretation.
+//
+//  PERFORMANCE CONTRACT:
+//    Changes here directly impact large PSB decode time.
+//    Any modification must be benchmarked against large (≥3GB) PSB files.
+//    Avoid:
+//      - Division in inner loops
+//      - Extra bounds checks
+//      - Additional Span slicing
+//      - Refactors that reintroduce nested branching
+//
+//  Verified against:
+//    - Reference color correctness tests
+//    - CMYK polarity validation
+//    - ICC calibration LUT validation
+//    - 3GB PSB benchmark
+// ============================================================================
 public static class PixelRowWriter
 {
     public readonly record struct CmykHeuristicTuning(
@@ -14,14 +54,13 @@ public static class PixelRowWriter
         int NeutralBAdd
     );
 
+    #region RGB
+
     public static void WriteRgbRow(
         Span<byte> dstRow,
         PixelFormat dstPixelFormat,
         AlphaType alphaType,
-        ReadOnlySpan<byte> rRow,
-        ReadOnlySpan<byte> gRow,
-        ReadOnlySpan<byte> bRow,
-        ReadOnlySpan<byte> aRow,
+        ReadOnlySpan<byte> rRow, ReadOnlySpan<byte> gRow, ReadOnlySpan<byte> bRow, ReadOnlySpan<byte> aRow,
         bool hasAlpha,
         bool useCalibration,
         RgbLuts cal)
@@ -30,27 +69,260 @@ public static class PixelRowWriter
         Debug.Assert(!hasAlpha || aRow.Length >= rRow.Length, "Alpha row must be at least as long as color rows when hasAlpha=true.");
         Debug.Assert(dstRow.Length >= rRow.Length * 4, "Destination row span too small.");
 
+        var isBgra = dstPixelFormat == PixelFormat.Bgra8888;
+        var isRgba = dstPixelFormat == PixelFormat.Rgba8888;
+        if (!isBgra && !isRgba)
+            throw new NotSupportedException($"Unsupported PixelFormat: {dstPixelFormat}");
+
+        var width = rRow.Length;
+
+        // Resolve LUTs up front
+        byte[]? lutR = null, lutG = null, lutB = null;
         if (useCalibration)
         {
-            if (cal.R is null || cal.G is null || cal.B is null)
+            lutR = cal.R;
+            lutG = cal.G;
+            lutB = cal.B;
+
+            if (lutR is null || lutG is null || lutB is null)
                 throw new ArgumentNullException(nameof(cal), "Calibration LUTs are required when useCalibration=true.");
 
-            if (cal.R.Length < 256 || cal.G.Length < 256 || cal.B.Length < 256)
+            if (lutR.Length < 256 || lutG.Length < 256 || lutB.Length < 256)
                 throw new ArgumentException("Calibration LUTs must have length >= 256.", nameof(cal));
         }
 
-        switch (dstPixelFormat)
+        bool premul = hasAlpha && alphaType == AlphaType.Premultiplied;
+
+        if (!hasAlpha)
         {
-            case PixelFormat.Bgra8888:
-                WriteRgbBgra(dstRow, alphaType, rRow, gRow, bRow, aRow, hasAlpha, useCalibration, cal);
-                return;
-            case PixelFormat.Rgba8888:
-                WriteRgbRgba(dstRow, alphaType, rRow, gRow, bRow, aRow, hasAlpha, useCalibration, cal);
-                return;
-            default:
-                throw new NotSupportedException($"Unsupported output PixelFormat: {dstPixelFormat}");
+            if (useCalibration)
+                WriteRgb_NoAlpha_Lut(dstRow, isBgra, rRow, gRow, bRow, lutR!, lutG!, lutB!, width);
+            else
+                WriteRgb_NoAlpha(dstRow, isBgra, rRow, gRow, bRow, width);
+
+            return;
+        }
+
+        if (!premul)
+        {
+            if (useCalibration)
+                WriteRgb_AlphaStraight_Lut(dstRow, isBgra, rRow, gRow, bRow, aRow, lutR!, lutG!, lutB!, width);
+            else
+                WriteRgb_AlphaStraight(dstRow, isBgra, rRow, gRow, bRow, aRow, width);
+
+            return;
+        }
+
+        // premul
+        if (useCalibration)
+            WriteRgb_AlphaPremul_Lut(dstRow, isBgra, rRow, gRow, bRow, aRow, lutR!, lutG!, lutB!, width);
+        else
+            WriteRgb_AlphaPremul(dstRow, isBgra, rRow, gRow, bRow, aRow, width);
+    }
+
+    private static void WriteRgb_NoAlpha(
+        Span<byte> dst, bool isBgra,
+        ReadOnlySpan<byte> r, ReadOnlySpan<byte> g, ReadOnlySpan<byte> b,
+        int width)
+    {
+        for (int i = 0, di = 0; i < width; i++, di += 4)
+        {
+            byte rr = r[i], gg = g[i], bb = b[i];
+
+            if (isBgra)
+            {
+                dst[di + 0] = bb;
+                dst[di + 1] = gg;
+                dst[di + 2] = rr;
+                dst[di + 3] = 255;
+            }
+            else
+            {
+                dst[di + 0] = rr;
+                dst[di + 1] = gg;
+                dst[di + 2] = bb;
+                dst[di + 3] = 255;
+            }
         }
     }
+
+    private static void WriteRgb_NoAlpha_Lut(
+        Span<byte> dst, bool isBgra,
+        ReadOnlySpan<byte> r, ReadOnlySpan<byte> g, ReadOnlySpan<byte> b,
+        byte[] lutR, byte[] lutG, byte[] lutB,
+        int width)
+    {
+        for (int i = 0, di = 0; i < width; i++, di += 4)
+        {
+            byte rr = lutR[r[i]];
+            byte gg = lutG[g[i]];
+            byte bb = lutB[b[i]];
+
+            if (isBgra)
+            {
+                dst[di + 0] = bb;
+                dst[di + 1] = gg;
+                dst[di + 2] = rr;
+                dst[di + 3] = 255;
+            }
+            else
+            {
+                dst[di + 0] = rr;
+                dst[di + 1] = gg;
+                dst[di + 2] = bb;
+                dst[di + 3] = 255;
+            }
+        }
+    }
+
+    private static void WriteRgb_AlphaStraight(
+        Span<byte> dst, bool isBgra,
+        ReadOnlySpan<byte> r, ReadOnlySpan<byte> g, ReadOnlySpan<byte> b, ReadOnlySpan<byte> a,
+        int width)
+    {
+        for (int i = 0, di = 0; i < width; i++, di += 4)
+        {
+            byte rr = r[i], gg = g[i], bb = b[i], aa = a[i];
+
+            if (isBgra)
+            {
+                dst[di + 0] = bb;
+                dst[di + 1] = gg;
+                dst[di + 2] = rr;
+                dst[di + 3] = aa;
+            }
+            else
+            {
+                dst[di + 0] = rr;
+                dst[di + 1] = gg;
+                dst[di + 2] = bb;
+                dst[di + 3] = aa;
+            }
+        }
+    }
+
+    private static void WriteRgb_AlphaStraight_Lut(
+        Span<byte> dst, bool isBgra,
+        ReadOnlySpan<byte> r, ReadOnlySpan<byte> g, ReadOnlySpan<byte> b, ReadOnlySpan<byte> a,
+        byte[] lutR, byte[] lutG, byte[] lutB,
+        int width)
+    {
+        for (int i = 0, di = 0; i < width; i++, di += 4)
+        {
+            byte rr = lutR[r[i]];
+            byte gg = lutG[g[i]];
+            byte bb = lutB[b[i]];
+            byte aa = a[i];
+
+            if (isBgra)
+            {
+                dst[di + 0] = bb;
+                dst[di + 1] = gg;
+                dst[di + 2] = rr;
+                dst[di + 3] = aa;
+            }
+            else
+            {
+                dst[di + 0] = rr;
+                dst[di + 1] = gg;
+                dst[di + 2] = bb;
+                dst[di + 3] = aa;
+            }
+        }
+    }
+
+    private static void WriteRgb_AlphaPremul(
+        Span<byte> dst, bool isBgra,
+        ReadOnlySpan<byte> r, ReadOnlySpan<byte> g, ReadOnlySpan<byte> b, ReadOnlySpan<byte> a,
+        int width)
+    {
+        for (int i = 0, di = 0; i < width; i++, di += 4)
+        {
+            byte rr = r[i], gg = g[i], bb = b[i], aa = a[i];
+
+            if (aa < 255)
+            {
+                rr = PremultiplyFast(rr, aa);
+                gg = PremultiplyFast(gg, aa);
+                bb = PremultiplyFast(bb, aa);
+            }
+
+            if (isBgra)
+            {
+                dst[di + 0] = bb;
+                dst[di + 1] = gg;
+                dst[di + 2] = rr;
+                dst[di + 3] = aa;
+            }
+            else
+            {
+                dst[di + 0] = rr;
+                dst[di + 1] = gg;
+                dst[di + 2] = bb;
+                dst[di + 3] = aa;
+            }
+        }
+    }
+
+    private static void WriteRgb_AlphaPremul_Lut(
+        Span<byte> dst, bool isBgra,
+        ReadOnlySpan<byte> r, ReadOnlySpan<byte> g, ReadOnlySpan<byte> b,
+        ReadOnlySpan<byte> a,
+        byte[] lutR, byte[] lutG, byte[] lutB,
+        int width)
+    {
+        for (int i = 0, di = 0; i < width; i++, di += 4)
+        {
+            byte rr = lutR[r[i]];
+            byte gg = lutG[g[i]];
+            byte bb = lutB[b[i]];
+            byte aa = a[i];
+
+            if (aa < 255)
+            {
+                rr = PremultiplyFast(rr, aa);
+                gg = PremultiplyFast(gg, aa);
+                bb = PremultiplyFast(bb, aa);
+            }
+
+            if (isBgra)
+            {
+                dst[di + 0] = bb;
+                dst[di + 1] = gg;
+                dst[di + 2] = rr;
+                dst[di + 3] = aa;
+            }
+            else
+            {
+                dst[di + 0] = rr;
+                dst[di + 1] = gg;
+                dst[di + 2] = bb;
+                dst[di + 3] = aa;
+            }
+        }
+    }
+
+    #endregion
+
+    #region CMYK
+
+    private static readonly byte[] PaperMulLut = BuildPaperMulLut();
+
+    private static byte[] BuildPaperMulLut()
+    {
+        var t = new byte[256 * 256];
+        for (int a = 0; a < 256; a++)
+        for (int b = 0; b < 256; b++)
+        {
+            int temp = a * b + 128;
+            t[(a << 8) | b] = (byte)((temp + (temp >> 8)) >> 8);
+        }
+
+        return t;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static byte PaperMul(byte a, byte b) => PaperMulLut[(a << 8) | b];
 
     public static void WriteCmykRow(
         Span<byte> dstRow,
@@ -63,440 +335,569 @@ public static class PixelRowWriter
         ReadOnlySpan<byte> aRow,
         bool hasAlpha,
         bool useHeuristicTuning,
-        CmykHeuristicTuning tuning,
+        in CmykHeuristicTuning tuning,
         RgbLuts cal)
     {
         Debug.Assert(cRow.Length == mRow.Length && cRow.Length == yRow.Length && cRow.Length == kRow.Length, "CMYK plane rows must have equal length.");
         Debug.Assert(!hasAlpha || aRow.Length >= cRow.Length, "Alpha row must be at least as long as color rows when hasAlpha=true.");
         Debug.Assert(dstRow.Length >= cRow.Length * 4, "Destination row span too small.");
 
+        var isBgra = dstPixelFormat == PixelFormat.Bgra8888;
+        var isRgba = dstPixelFormat == PixelFormat.Rgba8888;
+        if (!isBgra && !isRgba)
+            throw new NotSupportedException($"Unsupported PixelFormat: {dstPixelFormat}");
+
+        var width = cRow.Length;
+
         if (useHeuristicTuning)
         {
-            if (tuning.GammaLut is null)
-                throw new ArgumentNullException(nameof(tuning), "Tuning GammaLut is required when useHeuristicTuning=true.");
-
-            if (tuning.GammaLut.Length < 256)
+            if (tuning.GammaLut is null || tuning.GammaLut.Length < 256)
                 throw new ArgumentException("Tuning GammaLut must have length >= 256.", nameof(tuning));
+
+            bool premul = hasAlpha && alphaType == AlphaType.Premultiplied;
+
+            if (!hasAlpha)
+            {
+                WriteCmyk_NoAlpha_Tuning(dstRow, isBgra, cRow, mRow, yRow, kRow, in tuning, width);
+                return;
+            }
+
+            if (!premul)
+            {
+                WriteCmyk_AlphaStraight_Tuning(dstRow, isBgra, cRow, mRow, yRow, kRow, aRow, in tuning, width);
+                return;
+            }
+
+            WriteCmyk_AlphaPremul_Tuning(dstRow, isBgra, cRow, mRow, yRow, kRow, aRow, in tuning, width);
         }
         else
         {
-            // calibration path (implied by !useHeuristicTuning)
-            if (cal.R is null || cal.G is null || cal.B is null)
+            var lutR = cal.R;
+            var lutG = cal.G;
+            var lutB = cal.B;
+
+            if (lutR is null || lutG is null || lutB is null)
                 throw new ArgumentNullException(nameof(cal), "Calibration LUTs are required when useHeuristicTuning=false.");
 
-            if (cal.R.Length < 256 || cal.G.Length < 256 || cal.B.Length < 256)
+            if (lutR.Length < 256 || lutG.Length < 256 || lutB.Length < 256)
                 throw new ArgumentException("Calibration LUTs must have length >= 256.", nameof(cal));
-        }
-        
-        switch (dstPixelFormat)
-        {
-            case PixelFormat.Bgra8888:
-                WriteCmykBgra(dstRow, alphaType, cRow, mRow, yRow, kRow, aRow, hasAlpha, useHeuristicTuning, tuning, cal);
+
+            bool premul = hasAlpha && alphaType == AlphaType.Premultiplied;
+
+            if (!hasAlpha)
+            {
+                WriteCmyk_NoAlpha_Lut(dstRow, isBgra, cRow, mRow, yRow, kRow, lutR, lutG, lutB, width);
                 return;
-            case PixelFormat.Rgba8888:
-                WriteCmykRgba(dstRow, alphaType, cRow, mRow, yRow, kRow, aRow, hasAlpha, useHeuristicTuning, tuning, cal);
+            }
+
+            if (!premul)
+            {
+                WriteCmyk_AlphaStraight_Lut(dstRow, isBgra, cRow, mRow, yRow, kRow, aRow, lutR, lutG, lutB, width);
                 return;
-            default:
-                throw new NotSupportedException($"Unsupported output PixelFormat: {dstPixelFormat}");
+            }
+
+            WriteCmyk_AlphaPremul_Lut(dstRow, isBgra, cRow, mRow, yRow, kRow, aRow, lutR, lutG, lutB, width);
         }
     }
 
-    private static void WriteRgbBgra(
-        Span<byte> dstRow,
-        AlphaType alphaType,
-        ReadOnlySpan<byte> rRow,
-        ReadOnlySpan<byte> gRow,
-        ReadOnlySpan<byte> bRow,
-        ReadOnlySpan<byte> aRow,
-        bool hasAlpha,
-        bool useCalibration,
-        RgbLuts cal)
+    private static void WriteCmyk_NoAlpha_Lut(
+        Span<byte> dst, bool isBgra,
+        ReadOnlySpan<byte> c, ReadOnlySpan<byte> m, ReadOnlySpan<byte> y, ReadOnlySpan<byte> k,
+        byte[] lutR, byte[] lutG, byte[] lutB,
+        int width)
     {
-        var di = 0;
-        if (!hasAlpha)
+        for (int i = 0, di = 0; i < width; i++, di += 4)
         {
-            for (var x = 0; x < rRow.Length; x++)
+            byte kk = k[i];
+            byte r0 = PaperMul(c[i], kk);
+            byte g0 = PaperMul(m[i], kk);
+            byte b0 = PaperMul(y[i], kk);
+
+            byte r = lutR[r0];
+            byte g = lutG[g0];
+            byte b = lutB[b0];
+
+            if (isBgra)
             {
-                var rr = rRow[x];
-                var gg = gRow[x];
-                var bb = bRow[x];
-
-                if (useCalibration)
-                {
-                    rr = cal.R[rr];
-                    gg = cal.G[gg];
-                    bb = cal.B[bb];
-                }
-
-                dstRow[di + 0] = bb;
-                dstRow[di + 1] = gg;
-                dstRow[di + 2] = rr;
-                dstRow[di + 3] = 255;
-                di += 4;
+                dst[di + 0] = b;
+                dst[di + 1] = g;
+                dst[di + 2] = r;
+                dst[di + 3] = 255;
             }
-
-            return;
-        }
-
-        if (alphaType == AlphaType.Straight)
-        {
-            for (var x = 0; x < rRow.Length; x++)
+            else
             {
-                var rr = rRow[x];
-                var gg = gRow[x];
-                var bb = bRow[x];
-                var aa = aRow[x];
-
-                if (useCalibration)
-                {
-                    rr = cal.R[rr];
-                    gg = cal.G[gg];
-                    bb = cal.B[bb];
-                }
-
-                dstRow[di + 0] = bb;
-                dstRow[di + 1] = gg;
-                dstRow[di + 2] = rr;
-                dstRow[di + 3] = aa;
-                di += 4;
-            }
-        }
-        else
-        {
-            for (var x = 0; x < rRow.Length; x++)
-            {
-                var rr = rRow[x];
-                var gg = gRow[x];
-                var bb = bRow[x];
-                var aa = aRow[x];
-
-                if (useCalibration)
-                {
-                    rr = cal.R[rr];
-                    gg = cal.G[gg];
-                    bb = cal.B[bb];
-                }
-
-                dstRow[di + 0] = Premultiply(bb, aa);
-                dstRow[di + 1] = Premultiply(gg, aa);
-                dstRow[di + 2] = Premultiply(rr, aa);
-                dstRow[di + 3] = aa;
-                di += 4;
+                dst[di + 0] = r;
+                dst[di + 1] = g;
+                dst[di + 2] = b;
+                dst[di + 3] = 255;
             }
         }
     }
 
-    private static void WriteRgbRgba(
-        Span<byte> dstRow,
-        AlphaType alphaType,
-        ReadOnlySpan<byte> rRow,
-        ReadOnlySpan<byte> gRow,
-        ReadOnlySpan<byte> bRow,
-        ReadOnlySpan<byte> aRow,
-        bool hasAlpha,
-        bool useCalibration,
-        RgbLuts cal)
+    private static void WriteCmyk_AlphaStraight_Lut(
+        Span<byte> dst, bool isBgra,
+        ReadOnlySpan<byte> c, ReadOnlySpan<byte> m, ReadOnlySpan<byte> y, ReadOnlySpan<byte> k, ReadOnlySpan<byte> a,
+        byte[] lutR, byte[] lutG, byte[] lutB,
+        int width)
     {
-        var di = 0;
-        if (!hasAlpha)
+        for (int i = 0, di = 0; i < width; i++, di += 4)
         {
-            for (var x = 0; x < rRow.Length; x++)
+            byte kk = k[i];
+            byte r0 = PaperMul(c[i], kk);
+            byte g0 = PaperMul(m[i], kk);
+            byte b0 = PaperMul(y[i], kk);
+
+            byte r = lutR[r0];
+            byte g = lutG[g0];
+            byte b = lutB[b0];
+
+            byte aa = a[i];
+
+            if (isBgra)
             {
-                var rr = rRow[x];
-                var gg = gRow[x];
-                var bb = bRow[x];
-
-                if (useCalibration)
-                {
-                    rr = cal.R[rr];
-                    gg = cal.G[gg];
-                    bb = cal.B[bb];
-                }
-
-                dstRow[di + 0] = rr;
-                dstRow[di + 1] = gg;
-                dstRow[di + 2] = bb;
-                dstRow[di + 3] = 255;
-                di += 4;
+                dst[di + 0] = b;
+                dst[di + 1] = g;
+                dst[di + 2] = r;
+                dst[di + 3] = aa;
             }
-
-            return;
-        }
-
-        if (alphaType == AlphaType.Straight)
-        {
-            for (var x = 0; x < rRow.Length; x++)
+            else
             {
-                var rr = rRow[x];
-                var gg = gRow[x];
-                var bb = bRow[x];
-                var aa = aRow[x];
-
-                if (useCalibration)
-                {
-                    rr = cal.R[rr];
-                    gg = cal.G[gg];
-                    bb = cal.B[bb];
-                }
-
-                dstRow[di + 0] = rr;
-                dstRow[di + 1] = gg;
-                dstRow[di + 2] = bb;
-                dstRow[di + 3] = aa;
-                di += 4;
-            }
-        }
-        else
-        {
-            for (var x = 0; x < rRow.Length; x++)
-            {
-                var rr = rRow[x];
-                var gg = gRow[x];
-                var bb = bRow[x];
-                var aa = aRow[x];
-
-                if (useCalibration)
-                {
-                    rr = cal.R[rr];
-                    gg = cal.G[gg];
-                    bb = cal.B[bb];
-                }
-
-                dstRow[di + 0] = Premultiply(rr, aa);
-                dstRow[di + 1] = Premultiply(gg, aa);
-                dstRow[di + 2] = Premultiply(bb, aa);
-                dstRow[di + 3] = aa;
-                di += 4;
+                dst[di + 0] = r;
+                dst[di + 1] = g;
+                dst[di + 2] = b;
+                dst[di + 3] = aa;
             }
         }
     }
 
-    private static void WriteCmykBgra(
-        Span<byte> dstRow,
-        AlphaType alphaType,
-        ReadOnlySpan<byte> cRow,
-        ReadOnlySpan<byte> mRow,
-        ReadOnlySpan<byte> yRow,
-        ReadOnlySpan<byte> kRow,
-        ReadOnlySpan<byte> aRow,
-        bool hasAlpha,
-        bool useHeuristicTuning,
-        CmykHeuristicTuning tuning,
-        RgbLuts cal)
+    private static void WriteCmyk_AlphaPremul_Lut(
+        Span<byte> dst, bool isBgra,
+        ReadOnlySpan<byte> c, ReadOnlySpan<byte> m, ReadOnlySpan<byte> y, ReadOnlySpan<byte> k, ReadOnlySpan<byte> a,
+        byte[] lutR, byte[] lutG, byte[] lutB,
+        int width)
     {
-        var di = 0;
-        if (!hasAlpha)
+        for (int i = 0, di = 0; i < width; i++, di += 4)
         {
-            for (var x = 0; x < cRow.Length; x++)
+            byte kk = k[i];
+            byte r0 = PaperMul(c[i], kk);
+            byte g0 = PaperMul(m[i], kk);
+            byte b0 = PaperMul(y[i], kk);
+
+            byte r = lutR[r0];
+            byte g = lutG[g0];
+            byte b = lutB[b0];
+
+            byte aa = a[i];
+            if (aa < 255)
             {
-                ConvertCmykApprox(cRow[x], mRow[x], yRow[x], kRow[x], out var r, out var g, out var b);
-
-                if (useHeuristicTuning)
-                    ApplyCmykHeuristicTuning(ref r, ref g, ref b, tuning);
-                else
-                {
-                    r = cal.R[r];
-                    g = cal.G[g];
-                    b = cal.B[b];
-                }
-
-                dstRow[di + 0] = b;
-                dstRow[di + 1] = g;
-                dstRow[di + 2] = r;
-                dstRow[di + 3] = 255;
-                di += 4;
+                r = PremultiplyFast(r, aa);
+                g = PremultiplyFast(g, aa);
+                b = PremultiplyFast(b, aa);
             }
 
-            return;
-        }
-
-        if (alphaType == AlphaType.Straight)
-        {
-            for (var x = 0; x < cRow.Length; x++)
+            if (isBgra)
             {
-                ConvertCmykApprox(cRow[x], mRow[x], yRow[x], kRow[x], out var r, out var g, out var b);
-                var a = aRow[x];
-
-                if (useHeuristicTuning)
-                    ApplyCmykHeuristicTuning(ref r, ref g, ref b, tuning);
-                else
-                {
-                    r = cal.R[r];
-                    g = cal.G[g];
-                    b = cal.B[b];
-                }
-
-                dstRow[di + 0] = b;
-                dstRow[di + 1] = g;
-                dstRow[di + 2] = r;
-                dstRow[di + 3] = a;
-                di += 4;
+                dst[di + 0] = b;
+                dst[di + 1] = g;
+                dst[di + 2] = r;
+                dst[di + 3] = aa;
             }
-        }
-        else
-        {
-            for (var x = 0; x < cRow.Length; x++)
+            else
             {
-                ConvertCmykApprox(cRow[x], mRow[x], yRow[x], kRow[x], out var r, out var g, out var b);
-                var a = aRow[x];
-
-                if (useHeuristicTuning)
-                    ApplyCmykHeuristicTuning(ref r, ref g, ref b, tuning);
-                else
-                {
-                    r = cal.R[r];
-                    g = cal.G[g];
-                    b = cal.B[b];
-                }
-
-                dstRow[di + 0] = Premultiply(b, a);
-                dstRow[di + 1] = Premultiply(g, a);
-                dstRow[di + 2] = Premultiply(r, a);
-                dstRow[di + 3] = a;
-                di += 4;
+                dst[di + 0] = r;
+                dst[di + 1] = g;
+                dst[di + 2] = b;
+                dst[di + 3] = aa;
             }
         }
     }
 
-    private static void WriteCmykRgba(
-        Span<byte> dstRow,
-        AlphaType alphaType,
-        ReadOnlySpan<byte> cRow,
-        ReadOnlySpan<byte> mRow,
-        ReadOnlySpan<byte> yRow,
-        ReadOnlySpan<byte> kRow,
-        ReadOnlySpan<byte> aRow,
-        bool hasAlpha,
-        bool useHeuristicTuning,
-        CmykHeuristicTuning tuning,
-        RgbLuts cal)
+    private static void WriteCmyk_NoAlpha_Tuning(
+        Span<byte> dst, bool isBgra,
+        ReadOnlySpan<byte> c, ReadOnlySpan<byte> m, ReadOnlySpan<byte> y, ReadOnlySpan<byte> k,
+        in CmykHeuristicTuning tuning,
+        int width)
     {
-        var di = 0;
-        if (!hasAlpha)
+        var gamma = tuning.GammaLut;
+        var doNeutral = tuning.EnableNeutralBalance;
+        var threshold = tuning.NeutralThreshold;
+        var rAdd = tuning.NeutralRAdd;
+        var gAdd = tuning.NeutralGAdd;
+        var bAdd = tuning.NeutralBAdd;
+
+        for (int i = 0, di = 0; i < width; i++, di += 4)
         {
-            for (var x = 0; x < cRow.Length; x++)
+            byte kk = k[i];
+            byte r = gamma[PaperMul(c[i], kk)];
+            byte g = gamma[PaperMul(m[i], kk)];
+            byte b = gamma[PaperMul(y[i], kk)];
+
+            if (doNeutral)
+                ApplyNeutralBalanceFast(ref r, ref g, ref b, threshold, rAdd, gAdd, bAdd);
+
+            if (isBgra)
             {
-                ConvertCmykApprox(cRow[x], mRow[x], yRow[x], kRow[x], out var r, out var g, out var b);
-
-                if (useHeuristicTuning)
-                    ApplyCmykHeuristicTuning(ref r, ref g, ref b, tuning);
-                else
-                {
-                    r = cal.R[r];
-                    g = cal.G[g];
-                    b = cal.B[b];
-                }
-
-                dstRow[di + 0] = r;
-                dstRow[di + 1] = g;
-                dstRow[di + 2] = b;
-                dstRow[di + 3] = 255;
-                di += 4;
+                dst[di + 0] = b;
+                dst[di + 1] = g;
+                dst[di + 2] = r;
+                dst[di + 3] = 255;
             }
-
-            return;
-        }
-
-        if (alphaType == AlphaType.Straight)
-        {
-            for (var x = 0; x < cRow.Length; x++)
+            else
             {
-                ConvertCmykApprox(cRow[x], mRow[x], yRow[x], kRow[x], out var r, out var g, out var b);
-                var a = aRow[x];
-
-                if (useHeuristicTuning)
-                    ApplyCmykHeuristicTuning(ref r, ref g, ref b, tuning);
-                else
-                {
-                    r = cal.R[r];
-                    g = cal.G[g];
-                    b = cal.B[b];
-                }
-
-                dstRow[di + 0] = r;
-                dstRow[di + 1] = g;
-                dstRow[di + 2] = b;
-                dstRow[di + 3] = a;
-                di += 4;
-            }
-        }
-        else
-        {
-            for (var x = 0; x < cRow.Length; x++)
-            {
-                ConvertCmykApprox(cRow[x], mRow[x], yRow[x], kRow[x], out var r, out var g, out var b);
-                var a = aRow[x];
-
-                if (useHeuristicTuning)
-                    ApplyCmykHeuristicTuning(ref r, ref g, ref b, tuning);
-                else
-                {
-                    r = cal.R[r];
-                    g = cal.G[g];
-                    b = cal.B[b];
-                }
-
-                dstRow[di + 0] = Premultiply(r, a);
-                dstRow[di + 1] = Premultiply(g, a);
-                dstRow[di + 2] = Premultiply(b, a);
-                dstRow[di + 3] = a;
-                di += 4;
+                dst[di + 0] = r;
+                dst[di + 1] = g;
+                dst[di + 2] = b;
+                dst[di + 3] = 255;
             }
         }
     }
 
-    private static void ApplyCmykHeuristicTuning(ref byte r, ref byte g, ref byte b, CmykHeuristicTuning tuning)
+    private static void WriteCmyk_AlphaStraight_Tuning(
+        Span<byte> dst, bool isBgra,
+        ReadOnlySpan<byte> c, ReadOnlySpan<byte> m, ReadOnlySpan<byte> y, ReadOnlySpan<byte> k, ReadOnlySpan<byte> a,
+        in CmykHeuristicTuning tuning,
+        int width)
     {
-        r = tuning.GammaLut[r];
-        g = tuning.GammaLut[g];
-        b = tuning.GammaLut[b];
+        var gamma = tuning.GammaLut;
+        var doNeutral = tuning.EnableNeutralBalance;
+        var threshold = tuning.NeutralThreshold;
+        var rAdd = tuning.NeutralRAdd;
+        var gAdd = tuning.NeutralGAdd;
+        var bAdd = tuning.NeutralBAdd;
 
-        if (tuning.EnableNeutralBalance)
-            ApplyNeutralBalance(ref r, ref g, ref b, tuning.NeutralThreshold, tuning.NeutralRAdd, tuning.NeutralGAdd, tuning.NeutralBAdd);
+        for (int i = 0, di = 0; i < width; i++, di += 4)
+        {
+            byte kk = k[i];
+            byte r = gamma[PaperMul(c[i], kk)];
+            byte g = gamma[PaperMul(m[i], kk)];
+            byte b = gamma[PaperMul(y[i], kk)];
+
+            if (doNeutral)
+                ApplyNeutralBalanceFast(ref r, ref g, ref b, threshold, rAdd, gAdd, bAdd);
+
+            byte aa = a[i];
+
+            if (isBgra)
+            {
+                dst[di + 0] = b;
+                dst[di + 1] = g;
+                dst[di + 2] = r;
+                dst[di + 3] = aa;
+            }
+            else
+            {
+                dst[di + 0] = r;
+                dst[di + 1] = g;
+                dst[di + 2] = b;
+                dst[di + 3] = aa;
+            }
+        }
     }
 
-    private static void ApplyNeutralBalance(ref byte r, ref byte g, ref byte b, int threshold, int rAdd, int gAdd, int bAdd)
+    private static void WriteCmyk_AlphaPremul_Tuning(
+        Span<byte> dst, bool isBgra,
+        ReadOnlySpan<byte> c, ReadOnlySpan<byte> m, ReadOnlySpan<byte> y, ReadOnlySpan<byte> k, ReadOnlySpan<byte> a,
+        in CmykHeuristicTuning tuning,
+        int width)
     {
-        int max = r;
-        if (g > max) max = g;
-        if (b > max) max = b;
+        var gamma = tuning.GammaLut;
+        var doNeutral = tuning.EnableNeutralBalance;
+        var threshold = tuning.NeutralThreshold;
+        var rAdd = tuning.NeutralRAdd;
+        var gAdd = tuning.NeutralGAdd;
+        var bAdd = tuning.NeutralBAdd;
 
-        int min = r;
-        if (g < min) min = g;
-        if (b < min) min = b;
+        for (int i = 0, di = 0; i < width; i++, di += 4)
+        {
+            byte kk = k[i];
+            byte r = gamma[PaperMul(c[i], kk)];
+            byte g = gamma[PaperMul(m[i], kk)];
+            byte b = gamma[PaperMul(y[i], kk)];
+
+            if (doNeutral)
+                ApplyNeutralBalanceFast(ref r, ref g, ref b, threshold, rAdd, gAdd, bAdd);
+
+            byte aa = a[i];
+            if (aa < 255)
+            {
+                r = PremultiplyFast(r, aa);
+                g = PremultiplyFast(g, aa);
+                b = PremultiplyFast(b, aa);
+            }
+
+            if (isBgra)
+            {
+                dst[di + 0] = b;
+                dst[di + 1] = g;
+                dst[di + 2] = r;
+                dst[di + 3] = aa;
+            }
+            else
+            {
+                dst[di + 0] = r;
+                dst[di + 1] = g;
+                dst[di + 2] = b;
+                dst[di + 3] = aa;
+            }
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ApplyNeutralBalanceFast(ref byte r, ref byte g, ref byte b, int threshold, int rAdd, int gAdd, int bAdd)
+    {
+        int ri = r, gi = g, bi = b;
+
+        int max = ri > gi ? ri : gi;
+        if (bi > max) max = bi;
+
+        int min = ri < gi ? ri : gi;
+        if (bi < min) min = bi;
 
         if (max - min > threshold)
             return;
 
-        r = ClampToByte(r + rAdd);
-        g = ClampToByte(g + gAdd);
-        b = ClampToByte(b + bAdd);
+        r = ClampToByte(ri + rAdd);
+        g = ClampToByte(gi + gAdd);
+        b = ClampToByte(bi + bAdd);
     }
 
-    private static void ConvertCmykApprox(byte c0, byte m0, byte y0, byte k0, out byte r, out byte g, out byte b)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void CmykPaperToRgbBaseline(byte c0, byte m0, byte y0, byte k0, out byte r, out byte g, out byte b)
     {
-        var c = (byte)(255 - c0);
-        var m = (byte)(255 - m0);
-        var y = (byte)(255 - y0);
-        var k = (byte)(255 - k0);
-
-        r = ToRgbComponent(c, k);
-        g = ToRgbComponent(m, k);
-        b = ToRgbComponent(y, k);
+        r = PaperMul(c0, k0);
+        g = PaperMul(m0, k0);
+        b = PaperMul(y0, k0);
     }
 
-    private static byte ToRgbComponent(byte ink, byte k)
+    #endregion
+
+    #region Grayscale
+
+    public static void WriteGrayRow(
+        Span<byte> dstRow,
+        PixelFormat dstPixelFormat,
+        AlphaType alphaType,
+        ReadOnlySpan<byte> grayRow,
+        ReadOnlySpan<byte> aRow,
+        bool hasAlpha,
+        bool useCalibration,
+        RgbLuts cal)
     {
-        var c = ink / 255f;
-        var kk = k / 255f;
-        var v = 255f * (1f - c) * (1f - kk);
-        var iv = (int)(v + 0.5f);
-        if (iv < 0) iv = 0;
-        if (iv > 255) iv = 255;
-        return (byte)iv;
+        Debug.Assert(!hasAlpha || aRow.Length >= grayRow.Length, "Alpha row must be at least as long as grayscale row when hasAlpha=true.");
+        Debug.Assert(dstRow.Length >= grayRow.Length * 4, "Destination row span too small.");
+
+        var isBgra = dstPixelFormat == PixelFormat.Bgra8888;
+        var isRgba = dstPixelFormat == PixelFormat.Rgba8888;
+        if (!isBgra && !isRgba)
+            throw new NotSupportedException($"Unsupported PixelFormat: {dstPixelFormat}");
+
+        var isPremul = hasAlpha && alphaType == AlphaType.Premultiplied;
+        var width = grayRow.Length;
+
+        byte[]? lutR = null, lutG = null, lutB = null;
+        var useLut = useCalibration;
+        if (useLut)
+        {
+            lutR = cal.R;
+            lutG = cal.G;
+            lutB = cal.B;
+
+            if (lutR is null || lutG is null || lutB is null)
+                throw new ArgumentNullException(nameof(cal), "Calibration LUTs are required when useCalibration=true.");
+
+            if (lutR.Length < 256 || lutG.Length < 256 || lutB.Length < 256)
+                throw new ArgumentException("Calibration LUTs must have length >= 256.", nameof(cal));
+        }
+
+        for (int i = 0, dstIdx = 0; i < width; i++, dstIdx += 4)
+        {
+            byte c = grayRow[i];
+            byte r = useLut ? lutR![c] : c;
+            byte g = useLut ? lutG![c] : c;
+            byte b = useLut ? lutB![c] : c;
+
+            byte a = hasAlpha ? aRow[i] : (byte)255;
+
+            if (isPremul && a < 255)
+            {
+                r = PremultiplyFast(r, a);
+                g = PremultiplyFast(g, a);
+                b = PremultiplyFast(b, a);
+            }
+
+            if (isBgra)
+            {
+                dstRow[dstIdx + 0] = b;
+                dstRow[dstIdx + 1] = g;
+                dstRow[dstIdx + 2] = r;
+                dstRow[dstIdx + 3] = a;
+            }
+            else
+            {
+                dstRow[dstIdx + 0] = r;
+                dstRow[dstIdx + 1] = g;
+                dstRow[dstIdx + 2] = b;
+                dstRow[dstIdx + 3] = a;
+            }
+        }
     }
 
-    private static byte Premultiply(byte c, byte a) => (byte)((c * a + 127) / 255);
+    #endregion
 
-    private static byte ClampToByte(int v) => v < 0 ? (byte)0 : v > 255 ? (byte)255 : (byte)v;
+    #region Indexed
+
+    public static void WriteIndexedRow(
+        Span<byte> dstRow,
+        PixelFormat dstPixelFormat,
+        AlphaType alphaType,
+        ReadOnlySpan<byte> indexRow,
+        ReadOnlySpan<byte> aRow,
+        ReadOnlySpan<byte> palette,
+        bool hasAlpha)
+    {
+        Debug.Assert(palette.Length >= 768, "Palette must have at least 768 bytes (256 * 3).");
+        Debug.Assert(!hasAlpha || aRow.Length >= indexRow.Length, "Alpha row must be at least as long as index row when hasAlpha=true.");
+        Debug.Assert(dstRow.Length >= indexRow.Length * 4, "Destination row span too small.");
+
+        var isBgra = dstPixelFormat == PixelFormat.Bgra8888;
+        var isRgba = dstPixelFormat == PixelFormat.Rgba8888;
+        if (!isBgra && !isRgba)
+            throw new NotSupportedException($"Unsupported PixelFormat: {dstPixelFormat}");
+
+        var width = indexRow.Length;
+        var isPremul = hasAlpha && alphaType == AlphaType.Premultiplied;
+
+        const bool assumePlanar = true;
+
+        for (int i = 0, dstIdx = 0; i < width; i++, dstIdx += 4)
+        {
+            var idx = indexRow[i];
+
+            byte r, g, b;
+            if (assumePlanar)
+            {
+                ReadPaletteRgbPlanar(palette, idx, out r, out g, out b);
+            }
+            else
+            {
+                ReadPaletteRgbInterleaved(palette, idx, out r, out g, out b);
+            }
+
+            byte a = hasAlpha ? aRow[i] : (byte)255;
+
+            if (isPremul && a < 255)
+            {
+                r = PremultiplyFast(r, a);
+                g = PremultiplyFast(g, a);
+                b = PremultiplyFast(b, a);
+            }
+
+            if (isBgra)
+            {
+                dstRow[dstIdx + 0] = b;
+                dstRow[dstIdx + 1] = g;
+                dstRow[dstIdx + 2] = r;
+                dstRow[dstIdx + 3] = a;
+            }
+            else
+            {
+                dstRow[dstIdx + 0] = r;
+                dstRow[dstIdx + 1] = g;
+                dstRow[dstIdx + 2] = b;
+                dstRow[dstIdx + 3] = a;
+            }
+        }
+    }
+
+    public static void WriteIndexedRowInterleaved(
+        Span<byte> dstRow,
+        PixelFormat dstPixelFormat,
+        AlphaType alphaType,
+        ReadOnlySpan<byte> indexRow,
+        ReadOnlySpan<byte> aRow,
+        ReadOnlySpan<byte> paletteRgbInterleaved,
+        bool hasAlpha)
+    {
+        Debug.Assert(paletteRgbInterleaved.Length >= 768, "Palette must have at least 768 bytes (256 * 3).");
+        Debug.Assert(!hasAlpha || aRow.Length >= indexRow.Length);
+        Debug.Assert(dstRow.Length >= indexRow.Length * 4);
+
+        var isBgra = dstPixelFormat == PixelFormat.Bgra8888;
+        var isRgba = dstPixelFormat == PixelFormat.Rgba8888;
+        if (!isBgra && !isRgba)
+            throw new NotSupportedException($"Unsupported PixelFormat: {dstPixelFormat}");
+
+        var width = indexRow.Length;
+        var isPremul = hasAlpha && alphaType == AlphaType.Premultiplied;
+
+        for (int i = 0, dstIdx = 0; i < width; i++, dstIdx += 4)
+        {
+            var idx = indexRow[i];
+
+            ReadPaletteRgbInterleaved(paletteRgbInterleaved, idx, out var r, out var g, out var b);
+
+            byte a = hasAlpha ? aRow[i] : (byte)255;
+
+            if (isPremul && a < 255)
+            {
+                r = PremultiplyFast(r, a);
+                g = PremultiplyFast(g, a);
+                b = PremultiplyFast(b, a);
+            }
+
+            if (isBgra)
+            {
+                dstRow[dstIdx + 0] = b;
+                dstRow[dstIdx + 1] = g;
+                dstRow[dstIdx + 2] = r;
+                dstRow[dstIdx + 3] = a;
+            }
+            else
+            {
+                dstRow[dstIdx + 0] = r;
+                dstRow[dstIdx + 1] = g;
+                dstRow[dstIdx + 2] = b;
+                dstRow[dstIdx + 3] = a;
+            }
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ReadPaletteRgbPlanar(ReadOnlySpan<byte> palette, byte idx, out byte r, out byte g, out byte b)
+    {
+        // Planar: [R(256)][G(256)][B(256)]
+        var i = idx;
+        r = palette[i];
+        g = palette[i + 256];
+        b = palette[i + 512];
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ReadPaletteRgbInterleaved(ReadOnlySpan<byte> palette, byte idx, out byte r, out byte g, out byte b)
+    {
+        // Interleaved: [R0 G0 B0][R1 G1 B1]...
+        var baseIdx = idx * 3;
+        r = palette[baseIdx + 0];
+        g = palette[baseIdx + 1];
+        b = palette[baseIdx + 2];
+    }
+
+    #endregion
+
+    #region Helpers
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static byte PremultiplyFast(byte c, byte a)
+        => (byte)(((c * a + 128) * 257) >> 16);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static byte ClampToByte(int value)
+    {
+        if ((uint)value <= 255)
+            return (byte)value;
+
+        return (byte)(value < 0 ? 0 : 255);
+    }
+
+    #endregion
 }

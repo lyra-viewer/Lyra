@@ -62,10 +62,10 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 
 ### GPU Formats
 
-| Format | Description                    | Extensions     |
-|--------|--------------------------------|----------------|
-| ~DDS~  | ~DirectDraw Surface~           | `.dds`         |
-| ~KTX~  | ~GPU texture container format~ | `.ktx` `.ktx2` |
+| Format | Description                    | Extensions       |
+|--------|--------------------------------|------------------|
+| ~DDS~  | ~DirectDraw Surface~           | ~`.dds`~         |
+| ~KTX~  | ~GPU texture container format~ | ~`.ktx` `.ktx2`~ |
 
 ### Document / Vector Formats
 
@@ -105,9 +105,10 @@ At the moment, Lyra supports decoding the following Photoshop color modes from I
 
 - RGB
 - CMYK
+- Grayscale
 - Indexed
 
-Support for other modes (Lab, Grayscale, Bitmap...) will be implemented.
+Support for other modes (Bitmap, Lab, Multichannel, Duotone) will be implemented.
 
 ### PSB Support
 

@@ -3,6 +3,7 @@
 #include <OpenEXR/ImfRgbaFile.h>
 #include <OpenEXR/ImfThreading.h>
 #include <cstdio>
+#include <thread>
 #include <mutex>
 #include <unordered_set>
 

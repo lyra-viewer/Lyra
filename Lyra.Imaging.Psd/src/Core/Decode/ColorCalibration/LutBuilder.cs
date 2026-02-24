@@ -56,6 +56,12 @@ public static class LutBuilder
                 lut[j] = lut[last];
         }
 
-        return lut;
+        for (var i = 0; i < 256; i++)
+        {
+            if (lut[i] != (byte)i)
+                return lut;
+        }
+
+        return RgbLuts.Identity.R;
     }
 }

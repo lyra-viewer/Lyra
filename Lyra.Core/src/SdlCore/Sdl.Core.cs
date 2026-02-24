@@ -34,7 +34,7 @@ public partial class SdlCore : IDisposable
     // Safety cap for “vsync forced off” situations.
     private const int MaxFps = 240;
     private const ulong NsPerSecond = 1_000_000_000UL;
-    private static readonly ulong TargetFrameNs = NsPerSecond / MaxFps;
+    private const ulong TargetFrameNs = NsPerSecond / MaxFps;
     private ulong _nextFrameDeadlineNs;
     // ----------------------------------------------------------------------
 

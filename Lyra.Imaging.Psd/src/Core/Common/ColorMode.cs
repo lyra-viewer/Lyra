@@ -1,6 +1,6 @@
 namespace Lyra.Imaging.Psd.Core.Common;
 
-public enum ColorMode : ushort
+public enum ColorMode
 {
     Bitmap = 0,
     Grayscale = 1,

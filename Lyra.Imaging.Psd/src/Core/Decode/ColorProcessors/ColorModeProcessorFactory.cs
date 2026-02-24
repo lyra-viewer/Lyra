@@ -9,9 +9,8 @@ public static class ColorModeProcessorFactory
         ColorMode.Rgb => new RgbProcessor(),
         ColorMode.Cmyk => new CmykProcessor(),
         ColorMode.Indexed => new IndexedProcessor(),
+        ColorMode.Grayscale => new GrayscaleProcessor(),
         // TODO:
-        // ColorMode.Bitmap => new BitmapProcessor(),
-        // ColorMode.Grayscale => new GrayscaleProcessor(),
         // ColorMode.Lab => new LabProcessor(),
         // ColorMode.Duotone => new DuotoneFallbackProcessor(),
         // ColorMode.Multichannel => new MultichannelFallbackProcessor(),

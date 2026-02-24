@@ -32,19 +32,21 @@ public sealed class CmykProcessor : IColorModeProcessor
     {
         var depth = PsdDepthUtil.FromBitsPerChannel(src.BitsPerChannel);
         var bpcBytes = depth.BytesPerChannel();
-        var rowBytes = depth.RowBytes(src.Width);
+        var srcRowBytes = depth.RowBytes(src.Width);
 
         var c = src.GetPlaneOrThrow(PlaneRole.C);
         var m = src.GetPlaneOrThrow(PlaneRole.M);
         var y = src.GetPlaneOrThrow(PlaneRole.Y);
         var k = src.GetPlaneOrThrow(PlaneRole.K);
-        
+
         src.TryGetPlane(PlaneRole.A, out var a);
-        
-        if (c.BytesPerRow < rowBytes || m.BytesPerRow < rowBytes || y.BytesPerRow < rowBytes || k.BytesPerRow < rowBytes)
+
+        var hasAlpha = a.Data is { Length: > 0 };
+
+        if (c.BytesPerRow < srcRowBytes || m.BytesPerRow < srcRowBytes || y.BytesPerRow < srcRowBytes || k.BytesPerRow < srcRowBytes)
             throw new InvalidOperationException("Plane BytesPerRow is smaller than Width*bpc for CMYK.");
 
-        if (a.Data != null && a.BytesPerRow < rowBytes)
+        if (hasAlpha && a.BytesPerRow < srcRowBytes)
             throw new InvalidOperationException("Alpha plane BytesPerRow is smaller than Width*bpc.");
 
         var dstPixelFormat = ctx.OutputFormat.PixelFormat;
@@ -90,7 +92,7 @@ public sealed class CmykProcessor : IColorModeProcessor
             m8Rent = ArrayPool<byte>.Shared.Rent(src.Width);
             y8Rent = ArrayPool<byte>.Shared.Rent(src.Width);
             k8Rent = ArrayPool<byte>.Shared.Rent(src.Width);
-            if (a.Data != null)
+            if (hasAlpha)
                 a8Rent = ArrayPool<byte>.Shared.Rent(src.Width);
         }
 
@@ -100,10 +102,10 @@ public sealed class CmykProcessor : IColorModeProcessor
             {
                 ct.ThrowIfCancellationRequested();
 
-                var cRowRaw = c.Data.AsSpan(row * c.BytesPerRow, rowBytes);
-                var mRowRaw = m.Data.AsSpan(row * m.BytesPerRow, rowBytes);
-                var yRowRaw = y.Data.AsSpan(row * y.BytesPerRow, rowBytes);
-                var kRowRaw = k.Data.AsSpan(row * k.BytesPerRow, rowBytes);
+                var cRowRaw = c.Data.AsSpan(row * c.BytesPerRow, srcRowBytes);
+                var mRowRaw = m.Data.AsSpan(row * m.BytesPerRow, srcRowBytes);
+                var yRowRaw = y.Data.AsSpan(row * y.BytesPerRow, srcRowBytes);
+                var kRowRaw = k.Data.AsSpan(row * k.BytesPerRow, srcRowBytes);
 
                 ReadOnlySpan<byte> cRow8;
                 ReadOnlySpan<byte> mRow8;
@@ -111,14 +113,12 @@ public sealed class CmykProcessor : IColorModeProcessor
                 ReadOnlySpan<byte> kRow8;
                 ReadOnlySpan<byte> aRow8 = default;
 
-                var hasAlpha = a.Data != null && a.Data.Length != 0;
-
                 if (bpcBytes == 1)
                 {
-                    cRow8 = cRowRaw[..src.Width];
-                    mRow8 = mRowRaw[..src.Width];
-                    yRow8 = yRowRaw[..src.Width];
-                    kRow8 = kRowRaw[..src.Width];
+                    cRow8 = c.Data.AsSpan(row * c.BytesPerRow, src.Width);
+                    mRow8 = m.Data.AsSpan(row * m.BytesPerRow, src.Width);
+                    yRow8 = y.Data.AsSpan(row * y.BytesPerRow, src.Width);
+                    kRow8 = k.Data.AsSpan(row * k.BytesPerRow, src.Width);
 
                     if (hasAlpha)
                         aRow8 = a.Data.AsSpan(row * a.BytesPerRow, src.Width);
@@ -139,7 +139,7 @@ public sealed class CmykProcessor : IColorModeProcessor
 
                         if (hasAlpha)
                         {
-                            var aRaw = a.Data.AsSpan(row * a.BytesPerRow, rowBytes);
+                            var aRaw = a.Data.AsSpan(row * a.BytesPerRow, srcRowBytes);
                             var aa = a8Rent!.AsSpan(0, src.Width);
                             PsdSampleConvert.Row16BeTo8(aa, aRaw);
                             aRow8 = aa;
@@ -154,7 +154,7 @@ public sealed class CmykProcessor : IColorModeProcessor
 
                         if (hasAlpha)
                         {
-                            var aRaw = a.Data.AsSpan(row * a.BytesPerRow, rowBytes);
+                            var aRaw = a.Data.AsSpan(row * a.BytesPerRow, srcRowBytes);
                             var aa = a8Rent!.AsSpan(0, src.Width);
                             PsdSampleConvert.Row32FloatBeTo8(aa, aRaw);
                             aRow8 = aa;
@@ -201,34 +201,6 @@ public sealed class CmykProcessor : IColorModeProcessor
         }
     }
 
-    private static void ConvertCmykApprox(byte c0, byte m0, byte y0, byte k0, out byte r, out byte g, out byte b)
-    {
-        var c = (byte)(255 - c0);
-        var m = (byte)(255 - m0);
-        var y = (byte)(255 - y0);
-        var k = (byte)(255 - k0);
-
-        r = ToRgbComponent(c, k);
-        g = ToRgbComponent(m, k);
-        b = ToRgbComponent(y, k);
-    }
-
-    private static byte ToRgbComponent(byte ink, byte k)
-    {
-        var c = ink / 255f;
-        var kk = k / 255f;
-
-        var v = 255f * (1f - c) * (1f - kk);
-        var iv = (int)(v + 0.5f);
-        if (iv < 0)
-            iv = 0;
-
-        if (iv > 255)
-            iv = 255;
-
-        return (byte)iv;
-    }
-
     private static byte[] BuildGammaLut(float gamma)
     {
         var lut = new byte[256];
@@ -264,7 +236,7 @@ public sealed class CmykProcessor : IColorModeProcessor
             _ => throw new NotSupportedException($"Calibration: BitsPerChannel {src.BitsPerChannel} not supported (expected 8/16/32).")
         };
 
-        var rowBytes = checked(src.Width * bpcBytes);
+        var srcRowBytes = checked(src.Width * bpcBytes);
 
         var sumR = new int[256];
         var sumG = new int[256];
@@ -282,10 +254,10 @@ public sealed class CmykProcessor : IColorModeProcessor
             var row = (int)((gy + 0.5) * src.Height / gridSize);
             if (row >= src.Height) row = src.Height - 1;
 
-            var cRow = c.Data.AsSpan(row * c.BytesPerRow, rowBytes);
-            var mRow = m.Data.AsSpan(row * m.BytesPerRow, rowBytes);
-            var yRow = y.Data.AsSpan(row * y.BytesPerRow, rowBytes);
-            var kRow = k.Data.AsSpan(row * k.BytesPerRow, rowBytes);
+            var cRow = c.Data.AsSpan(row * c.BytesPerRow, srcRowBytes);
+            var mRow = m.Data.AsSpan(row * m.BytesPerRow, srcRowBytes);
+            var yRow = y.Data.AsSpan(row * y.BytesPerRow, srcRowBytes);
+            var kRow = k.Data.AsSpan(row * k.BytesPerRow, srcRowBytes);
 
             for (var gx = 0; gx < gridSize; gx++)
             {
@@ -300,7 +272,7 @@ public sealed class CmykProcessor : IColorModeProcessor
                 var y0 = PsdSampleConvert.SampleTo8(yRow, off, bpcBytes);
                 var k0 = PsdSampleConvert.SampleTo8(kRow, off, bpcBytes);
 
-                ConvertCmykApprox(c0, m0, y0, k0, out var r0, out var g0, out var b0);
+                PixelRowWriter.CmykPaperToRgbBaseline(c0, m0, y0, k0, out var r0, out var g0, out var b0);
 
                 if (useInverted is null || !decidePolarityOnce)
                 {
