@@ -35,14 +35,18 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     private readonly HelpBarOverlay _helpBarOverlay;
     private readonly CenteredTextOverlay _centeredOverlay;
 
-    protected SkiaRendererBase(PixelSize drawableSize, IDropProgressProvider dropProgressProvider)
+    private readonly string _backend;
+
+    protected SkiaRendererBase(PixelSize drawableSize, IDropProgressProvider dropProgressProvider, string backend)
     {
+        _backend = backend;
+
         WindowWidth = drawableSize.PixelWidth;
         WindowHeight = drawableSize.PixelHeight;
         DisplayScale = drawableSize.Scale;
-        
+
         _dropProgressProvider = dropProgressProvider;
-        
+
         Subscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
 
         _imageInfoOverlay = new ImageInfoOverlay().WithDrawableSizeSubscription();
@@ -54,6 +58,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     protected abstract SKSurface CreateSurface();
 
+    protected virtual bool DisposeSurfaceAfterRender => true;
+
     protected virtual void BeforeRender()
     {
     }
@@ -62,20 +68,30 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     {
     }
 
+    protected virtual void OnDrawableSizeChangedInternal(int width, int height, float scale)
+    {
+    }
+
     public virtual void Render()
     {
         BeforeRender();
 
-        using var surface = CreateSurface();
-        var canvas = surface.Canvas;
+        var surface = CreateSurface();
+        try
+        {
+            var canvas = surface.Canvas;
 
-        RenderBackground(canvas);
-        RenderComposite(canvas);
-        RenderOverlay(canvas);
+            RenderBackground(canvas);
+            RenderComposite(canvas);
+            RenderOverlay(canvas);
 
-        canvas.Flush();
-
-        AfterRender(surface);
+            AfterRender(surface);
+        }
+        finally
+        {
+            if (DisposeSurfaceAfterRender)
+                surface.Dispose();
+        }
     }
 
     private void RenderBackground(SKCanvas canvas)
@@ -173,7 +189,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         {
             if (_composite == null || _composite.State == CompositeState.Failed)
                 _centeredOverlay.Render(canvas, bounds, textColor, "No image");
-            else if (_composite.State == CompositeState.Loading) 
+            else if (_composite.State == CompositeState.Loading)
                 _centeredOverlay.Render(canvas, bounds, textColor, "Loading...");
         }
     }
@@ -219,6 +235,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             DropPathsEnqueued = drop.PathsEnqueued,
             DropFilesEnumerated = drop.FilesEnumerated,
             DropFilesSupported = drop.FilesSupported,
+            Backend = _backend
         };
     }
 
@@ -234,6 +251,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         WindowWidth = e.PixelWidth;
         WindowHeight = e.PixelHeight;
         DisplayScale = e.Scale;
+
+        OnDrawableSizeChangedInternal(WindowWidth, WindowHeight, DisplayScale);
     }
 
     public void SetComposite(Composite? composite) => _composite = composite;
@@ -271,7 +290,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     {
         return new UiSettings(_samplingMode, _backgroundMode, _infoMode, _helpBarVisible);
     }
-    
+
     public virtual void Dispose()
     {
         Unsubscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);

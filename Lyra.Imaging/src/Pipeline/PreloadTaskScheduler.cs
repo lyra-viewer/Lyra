@@ -2,28 +2,33 @@ using System.Collections.Concurrent;
 
 namespace Lyra.Imaging.Pipeline;
 
-internal class PreloadTaskScheduler : TaskScheduler
+internal sealed class PreloadTaskScheduler : TaskScheduler
 {
     private readonly BlockingCollection<Task> _tasks = new();
-    private readonly List<Thread> _threads; // Hold thread references to prevent a GC collection
+    private readonly List<Thread> _threads;
 
     public PreloadTaskScheduler(int maxDegreeOfParallelism)
     {
-        _threads = Enumerable.Range(0, maxDegreeOfParallelism).Select(i =>
+        _threads = new List<Thread>(maxDegreeOfParallelism);
+
+        for (var i = 0; i < maxDegreeOfParallelism; i++)
         {
-            var thread = new Thread(() =>
-            {
-                foreach (var task in _tasks.GetConsumingEnumerable())
-                    TryExecuteTask(task); // TODO LOH
-            })
+            var thread = new Thread(WorkerLoop)
             {
                 IsBackground = true,
                 Name = $"PreloadWorker-{i}",
                 Priority = ThreadPriority.BelowNormal
             };
+            
+            _threads.Add(thread);
             thread.Start();
-            return thread;
-        }).ToList();
+        }
+    }
+
+    private void WorkerLoop()
+    {
+        foreach (var task in _tasks.GetConsumingEnumerable())
+            TryExecuteTask(task);
     }
 
     protected override IEnumerable<Task> GetScheduledTasks() => _tasks.ToArray();

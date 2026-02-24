@@ -58,7 +58,7 @@ public class ImageInfoOverlay : IOverlay<(Composite? composite, ApplicationState
             $"[File]          {states.CollectionIndex}/{states.CollectionCount}{dirNav}  |  {fileInfo.Name}  |  {fileSize}",
             $"[Image]         {composite.ImageFormatType.Description()}  |  {width}x{height}" + (composite.IsGrayscale ? "  |  Greyscale" : ""),
             $"[Displaying]    Zoom: {states.Zoom}%  |  Display Mode: {states.DisplayMode}",
-            $"[System]        Graphics API: OpenGL  |  Sampling: {states.SamplingMode}"
+            $"[System]        Graphics API: {states.Backend}  |  Sampling: {states.SamplingMode}"
         };
 
 #if DEBUG

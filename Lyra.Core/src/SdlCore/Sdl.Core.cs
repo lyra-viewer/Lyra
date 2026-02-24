@@ -29,6 +29,14 @@ public partial class SdlCore : IDisposable
     private const int WindowWarmupFrames = 30;
     private readonly List<Action> _deferredUntilWarm = [];
     private readonly ConcurrentQueue<Action> _mainThreadQueue = new();
+    // ----------------------------------------------------------------------
+    
+    // Safety cap for “vsync forced off” situations.
+    private const int MaxFps = 240;
+    private const ulong NsPerSecond = 1_000_000_000UL;
+    private static readonly ulong TargetFrameNs = NsPerSecond / MaxFps;
+    private ulong _nextFrameDeadlineNs;
+    // ----------------------------------------------------------------------
 
     private Composite? _composite;
     private int _zoomPercentage = 100;
@@ -81,14 +89,15 @@ public partial class SdlCore : IDisposable
                 throw new ArgumentOutOfRangeException();
         }
         
-        _renderer.ApplyUserSettings(uiSettings);
-
+        _nextFrameDeadlineNs = GetTicksNS() + TargetFrameNs;
         SetWindowMinimumSize(_window, 640, 480);
         SetWindowFocusable(_window, true);
         RefreshDisplayInfo();
 
         if (windowStateOnStart == WindowState.Fullscreen)
             SetFullscreen(true);
+        
+        _renderer.ApplyUserSettings(uiSettings);
     }
 
     private static (int w, int h) GetInitialWindowSize()
@@ -138,8 +147,23 @@ public partial class SdlCore : IDisposable
             HandleEvents();
             RecalculateDisplayModeIfNecessary();
             _renderer.Render();
+            
             GLSwapWindow(_window);
+            
+            // Safety pacing
+            var now = GetTicksNS();
+            if (now < _nextFrameDeadlineNs)
+            {
+                DelayNS(_nextFrameDeadlineNs - now);
+                _nextFrameDeadlineNs += TargetFrameNs;
+            }
+            else
+            {
+                // Running late! Resync so there is no drift.
+                _nextFrameDeadlineNs = now + TargetFrameNs;
+            }
 
+            // Cold start deffer
             if (!_coldStartSafe)
             {
                 if (--_coldStartFramesPending <= 0)

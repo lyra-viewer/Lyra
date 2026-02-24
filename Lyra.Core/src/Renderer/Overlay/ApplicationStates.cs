@@ -17,5 +17,7 @@ public readonly record struct ApplicationStates(
     bool DropAborted,
     long DropPathsEnqueued,
     long DropFilesEnumerated,
-    long DropFilesSupported
+    long DropFilesSupported,
+    
+    string Backend
 );

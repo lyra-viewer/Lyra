@@ -29,7 +29,7 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     private const ulong MTLPixelFormatBGRA8Unorm = 80;
 
     public SkiaMetalRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider)
-        : base(drawableSize, dropProgressProvider)
+        : base(drawableSize, dropProgressProvider, "Metal")
     {
         _metalView = MetalCreateView(window);
         if (_metalView == IntPtr.Zero)
@@ -42,13 +42,15 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
         _device = MetalNative.MTLCreateSystemDefaultDevice();
         if (_device == IntPtr.Zero)
             throw new InvalidOperationException("MTLCreateSystemDefaultDevice returned null.");
-
+        
         // layer.device = device
         ObjC.SendVoid_IntPtr(_metalLayer, ObjC.Sel("setDevice:"), _device);
         // layer.pixelFormat = BGRA8
         ObjC.SendVoid_UInt64(_metalLayer, ObjC.Sel("setPixelFormat:"), MTLPixelFormatBGRA8Unorm);
         // layer.framebufferOnly = NO
         ObjC.SendVoid_Bool(_metalLayer, ObjC.Sel("setFramebufferOnly:"), false);
+        // enable vsync
+        ObjC.SendVoid_Bool(_metalLayer, ObjC.Sel("setDisplaySyncEnabled:"), true);
 
         // queue = [device newCommandQueue]
         _queue = ObjC.Send_IntPtr(_device, ObjC.Sel("newCommandQueue"));
@@ -70,7 +72,6 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     protected override void BeforeRender()
     {
         // Drain autoreleased Objective-C objects every frame (important in a tight SDL render loop).
-        // Equivalent to: pool = [[NSAutoreleasePool alloc] init];
         _autoreleasePool = ObjC.Send_IntPtr(ObjC.GetClass("NSAutoreleasePool"), ObjC.Sel("new"));
     }
 
@@ -99,7 +100,7 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
 
     protected override void AfterRender(SKSurface surface)
     {
-        _grContext.Flush();
+        surface.Flush();
         _grContext.Submit();
 
         // Present
