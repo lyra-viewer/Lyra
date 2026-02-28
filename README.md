@@ -2,6 +2,32 @@
 
 ---
 
+![Screenshot](docs/images/screenshot.jpg)
+
+## Contents
+
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Supported Image Formats](#supported-image-formats)
+    - [Common Raster Formats (Essential)](#common-raster-formats-essential)
+    - [Modern / Web-Friendly Formats](#modern--web-friendly-formats)
+    - [High Dynamic Range Formats](#high-dynamic-range-formats)
+    - [GPU Formats](#gpu-formats)
+    - [Document / Vector Formats](#document--vector-formats)
+    - [Minor Formats](#minor-formats)
+- [PSD / PSB Decoding Model](#psd--psb-decoding-model)
+    - [Supported Color Modes](#supported-color-modes)
+    - [PSB Support](#psb-support)
+    - [ICC Color Profiles](#icc-color-profiles)
+    - [Future Direction](#future-direction)
+- [Keyboard Shortcuts & Controls](#keyboard-shortcuts--controls)
+    - [macOS Specific](#macos-specific)
+    - [Open With / Drag & Drop](#open-with--drag--drop)
+- [Prerequisites & Dependencies](#prerequisites--dependencies)
+- [Installation](#installation)
+    - [macOS (Homebrew)](#macos-homebrew)
+    - [Linux](#linux)
+
 ## Overview
 
 Lyra is a high-performance, minimalist image viewer designed for speed, fluid navigation, and precision, ideal for
@@ -79,7 +105,7 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 | Format    | Description                   | Extensions                              | Notes                                                                                                                                                   |
 |-----------|-------------------------------|-----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
 | ICO       | Icon container format         | `.ico`                                  |                                                                                                                                                         |
-| ~ICNS~    | ~Apple icon container format~ | `.icns`                                 |                                                                                                                                                         |
+| ~ICNS~    | ~Apple icon container format~ | ~`.icns`~                               |                                                                                                                                                         |
 | JPEG 2000 | Wavelet-based image format    | `.jp2` `.jpg2`<br/>`.j2k` `.j2c` `.jpc` | Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP) are intentionally not supported. |
 
 > _Note:_ Crossed-out formats are not implemented yet.
@@ -90,7 +116,7 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 
 Lyra currently focuses on decoding the flattened **Image Data** section of Photoshop files, rather than individual
 layers.
-This design choice prioritizes performance, and fast previewing.
+This design choice prioritizes performance and fast previewing.
 
 This is explicitly documented because the Image Data section is not strictly mandatory in the PSD specification and,
 in some edge cases, may be missing or may not fully represent the document as it appears when opened in Photoshop.

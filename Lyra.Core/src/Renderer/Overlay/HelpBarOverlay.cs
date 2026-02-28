@@ -18,7 +18,7 @@ public class HelpBarOverlay : IOverlay<(Composite? composite, ApplicationStates 
 
     public void ReloadFont()
     {
-        Font = FontHelper.GetScaledMonoFont(13, Scale);
+        Font = FontHelper.GetScaledMonoFont(12, Scale);
         Font.Edging = SKFontEdging.Antialias;
         Font.Subpixel = false;
     }
@@ -57,22 +57,27 @@ public class HelpBarOverlay : IOverlay<(Composite? composite, ApplicationStates 
         );
 
         var column4 = (
+            "[0]  Fit Screen / Orig. Size",
+            "                            "
+        );
+
+        var column5 = (
             "[I]  Toggle Info " + (anyInfoHidden ? "·" : " "),
             "[H]  Toggle Help  "
         );
 
-        var column5 = (
+        var column6 = (
             "[B]  Toggle Background",
             "[S]  Toggle Sampling  "
         );
 
-        var column6 = (
+        var column7 = (
             "[F]    Toggle Fullscreen",
             "[Esc]  Quit             "
         );
 
-        var columns = new[] { column1, column2, column3, column4, column5, column6 };
-        var gap = 33f * Scale;
+        var columns = new[] { column1, column2, column3, column4, column5, column6,  column7 };
+        var gap = 27f * Scale;
         var x = padding;
 
         _text.SetTextColor(textColor);
