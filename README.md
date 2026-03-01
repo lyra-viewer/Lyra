@@ -184,6 +184,7 @@ The PSD decoder is intentionally structured to allow future expansion.
 | `F`                   | Toggle fullscreen                                 |
 | `B`                   | Toggle background mode                            |
 | `I`                   | Toggle image information overlay                  |
+| `H`                   | Toggle help bar                                   |
 | `Return`              | Reveal image or directory in native file explorer |
 | `Esc`                 | Exit application                                  |
 
