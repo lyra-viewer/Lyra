@@ -2,8 +2,6 @@
 
 ---
 
-![Screenshot](docs/images/screenshot.jpg)
-
 ## Contents
 
 - [Overview](#overview)
@@ -254,3 +252,5 @@ brew install --cask lyra-viewer
 Not available yet.
 
 ---
+
+![Screenshot](docs/images/screenshot.jpg)
