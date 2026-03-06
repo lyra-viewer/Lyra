@@ -41,16 +41,12 @@ public partial class SdlCore : IDisposable
     private Composite? _composite;
     private int _zoomPercentage = 100;
     private DisplayMode _displayMode = DisplayMode.Undefined;
-
-    private readonly AppSettings _appSettings;
-
+    
     private const int PreloadDepth = 3;
     private const int CleanupSafeRange = 4;
 
-    public SdlCore(AppSettings appSettings, UiSettings uiSettings)
+    public SdlCore()
     {
-        _appSettings = appSettings;
-
         if (!Init(InitFlags.Video))
         {
             LogError(LogCategory.System, $"SDL could not initialize: {GetError()}");
@@ -58,7 +54,7 @@ public partial class SdlCore : IDisposable
         }
 
         ColdStartReset();
-        InitializeWindowAndRenderer(_appSettings.Renderer, _appSettings.WindowStateOnStart, uiSettings);
+        InitializeWindowAndRenderer();
         InitializeInput();
         ImageStore.Initialize();
 
@@ -66,16 +62,16 @@ public partial class SdlCore : IDisposable
         // LoadImage();
     }
 
-    private void InitializeWindowAndRenderer(Backend backend, WindowState windowStateOnStart, UiSettings uiSettings)
+    private void InitializeWindowAndRenderer()
     {
         var flags = WindowFlags.Resizable | WindowFlags.HighPixelDensity;
 
-        if (windowStateOnStart != WindowState.Normal)
+        if (SettingsManager.AppSettings.WindowStateOnStart != WindowState.Normal)
             flags |= WindowFlags.Maximized;
 
         var (w, h) = GetInitialWindowSize();
 
-        switch (backend)
+        switch (SettingsManager.AppSettings.Renderer)
         {
             case Backend.OpenGL:
                 _window = CreateWindow("Lyra Viewer (OpenGL)", w, h, flags | WindowFlags.OpenGL);
@@ -94,10 +90,8 @@ public partial class SdlCore : IDisposable
         SetWindowFocusable(_window, true);
         RefreshDisplayInfo();
 
-        if (windowStateOnStart == WindowState.Fullscreen)
+        if (SettingsManager.AppSettings.WindowStateOnStart == WindowState.Fullscreen)
             SetFullscreen(true);
-        
-        _renderer.ApplyUserSettings(uiSettings);
     }
 
     private static (int w, int h) GetInitialWindowSize()
@@ -245,12 +239,9 @@ public partial class SdlCore : IDisposable
     public void Dispose()
     {
         Logger.Info("[Core] Disposing...");
-
-        if (_appSettings.PreserveUiSettings)
-        {
-            var userSettings = _renderer.ExportUiSettings();
-            SettingsManager.SaveUiSettings(userSettings);
-        }
+        
+        var userSettings = _renderer.ExportUiSettings();
+        SettingsManager.SaveUiSettings(userSettings);
 
         _renderer.Dispose();
         ImageStore.SaveAndDispose();

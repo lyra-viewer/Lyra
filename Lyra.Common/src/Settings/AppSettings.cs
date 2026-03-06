@@ -6,6 +6,8 @@ public readonly record struct AppSettings(
     Backend Renderer,
     WindowState WindowStateOnStart,
     MidMouseButtonFunction MidMouseButtonFunction,
+    int InfoTextSize,
+    int HelpTextSize,
     bool PreserveUiSettings
 )
 {
@@ -13,6 +15,8 @@ public readonly record struct AppSettings(
         Renderer: Backend.OpenGL,
         WindowState.Maximized,
         MidMouseButtonFunction.Pan,
+        14,
+        12,
         PreserveUiSettings: true
     );
 }

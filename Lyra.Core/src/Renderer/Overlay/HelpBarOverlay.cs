@@ -1,3 +1,4 @@
+using Lyra.Common.Settings;
 using Lyra.Imaging.Content;
 using Lyra.SdlCore;
 using SkiaSharp;
@@ -18,7 +19,7 @@ public class HelpBarOverlay : IOverlay<(Composite? composite, ApplicationStates 
 
     public void ReloadFont()
     {
-        Font = FontHelper.GetScaledMonoFont(12, Scale);
+        Font = FontHelper.GetScaledMonoFont(SettingsManager.AppSettings.HelpTextSize, Scale);
         Font.Edging = SKFontEdging.Antialias;
         Font.Subpixel = false;
     }
@@ -77,7 +78,7 @@ public class HelpBarOverlay : IOverlay<(Composite? composite, ApplicationStates 
         );
 
         var columns = new[] { column1, column2, column3, column4, column5, column6,  column7 };
-        var gap = 27f * Scale;
+        var gap = Font.Size * 1.8f * Scale;
         var x = padding;
 
         _text.SetTextColor(textColor);

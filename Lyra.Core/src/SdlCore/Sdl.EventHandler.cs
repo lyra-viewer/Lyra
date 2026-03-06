@@ -1,4 +1,5 @@
 using Lyra.Common;
+using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
 using static Lyra.Common.Events.EventManager;
 using static SDL3.SDL;
@@ -99,7 +100,7 @@ public partial class SdlCore
         switch (e.Button.Button)
         {
             case ButtonLeft:
-            case ButtonMiddle when _appSettings.MidMouseButtonFunction == MidMouseButtonFunction.Pan:
+            case ButtonMiddle when SettingsManager.AppSettings.MidMouseButtonFunction == MidMouseButtonFunction.Pan:
                 StartPanning(e.Motion.X, e.Motion.Y);
                 break;
         }
@@ -110,10 +111,10 @@ public partial class SdlCore
         switch (e.Button.Button)
         {
             case ButtonLeft:
-            case ButtonMiddle when _appSettings.MidMouseButtonFunction == MidMouseButtonFunction.Pan:
+            case ButtonMiddle when SettingsManager.AppSettings.MidMouseButtonFunction == MidMouseButtonFunction.Pan:
                 StopPanning();
                 break;
-            case ButtonMiddle when _appSettings.MidMouseButtonFunction == MidMouseButtonFunction.Exit:
+            case ButtonMiddle when SettingsManager.AppSettings.MidMouseButtonFunction == MidMouseButtonFunction.Exit:
                 HandleEscape();
                 break;
         }

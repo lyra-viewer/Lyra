@@ -1,3 +1,4 @@
+using Lyra.Common.Settings;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.SdlCore;
@@ -19,7 +20,7 @@ public class ImageInfoOverlay : IOverlay<(Composite? composite, ApplicationState
 
     public void ReloadFont()
     {
-        Font = FontHelper.GetScaledMonoFont(14, Scale);
+        Font = FontHelper.GetScaledMonoFont(SettingsManager.AppSettings.InfoTextSize, Scale);
     }
 
     public void Render(SKCanvas canvas, PixelSize drawableBounds, SKColor textPaint, (Composite? composite, ApplicationStates states) data)

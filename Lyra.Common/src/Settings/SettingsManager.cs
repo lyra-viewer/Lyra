@@ -14,7 +14,18 @@ public static class SettingsManager
     private static readonly string AppSettingsFilepath = LyraIO.GetAppSettingsFile();
     private static readonly string UiSettingsFilepath = LyraIO.GetUiSettingsFile();
 
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 2;
+
+    public static AppSettings AppSettings = DefaultAppSettings;
+    public static UiSettings UiSettings = DefaultUiSettings;
+
+    public static void LoadSettings()
+    {
+        LoadAppSettings();
+
+        if (AppSettings.PreserveUiSettings)
+            LoadUiSettings();
+    }
 
     private static string BuildUserSettingsToml(UiSettings s)
     {
@@ -52,10 +63,14 @@ public static class SettingsManager
                 # If false, always use defaults.
                 preserve_ui_settings = {s.PreserveUiSettings.ToString().ToLowerInvariant()}
 
+                # UI text size:
+                info_text_size = {s.InfoTextSize}
+                help_text_size = {s.HelpTextSize}
+                
                 """;
     }
 
-    public static AppSettings LoadAppSettings()
+    private static void LoadAppSettings()
     {
         var defaultToml = BuildAppSettingsToml(DefaultAppSettings);
         var table = ParseTableOrReset(AppSettingsFilepath, defaultToml);
@@ -65,14 +80,17 @@ public static class SettingsManager
         {
             Logger.Warning($"[SettingsManager] AppSettings version mismatch ({version} != {CurrentVersion}). Resetting.");
             SaveAtomic(defaultToml, AppSettingsFilepath);
-            return DefaultAppSettings;
+            return;
         }
 
         var rendererAlias = GetString(table, "renderer", DefaultAppSettings.Renderer.Alias());
         var windowAlias = GetString(table, "window_state_on_start", DefaultAppSettings.WindowStateOnStart.Alias());
         var midAlias = GetString(table, "mid_mouse_button_function", DefaultAppSettings.MidMouseButtonFunction.Alias());
+        var infoTextSize = Math.Clamp(GetInt(table, "info_text_size", DefaultAppSettings.InfoTextSize), 4, 72);
+        var helpTextSize = Math.Clamp(GetInt(table, "help_text_size", DefaultAppSettings.HelpTextSize), 4, 72);
+        
         var preserveUi = GetBool(table, "preserve_ui_settings", DefaultAppSettings.PreserveUiSettings);
-
+        
         var renderer = DefaultAppSettings.Renderer;
         if (TryParseByAlias(rendererAlias, out Backend parsedBackend))
             renderer = parsedBackend;
@@ -91,10 +109,10 @@ public static class SettingsManager
         else
             Logger.Warning($"[SettingsManager] Unknown mid_mouse_button_function '{midAlias}', using default '{midMouseButton.Alias()}'");
 
-        return new AppSettings(renderer, windowState, midMouseButton, preserveUi);
+        AppSettings = new AppSettings(renderer, windowState, midMouseButton, infoTextSize, helpTextSize, preserveUi);
     }
 
-    public static UiSettings LoadUiSettings()
+    private static void LoadUiSettings()
     {
         var defaultToml = BuildUserSettingsToml(DefaultUiSettings);
         var table = ParseTableOrReset(UiSettingsFilepath, defaultToml);
@@ -104,7 +122,7 @@ public static class SettingsManager
         {
             Logger.Warning($"[SettingsManager] UiSettings version mismatch ({version} != {CurrentVersion}). Resetting.");
             SaveAtomic(defaultToml, UiSettingsFilepath);
-            return DefaultUiSettings;
+            return;
         }
 
         var samplingRaw = GetInt(table, "sampling_mode", (int)DefaultUiSettings.SamplingMode);
@@ -133,11 +151,14 @@ public static class SettingsManager
         if (!Enum.IsDefined(typeof(InfoMode), infoRaw))
             Logger.Warning($"[SettingsManager] Invalid info_level={infoRaw}, using default {(int)DefaultUiSettings.InfoLevel}");
 
-        return new UiSettings(sampling, background, info, help);
+        UiSettings = new UiSettings(sampling, background, info, help);
     }
 
     public static void SaveUiSettings(UiSettings uiSettings)
     {
+        if (!AppSettings.PreserveUiSettings)
+            return;
+
         var uiToml = BuildUserSettingsToml(uiSettings);
         SaveAtomic(uiToml, UiSettingsFilepath);
     }

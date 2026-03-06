@@ -23,10 +23,10 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     private DisplayMode _displayMode = DisplayMode.Undefined;
     private int _zoomPercentage = 100;
 
-    private SamplingMode _samplingMode = SamplingMode.Cubic;
-    private BackgroundMode _backgroundMode = BackgroundMode.Black;
-    private InfoMode _infoMode = InfoMode.Basic;
-    private bool _helpBarVisible = true;
+    private SamplingMode _samplingMode;
+    private BackgroundMode _backgroundMode;
+    private InfoMode _infoMode;
+    private bool _helpBarVisible;
 
     private readonly ICompositeContentDrawer _contentDrawer;
     private readonly IDropProgressProvider _dropProgressProvider;
@@ -54,6 +54,11 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         _centeredOverlay = new CenteredTextOverlay().WithDrawableSizeSubscription();
 
         _contentDrawer = new SkiaCompositeContentDrawer();
+        
+        _samplingMode = SettingsManager.UiSettings.SamplingMode;
+        _backgroundMode = SettingsManager.UiSettings.BackgroundMode;
+        _infoMode = SettingsManager.UiSettings.InfoLevel;
+        _helpBarVisible = SettingsManager.UiSettings.HelpBarVisible;
     }
 
     protected abstract SKSurface CreateSurface();
@@ -277,14 +282,6 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     public void ToggleHelpBar()
         => _helpBarVisible = !_helpBarVisible;
-
-    public void ApplyUserSettings(UiSettings uiSettings)
-    {
-        _samplingMode = uiSettings.SamplingMode;
-        _backgroundMode = uiSettings.BackgroundMode;
-        _infoMode = uiSettings.InfoLevel;
-        _helpBarVisible = uiSettings.HelpBarVisible;
-    }
 
     public UiSettings ExportUiSettings()
     {

@@ -12,14 +12,11 @@ static class Program
         Logger.Info($"[Application] Application started on {RuntimeInformation.RuntimeIdentifier}");
 
         NativeLibraryLoader.Initialize();
-        var appSettings = SettingsManager.LoadAppSettings();
-        var userSettings = appSettings.PreserveUiSettings
-            ? SettingsManager.LoadUiSettings()
-            : UiSettings.DefaultUiSettings;
+        SettingsManager.LoadSettings();
 
         try
         {
-            using var viewer = new SdlCore.SdlCore(appSettings, userSettings);
+            using var viewer = new SdlCore.SdlCore();
             viewer.Run();
         }
         catch (Exception ex)
