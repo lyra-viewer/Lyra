@@ -1,17 +1,18 @@
 using System.Buffers;
 using Lyra.Imaging.Psd.Core.Common;
 using Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
+using Lyra.Imaging.Psd.Core.Decode.ColorCalibration.Rgb;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 using Lyra.Imaging.Psd.Core.SectionData;
 using Wacton.Unicolour;
 
-namespace Lyra.Imaging.Psd.Core.Decode.ColorProcessors;
+namespace Lyra.Imaging.Psd.Core.Decode.Color.Processors;
 
 public sealed class IndexedProcessor : IColorModeProcessor
 {
     public string? IccProfileUsed { get; private set; }
 
-    private static readonly IccCalibrationProvider CalibrationProvider = new();
+    private static readonly RgbCalibrationProvider CalibrationProvider = new();
 
     public RgbaSurface Process(PlaneImage src, ColorModeContext ctx, ColorModeData? colorModeData, CancellationToken ct)
     {
@@ -40,9 +41,9 @@ public sealed class IndexedProcessor : IColorModeProcessor
         var size = checked(stride * src.Height);
 
         // ICC calibration (treat Indexed as RGB after palette expansion)
-        const int gridSize = ColorCalibrationDefaults.GridSize;
+        const int gridSize = RgbCalibrationDefaults.GridSize;
         var calibration = CalibrationProvider.GetCalibration(
-            new ColorCalibrationRequest(
+            new RgbCalibrationRequest(
                 SourceColorMode: ColorMode.Rgb,
                 EmbeddedIccProfile: ctx.IccProfile,
                 PreferColorManagement: ctx.PreferColorManagement,
@@ -97,9 +98,9 @@ public sealed class IndexedProcessor : IColorModeProcessor
                     var idx8 = idx8Rent!.AsSpan(0, src.Width);
 
                     if (bpcBytes == 2)
-                        PsdSampleConvert.Row16BeTo8(idx8, idxRowRaw);
+                        PsdSampleConvert.Row16BeTo8(idxRowRaw, idx8);
                     else
-                        PsdSampleConvert.Row32FloatBeTo8(idx8, idxRowRaw);
+                        PsdSampleConvert.Row32FloatBeTo8(idxRowRaw, idx8);
 
                     idxRow8 = idx8;
 
@@ -109,9 +110,9 @@ public sealed class IndexedProcessor : IColorModeProcessor
                         var aa = a8Rent!.AsSpan(0, src.Width);
 
                         if (bpcBytes == 2)
-                            PsdSampleConvert.Row16BeTo8(aa, aRaw);
+                            PsdSampleConvert.Row16BeTo8(aRaw, aa);
                         else
-                            PsdSampleConvert.Row32FloatBeTo8(aa, aRaw);
+                            PsdSampleConvert.Row32FloatBeTo8(aRaw, aa);
 
                         aRow8 = aa;
                     }
@@ -219,7 +220,7 @@ public sealed class IndexedProcessor : IColorModeProcessor
                 var g0 = gPal[p];
                 var b0 = bPal[p];
 
-                var rgb = IccOracle.OracleIccRgb(config, r0, g0, b0);
+                var rgb = IccTransformSampler.OracleIccRgb(config, r0, g0, b0);
 
                 sumR[r0] += rgb.r;
                 cntR[r0]++;
@@ -232,6 +233,6 @@ public sealed class IndexedProcessor : IColorModeProcessor
             }
         }
 
-        return LutBuilder.BuildRgbCurves(sumR, cntR, sumG, cntG, sumB, cntB);
+        return RgbCurveLutBuilder.BuildRgbCurves(sumR, cntR, sumG, cntG, sumB, cntB);
     }
 }

@@ -1,17 +1,18 @@
 using System.Buffers;
 using Lyra.Imaging.Psd.Core.Common;
 using Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
+using Lyra.Imaging.Psd.Core.Decode.ColorCalibration.Rgb;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 using Lyra.Imaging.Psd.Core.SectionData;
 using Wacton.Unicolour;
 
-namespace Lyra.Imaging.Psd.Core.Decode.ColorProcessors;
+namespace Lyra.Imaging.Psd.Core.Decode.Color.Processors;
 
 public sealed class GrayscaleProcessor : IColorModeProcessor
 {
     public string? IccProfileUsed { get; private set; }
 
-    private static readonly IccCalibrationProvider CalibrationProvider = new();
+    private static readonly RgbCalibrationProvider CalibrationProvider = new();
 
     public RgbaSurface Process(PlaneImage src, ColorModeContext ctx, ColorModeData? colorModeData, CancellationToken ct)
     {
@@ -32,10 +33,10 @@ public sealed class GrayscaleProcessor : IColorModeProcessor
         var stride = checked(src.Width * 4);
         var size = checked(stride * src.Height);
 
-        const int gridSize = ColorCalibrationDefaults.GridSize;
+        const int gridSize = RgbCalibrationDefaults.GridSize;
 
         var calibration = CalibrationProvider.GetCalibration(
-            new ColorCalibrationRequest(
+            new RgbCalibrationRequest(
                 SourceColorMode: ColorMode.Grayscale,
                 EmbeddedIccProfile: ctx.IccProfile,
                 PreferColorManagement: ctx.PreferColorManagement,
@@ -86,25 +87,25 @@ public sealed class GrayscaleProcessor : IColorModeProcessor
 
                     if (bpcBytes == 2)
                     {
-                        PsdSampleConvert.Row16BeTo8(gg, gRowRaw);
+                        PsdSampleConvert.Row16BeTo8(gRowRaw, gg);
 
                         if (hasAlpha)
                         {
                             var aRaw = a.Data.AsSpan(y * a.BytesPerRow, rowBytes);
                             var aa = a8Rent!.AsSpan(0, src.Width);
-                            PsdSampleConvert.Row16BeTo8(aa, aRaw);
+                            PsdSampleConvert.Row16BeTo8(aRaw, aa);
                             aRow8 = aa;
                         }
                     }
                     else
                     {
-                        PsdSampleConvert.Row32FloatBeTo8(gg, gRowRaw);
+                        PsdSampleConvert.Row32FloatBeTo8(gRowRaw, gg);
 
                         if (hasAlpha)
                         {
                             var aRaw = a.Data.AsSpan(y * a.BytesPerRow, rowBytes);
                             var aa = a8Rent!.AsSpan(0, src.Width);
-                            PsdSampleConvert.Row32FloatBeTo8(aa, aRaw);
+                            PsdSampleConvert.Row32FloatBeTo8(aRaw, aa);
                             aRow8 = aa;
                         }
                     }
@@ -169,7 +170,7 @@ public sealed class GrayscaleProcessor : IColorModeProcessor
                 var off = col * bpcBytes;
                 var g0 = PsdSampleConvert.SampleTo8(gRow, off, bpcBytes);
 
-                var rgb = IccOracle.OracleIccRgb(config, g0, g0, g0);
+                var rgb = IccTransformSampler.OracleIccRgb(config, g0, g0, g0);
 
                 sumR[g0] += rgb.r;
                 sumG[g0] += rgb.g;
@@ -178,6 +179,6 @@ public sealed class GrayscaleProcessor : IColorModeProcessor
             }
         }
 
-        return LutBuilder.BuildRgbCurves(sumR, cnt, sumG, cnt, sumB, cnt);
+        return RgbCurveLutBuilder.BuildRgbCurves(sumR, cnt, sumG, cnt, sumB, cnt);
     }
 }

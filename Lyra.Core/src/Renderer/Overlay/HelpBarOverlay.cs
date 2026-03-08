@@ -37,6 +37,7 @@ public class HelpBarOverlay : IOverlay<(Composite? composite, ApplicationStates 
 
         var anyInfoHidden = !data.states.ShowExif && (data.composite.ExifInfo != null && data.composite.ExifInfo.HasData() || data.composite.FormatSpecific.Count > 0);
         var multiDir = data.states is { DirectoryCount: not null, DirectoryIndex: not null };
+        var vector = data.composite.Content?.Kind == CompositeContentKind.Vector;
 
         var column1 = (
             "[ ← / → ]  Prev. / Next Image",
@@ -69,7 +70,7 @@ public class HelpBarOverlay : IOverlay<(Composite? composite, ApplicationStates 
 
         var column6 = (
             "[B]  Toggle Background",
-            "[S]  Toggle Sampling  "
+            !vector ? "[S]  Toggle Sampling  " : "                      "
         );
 
         var column7 = (

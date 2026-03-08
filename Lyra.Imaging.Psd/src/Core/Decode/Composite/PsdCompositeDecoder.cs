@@ -1,6 +1,6 @@
 using Lyra.Imaging.Psd.Core.Common;
+using Lyra.Imaging.Psd.Core.Decode.Color;
 using Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
-using Lyra.Imaging.Psd.Core.Decode.ColorProcessors;
 using Lyra.Imaging.Psd.Core.Decode.Decompressors;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 using Lyra.Imaging.Psd.Core.Decode.PlaneRowConsumer;

@@ -1,7 +1,7 @@
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 using Lyra.Imaging.Psd.Core.SectionData;
 
-namespace Lyra.Imaging.Psd.Core.Decode.ColorProcessors;
+namespace Lyra.Imaging.Psd.Core.Decode.Color;
 
 public interface IColorModeProcessor
 {

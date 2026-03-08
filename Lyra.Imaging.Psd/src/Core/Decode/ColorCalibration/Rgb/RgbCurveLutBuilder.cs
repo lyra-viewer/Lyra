@@ -1,6 +1,6 @@
-namespace Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
+namespace Lyra.Imaging.Psd.Core.Decode.ColorCalibration.Rgb;
 
-public static class LutBuilder
+public static class RgbCurveLutBuilder
 {
     public static RgbLuts BuildRgbCurves(int[] sumR, int[] cntR, int[] sumG, int[] cntG, int[] sumB, int[] cntB)
         => new(BuildCurve(sumR, cntR), BuildCurve(sumG, cntG), BuildCurve(sumB, cntB));

@@ -7,7 +7,7 @@ namespace Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
 /// Helper used during ICC calibration sampling to query the "oracle"
 /// (Unicolour + ICC) for the expected RGB output.
 /// </summary>
-internal static class IccOracle
+internal static class IccTransformSampler
 {
     public static (int r, int g, int b) OracleIccRgb(Configuration config, byte r, byte g, byte b)
     {

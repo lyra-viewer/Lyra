@@ -1,8 +1,8 @@
 using Lyra.Imaging.Psd.Core.Common;
 
-namespace Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
+namespace Lyra.Imaging.Psd.Core.Decode.ColorCalibration.Rgb;
 
-public sealed record ColorCalibrationRequest
+public sealed record RgbCalibrationRequest
 (
     ColorMode SourceColorMode,
     byte[]? EmbeddedIccProfile,

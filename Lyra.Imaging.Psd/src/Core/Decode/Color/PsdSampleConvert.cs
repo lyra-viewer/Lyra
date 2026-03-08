@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 
-namespace Lyra.Imaging.Psd.Core.Decode.ColorProcessors;
+namespace Lyra.Imaging.Psd.Core.Decode.Color;
 
 // ============================================================================
 //  PERFORMANCE CRITICAL – PSD SAMPLE CONVERSION
@@ -18,7 +18,7 @@ namespace Lyra.Imaging.Psd.Core.Decode.ColorProcessors;
 //    - Must remain branch-predictable.
 //
 //  Implementation Notes:
-//    - U16 → U8 conversion uses a division-free exact transform.
+//    - U16 -> U8 conversion uses a division-free exact transform.
 //    - Float conversion assumes normalized [0..1] PSD float encoding.
 //    - All methods assume caller guarantees valid buffer sizes.
 //    - No defensive re-checking inside inner loops.
@@ -49,7 +49,7 @@ internal static class PsdSampleConvert
     private static uint ReadU32BE(ReadOnlySpan<byte> src, int offset)
         => BinaryPrimitives.ReadUInt32BigEndian(src.Slice(offset, 4));
 
-    public static void Row16BeTo8(Span<byte> dst8, ReadOnlySpan<byte> src16be)
+    public static void Row16BeTo8(ReadOnlySpan<byte> src16be, Span<byte> dst8)
     {
         for (int i = 0, si = 0; i < dst8.Length; i++, si += 2)
         {
@@ -58,7 +58,7 @@ internal static class PsdSampleConvert
         }
     }
 
-    public static void Row32FloatBeTo8(Span<byte> dst8, ReadOnlySpan<byte> src32be)
+    public static void Row32FloatBeTo8(ReadOnlySpan<byte> src32be, Span<byte> dst8)
     {
         for (int i = 0, si = 0; i < dst8.Length; i++, si += 4)
         {
