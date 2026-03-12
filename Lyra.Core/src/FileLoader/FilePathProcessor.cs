@@ -185,7 +185,7 @@ public static class FilePathProcessor
                 Name = Path.GetFileName(full)
             })
             .OrderBy(x => x.Dir, PathComparer.CommonPathComparer)
-            .ThenBy(x => x.Name, PathComparer.CommonPathComparer)
+            .ThenBy(x => x.Name, NaturalStringComparer.Instance)
             .Select(x => x.Full)
             .ToList();
 
