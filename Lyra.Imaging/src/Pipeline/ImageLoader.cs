@@ -76,6 +76,11 @@ internal class ImageLoader
         RemoveMatching(key => !keepSet.Contains(key), "Cleanup:");
     }
 
+    public void Purge(string path)
+    {
+        RemoveMatching(key => PathComparer.Equals(key, path), "Purge:");
+    }
+
     /// <summary>Disposes everything and cancels in-flight jobs.</summary>
     public void DisposeAll()
     {

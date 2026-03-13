@@ -32,6 +32,11 @@ public static class ImageStore
         ImageLoader.Cleanup(keep);
     }
 
+    public static void Purge(string path)
+    {
+        ImageLoader.Purge(path);
+    }
+
     public static void SaveAndDispose()
     {
         LoadTimeEstimator.SaveTimeDataToFile();

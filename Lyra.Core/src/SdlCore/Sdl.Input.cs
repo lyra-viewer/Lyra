@@ -90,7 +90,7 @@ public partial class SdlCore
         if (DirectoryNavigator.HasNext())
         {
             DirectoryNavigator.MoveToNext();
-            LoadImage();
+            LoadImage(NavigationDirection.Forward);
         }
     }
 
@@ -99,7 +99,7 @@ public partial class SdlCore
         if (DirectoryNavigator.HasPrevious())
         {
             DirectoryNavigator.MoveToPrevious();
-            LoadImage();
+            LoadImage(NavigationDirection.Backward);
         }
     }
 
@@ -108,7 +108,8 @@ public partial class SdlCore
         if (!DirectoryNavigator.IsFirst())
         {
             DirectoryNavigator.MoveToFirst();
-            LoadImage();
+            // Correct - if the first image was deleted, the direction should be forward.
+            LoadImage(NavigationDirection.Forward);
         }
     }
 
@@ -117,7 +118,8 @@ public partial class SdlCore
         if (!DirectoryNavigator.IsLast())
         {
             DirectoryNavigator.MoveToLast();
-            LoadImage();
+            // Correct - if the first image was deleted, the direction should be backward.
+            LoadImage(NavigationDirection.Backward);
         }
     }
 
@@ -126,7 +128,7 @@ public partial class SdlCore
         if (!DirectoryNavigator.IsFirst())
         {
             DirectoryNavigator.MoveToLeftEdge();
-            LoadImage();
+            LoadImage(NavigationDirection.Backward);
         }
     }
 
@@ -135,7 +137,7 @@ public partial class SdlCore
         if (!DirectoryNavigator.IsLast())
         {
             DirectoryNavigator.MoveToRightEdge();
-            LoadImage();
+            LoadImage(NavigationDirection.Forward);
         }
     }
     

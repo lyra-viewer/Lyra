@@ -30,7 +30,7 @@ public partial class SdlCore : IDisposable
     private readonly List<Action> _deferredUntilWarm = [];
     private readonly ConcurrentQueue<Action> _mainThreadQueue = new();
     // ----------------------------------------------------------------------
-    
+
     // Safety cap for “vsync forced off” situations.
     private const int MaxFps = 240;
     private const ulong NsPerSecond = 1_000_000_000UL;
@@ -41,7 +41,7 @@ public partial class SdlCore : IDisposable
     private Composite? _composite;
     private int _zoomPercentage = 100;
     private DisplayMode _displayMode = DisplayMode.Undefined;
-    
+
     private const int PreloadDepth = 3;
     private const int CleanupSafeRange = 4;
 
@@ -84,7 +84,7 @@ public partial class SdlCore : IDisposable
             default:
                 throw new ArgumentOutOfRangeException();
         }
-        
+
         _nextFrameDeadlineNs = GetTicksNS() + TargetFrameNs;
         SetWindowMinimumSize(_window, 640, 480);
         SetWindowFocusable(_window, true);
@@ -107,8 +107,10 @@ public partial class SdlCore : IDisposable
         return (1280, 800);
     }
 
-    private void LoadImage()
+    private void LoadImage(NavigationDirection direction = NavigationDirection.None)
     {
+        PurgeNotExistingFiles(direction);
+
         var keepPaths = DirectoryNavigator.GetRange(CleanupSafeRange);
         ImageStore.Cleanup(keepPaths);
 
@@ -133,6 +135,18 @@ public partial class SdlCore : IDisposable
         _renderer.SetZoom(_zoomPercentage);
     }
 
+    private void PurgeNotExistingFiles(NavigationDirection direction = NavigationDirection.None)
+    {
+        while (DirectoryNavigator.GetCurrent() is { } candidate && !File.Exists(candidate))
+        {
+            DirectoryNavigator.Purge(candidate);
+            ImageStore.Purge(candidate);
+
+            if (direction == NavigationDirection.Backward && DirectoryNavigator.HasPrevious())
+                DirectoryNavigator.MoveToPrevious();
+        }
+    }
+
     public void Run()
     {
         while (_running)
@@ -141,9 +155,9 @@ public partial class SdlCore : IDisposable
             HandleEvents();
             RecalculateDisplayModeIfNecessary();
             _renderer.Render();
-            
+
             GLSwapWindow(_window);
-            
+
             // Safety pacing
             var now = GetTicksNS();
             if (now < _nextFrameDeadlineNs)
@@ -239,7 +253,7 @@ public partial class SdlCore : IDisposable
     public void Dispose()
     {
         Logger.Info("[Core] Disposing...");
-        
+
         var userSettings = _renderer.ExportUiSettings();
         SettingsManager.SaveUiSettings(userSettings);
 

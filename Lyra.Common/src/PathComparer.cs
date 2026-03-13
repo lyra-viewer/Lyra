@@ -1,4 +1,4 @@
-namespace Lyra.PathUtils;
+namespace Lyra.Common;
 
 public static class PathComparer
 {

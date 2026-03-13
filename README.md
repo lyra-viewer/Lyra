@@ -6,6 +6,7 @@
 
 - [Overview](#overview)
 - [Key Features](#key-features)
+- [Technical Details](#technical-details)
 - [Supported Image Formats](#supported-image-formats)
     - [Common Raster Formats (Essential)](#common-raster-formats-essential)
     - [Modern / Web-Friendly Formats](#modern--web-friendly-formats)
@@ -14,34 +15,31 @@
     - [Document / Vector Formats](#document--vector-formats)
     - [Minor Formats](#minor-formats)
 - [PSD / PSB Decoding Model](#psd--psb-decoding-model)
-    - [Supported Color Modes](#supported-color-modes)
+    - [PSD Color Mode Support](#psd-color-mode-support)
     - [PSB Support](#psb-support)
     - [ICC Color Profiles](#icc-color-profiles)
     - [Future Direction](#future-direction)
 - [Keyboard Shortcuts & Controls](#keyboard-shortcuts--controls)
     - [macOS Specific](#macos-specific)
     - [Open With / Drag & Drop](#open-with--drag--drop)
-- [Prerequisites & Dependencies](#prerequisites--dependencies)
+- [Dependencies](#dependencies)
 - [Installation](#installation)
     - [macOS (Homebrew)](#macos-homebrew)
     - [Linux](#linux)
+- [Configuration & Data Files (UNIX specific)](#configuration--data-files-unix-specific)
+    - [Configuration](#configuration)
+    - [Data](#data)
 
 ## Overview
 
-Lyra is a high-performance, minimalist image viewer designed for speed, fluid navigation, and precision, ideal for
-creative professionals who rely on images as a core resource in their workflow — such as:
+Lyra is a high-performance, minimalist image viewer designed for speed, fluid navigation, and precision.
+It handles modern and professional image formats without the overhead of full editing suites or Electron-based tools.
+Built for anyone who relies on images as a core resource in their workflow:
 
-- 2D/3D artists
-- Game developers
-- Environment designers
-- And other advanced users
-
-Built on SDL3 and SkiaSharp, Lyra is optimized for browsing collections of texture maps, HDRIs, baked assets, and
-other images exported from tools like Blender, Quixel Bridge or modern DCC pipelines.
-
-> _Developer note:_ Lyra is designed and written simultaneously.
-> As a result, parts of the code reflect iterative exploration rather than a fully pre-planned architecture.
-> Refactoring is ongoing wherever it improves clarity or maintainability.
+- 2D/3D artists and game developers browsing texture maps and baked assets
+- Photographers reviewing large batches of exports
+- Developers inspecting UI assets, icons, and generated output
+- And ordinary advanced users
 
 ---
 
@@ -54,6 +52,26 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 - **EXIF metadata** display for viewing embedded image information.
 - Zoom-to-cursor and panning for intuitive inspection at any scale.
 - Reasonable support for modern image formats, with limited support for older formats that refuse to die.
+
+---
+
+## Technical Details
+
+Lyra is built on .NET 9 with SDL3 for windowing and input, and SkiaSharp for hardware-accelerated rendering via OpenGL or Metal.
+It is not an Electron app - there is no embedded browser, no web runtime, and no hidden resource overhead (and definitely no AI client).
+The architecture is designed around fast, non-blocking image loading:
+
+- Decoded images are cached and adjacent files are preloaded in the background, so navigation feels instant even in large directories.
+- Large PSD/PSB files use streaming and tiled decoding to avoid loading entire documents into memory - tested with files exceeding 3 GB.
+
+Lyra integrates lightweight native interop wrappers for HDR and EXR decoding, and delegates format-specific work to focused libraries 
+rather than bundling large native dependencies. System libraries like libheif, OpenJPEG and OpenEXR are expected from the package manager (e.g. Homebrew).
+Originally built for workflows involving texture maps, HDRIs, and assets exported from tools like Blender and Quixel Bridge - but the design 
+generalizes well to any image-heavy workflow.
+
+> _Developer note:_ Lyra is designed and written simultaneously.
+> As a result, parts of the code reflect iterative exploration rather than a fully pre-planned architecture.
+> Refactoring is ongoing wherever it improves clarity or maintainability.
 
 ---
 
@@ -104,7 +122,7 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 |-----------|-------------------------------|-----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
 | ICO       | Icon container format         | `.ico`                                  |                                                                                                                                                         |
 | ~ICNS~    | ~Apple icon container format~ | ~`.icns`~                               |                                                                                                                                                         |
-| JPEG 2000 | Wavelet-based image format    | `.jp2` `.jpg2`<br/>`.j2k` `.j2c` `.jpc` | Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP) are intentionally not supported. |
+| JPEG 2000 | Wavelet-based image format    | `.jp2` `.jpg2`<br/>`.j2k` `.j2c` `.jpc` | Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP) are intentionally NOT supported. |
 
 > _Note:_ Crossed-out formats are not implemented yet.
 
@@ -113,8 +131,7 @@ other images exported from tools like Blender, Quixel Bridge or modern DCC pipel
 ## PSD / PSB Decoding Model
 
 Lyra currently focuses on decoding the flattened **Image Data** section of Photoshop files, rather than individual
-layers.
-This design choice prioritizes performance and fast previewing.
+layers. This design choice prioritizes performance and fast previewing.
 
 This is explicitly documented because the Image Data section is not strictly mandatory in the PSD specification and,
 in some edge cases, may be missing or may not fully represent the document as it appears when opened in Photoshop.
@@ -123,16 +140,18 @@ in some edge cases, may be missing or may not fully represent the document as it
 
 [Adobe Photoshop File Format Specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/PhotoshopFileFormats.htm#50577409_pgfId-1036097)
 
-### Supported Color Modes
+### PSD Color Mode Support
 
-At the moment, Lyra supports decoding the following Photoshop color modes from Image Data:
-
-- RGB
-- CMYK
-- Grayscale
-- Indexed
-
-Support for other modes (Bitmap, Lab, Multichannel, Duotone) will be implemented.
+| Color Mode                   | Channels    | Lyra Support |
+|------------------------------|-------------|--------------|
+| Bitmap                       | 1 (1-bit)   | Planned      |
+| Grayscale                    | 1           | Full         |
+| Duotone / Tritone / Quadtone | 1 + inks    | In progress  |
+| Indexed                      | 1 + palette | Full         |
+| RGB                          | 3           | Full         |
+| CMYK                         | 4           | Full         |
+| Lab                          | 3           | Planned      |
+| Multichannel                 | N           | Planned      |
 
 ### PSB Support
 
@@ -211,10 +230,7 @@ The PSD decoder is intentionally structured to allow future expansion.
 
 ---
 
-## Prerequisites & Dependencies
-
-Lyra Viewer is built on **.NET 9** and integrates several high-performance libraries designed to handle modern
-image formats, accurate color processing, and GPU-accelerated rendering:
+## Dependencies
 
 | Library              | Purpose                                                                | License       | Repository                                                        |
 |----------------------|------------------------------------------------------------------------|---------------|-------------------------------------------------------------------|
@@ -225,14 +241,9 @@ image formats, accurate color processing, and GPU-accelerated rendering:
 | LibHeifSharp         | HEIF / HEIC image decoding                                             | LGPL-3.0      | [github](https://github.com/0xC0000054/libheif-sharp)             |
 | OpenEXR              | High-dynamic-range OpenEXR (.exr) decoding                             | BSD-3-Clause  | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
 | rgbe                 | Radiance HDR (.hdr) image decoding                                     | Public Domain | [webpage](https://www.graphics.cornell.edu/~bjw/rgbe.html)        |
+| OpenJPEG             | JPEG 2000 still-image decoding                                         | BSD-2-Clause  | [github](https://github.com/uclouvain/openjpeg)                   |
 | Unicolour            | Color space conversions & perceptual color math (used in PSD decoding) | MIT           | [github](https://github.com/waacton/Unicolour)                    |
 | MetadataExtractor    | EXIF metadata extraction                                               | Apache 2.0    | [github](https://github.com/drewnoakes/metadata-extractor-dotnet) |
-
-> _Native dependencies:_ Lyra does **not** bundle large native image libraries such as **libheif** or **OpenEXR**.
-> These are expected to be provided by the system package manager (e.g. **Homebrew** on macOS,
-> and other platform-specific package managers on Linux in the future).
->
-> Lyra only ships **lightweight native interop wrappers** for HDR and EXR decoding.
 
 ---
 
@@ -250,6 +261,33 @@ brew install --cask lyra-viewer
 ### Linux
 
 Not available yet.
+
+---
+
+## Configuration & Data Files (UNIX specific)
+
+Lyra stores configuration and runtime data in standard XDG-compliant locations.
+
+### Configuration
+
+```~/.config/lyra-viewer/```
+
+| File                | Description                                                                               |
+|---------------------|-------------------------------------------------------------------------------------------|
+| `app-settings.toml` | Application settings: renderer, window state, middle mouse button function, text sizes... |
+| `ui-settings.toml`  | UI state - saved automatically on exit                                                    |
+
+### Data
+
+```~/.local/share/lyra-viewer/```
+
+| File                  | Description                                                            |
+|-----------------------|------------------------------------------------------------------------|
+| `log.txt`             | Application log output                                                 |
+| `load-time-data.toml` | Recorded decode times per format, used to estimate loading progress    |
+
+If any configuration file is missing or malformed, Lyra falls back to built-in defaults and recreates the file on next save.
+Deleting everything under these directories is always safe - Lyra will start fresh with default settings.
 
 ---
 

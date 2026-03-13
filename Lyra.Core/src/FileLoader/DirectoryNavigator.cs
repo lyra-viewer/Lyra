@@ -1,4 +1,4 @@
-using Lyra.PathUtils;
+using Lyra.Common;
 
 namespace Lyra.FileLoader;
 
@@ -123,6 +123,26 @@ public static class DirectoryNavigator
 
         var (ns, ne) = GetContiguousDirBounds(seedIndex: neighborProbe, normalizedDir: neighborDir);
         _currentIndex = goToStart ? ne : ns;
+    }
+
+    public static void Purge(string filePath)
+    {
+        var idx = _imageList.FindIndex(f => PathComparer.Equals(f, filePath));
+        if (idx < 0) 
+            return;
+
+        _imageList.RemoveAt(idx);
+
+        if (_imageList.Count == 0)
+        {
+            _currentIndex = -1;
+            return;
+        }
+
+        if (idx < _currentIndex)
+            _currentIndex--;
+        else if (idx == _currentIndex)
+            _currentIndex = Math.Min(_currentIndex, _imageList.Count - 1);
     }
 
     private static string? GetNormalizedDir(string filePath)
