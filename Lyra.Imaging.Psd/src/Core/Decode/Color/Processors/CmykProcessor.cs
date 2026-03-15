@@ -4,6 +4,7 @@ using Lyra.Imaging.Psd.Core.Common;
 using Lyra.Imaging.Psd.Core.Decode.ColorCalibration;
 using Lyra.Imaging.Psd.Core.Decode.ColorCalibration.Cmyk;
 using Lyra.Imaging.Psd.Core.Decode.ColorCalibration.Rgb;
+using Lyra.Imaging.Psd.Core.Decode.Composite;
 using Lyra.Imaging.Psd.Core.Decode.Pixel;
 using Lyra.Imaging.Psd.Core.SectionData;
 using Wacton.Unicolour;
