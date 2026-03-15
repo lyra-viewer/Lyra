@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using Tomlyn;
 using Tomlyn.Model;
+using Tomlyn.Parsing;
 
 namespace Lyra.Common;
 
@@ -124,7 +125,7 @@ public static class LoadTimeEstimator
                 }
             }
 
-            var toml = Toml.FromModel(root);
+            var toml = TomlSerializer.Serialize(root);
 
             var dir = Path.GetDirectoryName(TimeFilePath);
             if (!string.IsNullOrEmpty(dir))
@@ -159,14 +160,14 @@ public static class LoadTimeEstimator
         try
         {
             var text = File.ReadAllText(TimeFilePath);
-            var doc = Toml.Parse(text);
+            var doc = SyntaxParser.Parse(text);
             if (doc.HasErrors)
             {
                 Logger.Error("[LoadTimeEstimator] Failed to load time data: TOML parse errors.");
                 return;
             }
 
-            var model = doc.ToModel(); // TomlTable
+            var model = TomlSerializer.Deserialize<TomlTable>(text)!;
             LoadTimeData.Clear();
 
             foreach (var formatEntry in model)

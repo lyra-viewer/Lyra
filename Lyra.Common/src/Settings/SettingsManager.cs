@@ -4,6 +4,7 @@ using Lyra.Common.Settings.Enums;
 using Lyra.Common.SystemExtensions;
 using Tomlyn;
 using Tomlyn.Model;
+using Tomlyn.Parsing;
 using static Lyra.Common.Settings.AppSettings;
 using static Lyra.Common.Settings.UiSettings;
 
@@ -171,11 +172,11 @@ public static class SettingsManager
             {
                 Logger.Warning($"[SettingsManager] Missing settings file: {path}. Writing default.");
                 SaveAtomic(defaultToml, path);
-                return Toml.Parse(defaultToml).ToModel();
+                return TomlSerializer.Deserialize<TomlTable>(defaultToml)!;
             }
 
             var text = File.ReadAllText(path);
-            var doc = Toml.Parse(text);
+            var doc = SyntaxParser.Parse(text);
 
             if (doc.HasErrors)
             {
@@ -183,12 +184,12 @@ public static class SettingsManager
                 foreach (var d in doc.Diagnostics)
                     Logger.Error($"[SettingsManager] TOML: {d}");
 
-                BackupCorruptedFile(path, "Toml.Parse() diagnostics present");
+                BackupCorruptedFile(path, "TomlSerializer.Deserialize diagnostics present");
                 SaveAtomic(defaultToml, path);
-                return Toml.Parse(defaultToml).ToModel();
+                return TomlSerializer.Deserialize<TomlTable>(defaultToml)!;
             }
 
-            var model = doc.ToModel();
+            var model = TomlSerializer.Deserialize<TomlTable>(text)!;
             Logger.Debug($"[SettingsManager] Parsed TOML table: {path}");
             return model;
         }
@@ -200,7 +201,7 @@ public static class SettingsManager
             BackupCorruptedFile(path, "ParseTableOrReset hard failure", ex);
 
             SaveAtomic(defaultToml, path);
-            return Toml.Parse(defaultToml).ToModel();
+            return TomlSerializer.Deserialize<TomlTable>(defaultToml)!;
         }
     }
 
