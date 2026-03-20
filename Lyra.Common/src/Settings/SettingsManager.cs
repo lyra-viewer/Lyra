@@ -172,7 +172,7 @@ public static class SettingsManager
             {
                 Logger.Warning($"[SettingsManager] Missing settings file: {path}. Writing default.");
                 SaveAtomic(defaultToml, path);
-                return TomlSerializer.Deserialize<TomlTable>(defaultToml)!;
+                return TomlSerializer.Deserialize(defaultToml, LyraTomlContext.Default.TomlTable)!;
             }
 
             var text = File.ReadAllText(path);
@@ -186,10 +186,10 @@ public static class SettingsManager
 
                 BackupCorruptedFile(path, "TomlSerializer.Deserialize diagnostics present");
                 SaveAtomic(defaultToml, path);
-                return TomlSerializer.Deserialize<TomlTable>(defaultToml)!;
+                return TomlSerializer.Deserialize(defaultToml, LyraTomlContext.Default.TomlTable)!;
             }
 
-            var model = TomlSerializer.Deserialize<TomlTable>(text)!;
+            var model = TomlSerializer.Deserialize(text, LyraTomlContext.Default.TomlTable)!;
             Logger.Debug($"[SettingsManager] Parsed TOML table: {path}");
             return model;
         }
@@ -201,7 +201,7 @@ public static class SettingsManager
             BackupCorruptedFile(path, "ParseTableOrReset hard failure", ex);
 
             SaveAtomic(defaultToml, path);
-            return TomlSerializer.Deserialize<TomlTable>(defaultToml)!;
+            return TomlSerializer.Deserialize(defaultToml, LyraTomlContext.Default.TomlTable)!;
         }
     }
 
