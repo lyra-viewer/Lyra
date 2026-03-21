@@ -230,8 +230,6 @@ public static class PsdCompositeDecoder
         var processor = ColorModeProcessorFactory.GetProcessor(header.ColorMode);
         var roles = CompositePlaneRoles.Get(header.ColorMode, header.NumberOfChannels);
 
-        TilePlaneImageRowSink? sink = null;
-
         void OnTileCompleted(int tileX, int tileY, PlaneImage tilePlanes)
         {
             ct.ThrowIfCancellationRequested();
@@ -242,7 +240,7 @@ public static class PsdCompositeDecoder
             onTileReady?.Invoke(tileX, tileY);
         }
 
-        sink = new TilePlaneImageRowSink(
+        var sink = new TilePlaneImageRowSink(
             imageWidth: header.Width,
             imageHeight: header.Height,
             tileWidth: tiled.TileWidth,

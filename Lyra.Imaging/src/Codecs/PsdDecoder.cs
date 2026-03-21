@@ -79,7 +79,7 @@ internal class PsdDecoder : IImageDecoder
         using var stream = DecoderIO.OpenRandomAccessRead(path);
         var psd = PsdDocument.ReadDocument(stream);
 
-        LogLayerNames(psd.DecodeLayerRecords(stream));
+        ProcessLayerNames(psd.DecodeLayerRecords(stream));
 
         stream.Position = 0;
         using var surface = psd.Decode(stream, null, null, ct);
@@ -100,7 +100,7 @@ internal class PsdDecoder : IImageDecoder
         using var stream = DecoderIO.OpenRandomAccessRead(path);
         var psd = PsdDocument.ReadDocument(stream);
         
-        LogLayerNames(psd.DecodeLayerRecords(stream));
+        ProcessLayerNames(psd.DecodeLayerRecords(stream));
 
         stream.Position = 0;
         DecodePreview(psd, stream, rasterLarge, ct);
@@ -224,10 +224,9 @@ internal class PsdDecoder : IImageDecoder
             composite.FormatSpecific.Add("Effective ICC Profile", $"{metadata.EffectiveIccProfileName ?? "none"}");
     }
 
-    private static void LogLayerNames(LayerRecord[] layers)
+    private static void ProcessLayerNames(LayerRecord[] layers)
     {
-        foreach (var layer in layers)
-            Logger.Debug($"[PsdDecoder] Layer: {layer.Name}");
+        // TODO not used, not planned yet
     }
 
     #endregion
