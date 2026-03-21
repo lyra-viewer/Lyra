@@ -125,7 +125,7 @@ public static class LoadTimeEstimator
                 }
             }
 
-            var toml = TomlSerializer.Serialize(root);
+            var toml = TomlSerializer.Serialize(root, LyraTomlContext.Default.TomlTable);
 
             var dir = Path.GetDirectoryName(TimeFilePath);
             if (!string.IsNullOrEmpty(dir))
@@ -167,7 +167,7 @@ public static class LoadTimeEstimator
                 return;
             }
 
-            var model = TomlSerializer.Deserialize<TomlTable>(text)!;
+            var model = TomlSerializer.Deserialize(text, LyraTomlContext.Default.TomlTable)!;
             LoadTimeData.Clear();
 
             foreach (var formatEntry in model)
