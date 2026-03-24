@@ -10,15 +10,15 @@
 
     <ItemGroup>
         <PackageReference Include="LibHeifSharp" Version="3.2.0"/>
-        <PackageReference Include="MetadataExtractor" Version="2.9.0"/>
+        <PackageReference Include="Lyra.Psd" Version="0.1.2" />
+        <PackageReference Include="MetadataExtractor" Version="2.9.2" />
         <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12"/>
         <PackageReference Include="SkiaSharp" Version="3.119.2" />
-        <PackageReference Include="Svg.Skia" Version="3.6.0" />
+        <PackageReference Include="Svg.Skia" Version="3.7.0" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\Lyra.Common\Lyra.Common.csproj"/>
-        <ProjectReference Include="..\Lyra.Imaging.Psd\Lyra.Imaging.Psd.csproj"/>
     </ItemGroup>
 
 </Project>

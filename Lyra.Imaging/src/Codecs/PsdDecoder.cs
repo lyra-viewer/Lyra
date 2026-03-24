@@ -2,10 +2,10 @@ using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.ConstraintsProvider;
 using Lyra.Imaging.Content;
-using Lyra.Imaging.Psd;
-using Lyra.Imaging.Psd.Core.Decode.Composite;
-using Lyra.Imaging.Psd.Core.Decode.Layers;
-using Lyra.Imaging.Psd.Core.SectionData;
+using Lyra.Psd;
+using Lyra.Psd.Core.Decode.Composite;
+using Lyra.Psd.Core.Decode.Layers;
+using Lyra.Psd.Core.SectionData;
 using SkiaSharp;
 using static System.Threading.Thread;
 
