@@ -1,42 +1,29 @@
 using Lyra.Common.Settings;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
-using Lyra.SdlCore;
 using SkiaSharp;
 
 namespace Lyra.Renderer.Overlay;
 
 public class ImageInfoOverlay : IOverlay<(Composite? composite, ApplicationStates states)>
 {
-    public float Scale { get; set; }
-    public SKFont? Font { get; set; }
-
+    private readonly SKFont _font = FontHelper.GetMonoFont(SettingsManager.AppSettings.InfoTextSize);
     private readonly TaggedTextRenderer _text = new();
 
-    public ImageInfoOverlay()
+    public void Render(SKCanvas canvas, float logicalWidth, float logicalHeight, SKColor textColor, (Composite? composite, ApplicationStates states) data)
     {
-        ReloadFont();
-    }
-
-    public void ReloadFont()
-    {
-        Font = FontHelper.GetScaledMonoFont(SettingsManager.AppSettings.InfoTextSize, Scale);
-    }
-
-    public void Render(SKCanvas canvas, PixelSize drawableBounds, SKColor textPaint, (Composite? composite, ApplicationStates states) data)
-    {
-        if (Font == null || data.composite == null)
+        if (data.composite == null)
             return;
 
-        _text.SetTextColor(textPaint);
+        _text.SetTextColor(textColor);
 
-        var padding = OverlayTextMetrics.Padding(Scale);
-        var lineHeight = OverlayTextMetrics.LineHeight(Font, Scale);
-        var textY = padding + Font.Size;
+        var padding = OverlayTextMetrics.Padding();
+        var lineHeight = OverlayTextMetrics.LineHeight(_font);
+        var textY = padding + _font.Size;
 
         foreach (var line in BuildLines(data.composite, data.states))
         {
-            _text.Draw(canvas, line, padding, textY, Font);
+            _text.Draw(canvas, line, padding, textY, _font);
             textY += lineHeight;
         }
     }

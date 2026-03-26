@@ -9,7 +9,7 @@ public static class FontHelper
     private static readonly Lazy<string> MonoFontPath = new(TtfLoader.GetMonospaceFontPath, isThreadSafe: true);
     private static readonly ConcurrentDictionary<string, Lazy<SKTypeface>> TypefaceCache = new();
 
-    public static SKFont GetScaledMonoFont(float baseSize, float scale)
+    public static SKFont GetMonoFont(float size)
     {
         var path = MonoFontPath.Value;
 
@@ -18,7 +18,6 @@ public static class FontHelper
             p => new Lazy<SKTypeface>(() => SKTypeface.FromFile(p), isThreadSafe: true)
         );
 
-        var tf = lazyTf.Value;
-        return new SKFont(tf, baseSize * scale);
+        return new SKFont(lazyTf.Value, size);
     }
 }

@@ -49,9 +49,9 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
         Subscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
 
-        _imageInfoOverlay = new ImageInfoOverlay().WithDrawableSizeSubscription();
-        _helpBarOverlay = new HelpBarOverlay().WithDrawableSizeSubscription();
-        _centeredOverlay = new CenteredTextOverlay().WithDrawableSizeSubscription();
+        _imageInfoOverlay = new ImageInfoOverlay();
+        _helpBarOverlay = new HelpBarOverlay();
+        _centeredOverlay = new CenteredTextOverlay();
 
         _contentDrawer = new SkiaCompositeContentDrawer();
         
@@ -176,27 +176,33 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     private void RenderOverlay(SKCanvas canvas)
     {
-        var bounds = new PixelSize(WindowWidth, WindowHeight, DisplayScale);
+        var logicalWidth = WindowWidth / DisplayScale;
+        var logicalHeight = WindowHeight / DisplayScale;
         var textColor = _backgroundMode == BackgroundMode.White ? SKColors.Black : SKColors.White;
 
+        canvas.Save();
+        canvas.Scale(DisplayScale);
+        
         if (_infoMode != InfoMode.None)
-            _imageInfoOverlay.Render(canvas, bounds, textColor, (_composite, GetApplicationStates()));
+            _imageInfoOverlay.Render(canvas, logicalWidth, logicalHeight, textColor, (_composite, GetApplicationStates()));
 
         if (_helpBarVisible)
-            _helpBarOverlay.Render(canvas, bounds, textColor, (_composite, GetApplicationStates()));
+            _helpBarOverlay.Render(canvas, logicalWidth, logicalHeight, textColor, (_composite, GetApplicationStates()));
 
         var drop = _dropProgressProvider.GetDropStatus();
         if (drop is { Active: true, FilesEnumerated: > 300 })
         {
-            _centeredOverlay.Render(canvas, bounds, textColor, $"{drop.FilesSupported} images found, {drop.FilesEnumerated} files scanned...");
+            _centeredOverlay.Render(canvas, logicalWidth, logicalHeight, textColor, $"{drop.FilesSupported} images found, {drop.FilesEnumerated} files scanned...");
         }
         else
         {
             if (_composite == null || _composite.State == CompositeState.Failed)
-                _centeredOverlay.Render(canvas, bounds, textColor, "No image");
+                _centeredOverlay.Render(canvas, logicalWidth, logicalHeight, textColor, "No image");
             else if (_composite.State == CompositeState.Loading)
-                _centeredOverlay.Render(canvas, bounds, textColor, "Loading...");
+                _centeredOverlay.Render(canvas, logicalWidth, logicalHeight, textColor, "Loading...");
         }
+        
+        canvas.Restore();
     }
 
     private void DrawCheckerboardPattern(SKCanvas canvas)

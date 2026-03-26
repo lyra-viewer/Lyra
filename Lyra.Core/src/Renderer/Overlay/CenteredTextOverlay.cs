@@ -1,4 +1,3 @@
-using Lyra.SdlCore;
 using SkiaSharp;
 
 namespace Lyra.Renderer.Overlay;
@@ -11,31 +10,17 @@ public class CenteredTextOverlay : IOverlay<string>
         IsAntialias = true
     };
 
-    public float Scale { get; set; }
-    public SKFont? Font { get; set; }
+    private readonly SKFont _font = FontHelper.GetMonoFont(22);
 
-    public CenteredTextOverlay()
+    public void Render(SKCanvas canvas, float logicalWidth, float logicalHeight, SKColor textColor, string text)
     {
-        ReloadFont();
-    }
+        _textPaint.Color = textColor;
 
-    public void ReloadFont()
-    {
-        Font = FontHelper.GetScaledMonoFont(22, Scale);
-    }
+        _font.MeasureText(text, out var textBounds, _textPaint);
 
-    public void Render(SKCanvas canvas, PixelSize drawableBounds, SKColor textPaint, string text)
-    {
-        if (Font == null)
-            return;
+        var x = (logicalWidth - textBounds.Width) / 2;
+        var y = (logicalHeight + textBounds.Height) / 2;
 
-        _textPaint.Color = textPaint;
-
-        Font.MeasureText(text, out var imageBounds, _textPaint);
-
-        var x = (drawableBounds.PixelWidth - imageBounds.Width) / 2;
-        var y = (drawableBounds.PixelHeight + imageBounds.Height) / 2;
-
-        canvas.DrawText(text, x, y, SKTextAlign.Left, Font, _textPaint);
+        canvas.DrawText(text, x, y, SKTextAlign.Left, _font, _textPaint);
     }
 }

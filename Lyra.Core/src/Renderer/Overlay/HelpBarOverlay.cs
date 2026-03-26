@@ -7,33 +7,26 @@ namespace Lyra.Renderer.Overlay;
 
 public class HelpBarOverlay : IOverlay<(Composite? composite, ApplicationStates states)>
 {
-    public float Scale { get; set; }
-    public SKFont? Font { get; set; }
-
+    private readonly SKFont _font;
     private readonly TaggedTextRenderer _text = new();
 
     public HelpBarOverlay()
     {
-        ReloadFont();
+        _font = FontHelper.GetMonoFont(SettingsManager.AppSettings.HelpTextSize);
+        _font.Edging = SKFontEdging.Antialias;
+        _font.Subpixel = false;
     }
 
-    public void ReloadFont()
+    public void Render(SKCanvas canvas, float logicalWidth, float logicalHeight, SKColor textColor, (Composite? composite, ApplicationStates states) data)
     {
-        Font = FontHelper.GetScaledMonoFont(SettingsManager.AppSettings.HelpTextSize, Scale);
-        Font.Edging = SKFontEdging.Antialias;
-        Font.Subpixel = false;
-    }
-
-    public void Render(SKCanvas canvas, PixelSize drawableBounds, SKColor textColor, (Composite? composite, ApplicationStates states) data)
-    {
-        if (Font == null || data.composite == null)
+        if (data.composite == null)
             return;
         
-        var padding = OverlayTextMetrics.Padding(Scale);
+        var padding = OverlayTextMetrics.Padding();
 
         // Two-line help bar pinned to the bottom of the drawable area.
-        var line2Y = drawableBounds.PixelHeight - padding - (OverlayTextMetrics.BaseLineGap * Scale);
-        var line1Y = line2Y - OverlayTextMetrics.LineHeight(Font, Scale);
+        var line2Y = logicalHeight - padding - OverlayTextMetrics.BaseLineGap;
+        var line1Y = line2Y - OverlayTextMetrics.LineHeight(_font);
 
         var anyInfoHidden = !data.states.ShowExif && (data.composite.ExifInfo != null && data.composite.ExifInfo.HasData() || data.composite.FormatSpecific.Count > 0);
         var multiDir = data.states is { DirectoryCount: not null, DirectoryIndex: not null };
@@ -79,24 +72,24 @@ public class HelpBarOverlay : IOverlay<(Composite? composite, ApplicationStates 
         );
 
         var columns = new[] { column1, column2, column3, column4, column5, column6,  column7 };
-        var gap = Font.Size * 1.8f * Scale;
+        var gap = _font.Size * 1.8f;
         var x = padding;
 
         _text.SetTextColor(textColor);
 
         foreach (var col in columns)
         {
-            _text.Draw(canvas, col.Item1, x, line1Y, Font);
-            _text.Draw(canvas, col.Item2, x, line2Y, Font);
+            _text.Draw(canvas, col.Item1, x, line1Y, _font);
+            _text.Draw(canvas, col.Item2, x, line2Y, _font);
 
             var colWidth = MathF.Max(
-                _text.Measure(col.Item1, Font),
-                _text.Measure(col.Item2, Font)
+                _text.Measure(col.Item1, _font),
+                _text.Measure(col.Item2, _font)
             );
 
             x += colWidth + gap;
 
-            if (x > drawableBounds.PixelWidth - padding)
+            if (x > logicalWidth - padding)
                 break;
         }
     }
