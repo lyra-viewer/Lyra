@@ -1,5 +1,7 @@
 # Lyra Viewer
 
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Lyra-ff5e5b?logo=ko-fi)](https://ko-fi.com/nineveh_dev)
+
 ---
 
 ## Contents
