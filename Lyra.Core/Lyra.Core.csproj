@@ -20,6 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Lyra.Common\Lyra.Common.csproj" />
     <ProjectReference Include="..\Lyra.Imaging\Lyra.Imaging.csproj" />
+    <ProjectReference Include="..\Lyra.UI\Lyra.UI.csproj" />
   </ItemGroup>
   
 </Project>
