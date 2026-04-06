@@ -7,7 +7,7 @@ using static System.Threading.Thread;
 
 namespace Lyra.Imaging.Codecs;
 
-internal sealed class J2KDecoder : IImageDecoder
+internal class J2KDecoder : IImageDecoder
 {
     public bool CanDecode(ImageFormatType format) => format is ImageFormatType.Jp2 or ImageFormatType.J2k;
 
@@ -139,7 +139,7 @@ internal sealed class J2KDecoder : IImageDecoder
         }
         catch (Exception ex)
         {
-            Logger.Warning($"[J2KDecoder] Failed to load {path}: {ex}");
+            Logger.Warning($"[J2KDecoder] Failed to load {path}: {ex.Message}");
             throw; // propagate failure to Loader
         }
         finally

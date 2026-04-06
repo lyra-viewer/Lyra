@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Lyra.Common;
+using Lyra.Psd.Core.Decode.Layers;
 
 namespace Lyra.Imaging.Content;
 
@@ -41,6 +42,7 @@ public sealed class Composite : IDisposable
     // Metadata
     public ExifInfo? ExifInfo;
     public readonly Dictionary<string, string> FormatSpecific = new();
+    public LayerRecord[]? PsdLayers;
     public bool IsGrayscale;
 
     // Derived sizes for UI/zoom/pan: always prefer Full dims, else fall back to best known dims from content.

@@ -67,7 +67,7 @@ internal class SkiaDecoder : IImageDecoder
         }
         catch (Exception ex)
         {
-            Logger.Warning($"[SkiaDecoder] Failed to load {path}: {ex}");
+            Logger.Warning($"[SkiaDecoder] Failed to load {path}: {ex.Message}");
             throw; // Propagate failure to Loader
         }
 

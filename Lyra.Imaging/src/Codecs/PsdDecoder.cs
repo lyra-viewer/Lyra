@@ -4,7 +4,6 @@ using Lyra.Imaging.ConstraintsProvider;
 using Lyra.Imaging.Content;
 using Lyra.Psd;
 using Lyra.Psd.Core.Decode.Composite;
-using Lyra.Psd.Core.Decode.Layers;
 using Lyra.Psd.Core.SectionData;
 using SkiaSharp;
 using static System.Threading.Thread;
@@ -47,7 +46,7 @@ internal class PsdDecoder : IImageDecoder
         }
         catch (Exception e)
         {
-            Logger.Warning($"[PsdDecoder] Image could not be loaded: {path}\n{e}");
+            Logger.Warning($"[PsdDecoder] Image could not be loaded: {path}\n{e.Message}");
             throw;
         }
     }
@@ -69,7 +68,7 @@ internal class PsdDecoder : IImageDecoder
         }
         catch (Exception e)
         {
-            Logger.Warning($"[PsdDecoder] Header could not be read: {path}\n{e}");
+            Logger.Warning($"[PsdDecoder] Header could not be read: {path}\n{e.Message}");
             throw;
         }
     }
@@ -78,8 +77,7 @@ internal class PsdDecoder : IImageDecoder
     {
         using var stream = DecoderIO.OpenRandomAccessRead(path);
         var psd = PsdDocument.ReadDocument(stream);
-
-        ProcessLayerNames(psd.DecodeLayerRecords(stream));
+        composite.PsdLayers = psd.DecodeLayerRecords(stream);
 
         stream.Position = 0;
         using var surface = psd.Decode(stream, null, null, ct);
@@ -99,8 +97,7 @@ internal class PsdDecoder : IImageDecoder
 
         using var stream = DecoderIO.OpenRandomAccessRead(path);
         var psd = PsdDocument.ReadDocument(stream);
-        
-        ProcessLayerNames(psd.DecodeLayerRecords(stream));
+        composite.PsdLayers = psd.DecodeLayerRecords(stream);
 
         stream.Position = 0;
         DecodePreview(psd, stream, rasterLarge, ct);
@@ -222,11 +219,6 @@ internal class PsdDecoder : IImageDecoder
 
         if (metadata.EffectiveIccProfileName is not "Embedded ICC Profile")
             composite.FormatSpecific.Add("Effective ICC Profile", $"{metadata.EffectiveIccProfileName ?? "none"}");
-    }
-
-    private static void ProcessLayerNames(LayerRecord[] layers)
-    {
-        // TODO not used, not planned yet
     }
 
     #endregion

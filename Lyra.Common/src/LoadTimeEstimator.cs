@@ -22,6 +22,8 @@ public static class LoadTimeEstimator
 
     private static int _unsavedChangesCount;
 
+    private static readonly Lock SaveLock = new();
+
     static LoadTimeEstimator()
     {
         LoadTimeDataFromFile();
@@ -45,8 +47,11 @@ public static class LoadTimeEstimator
         // Save periodically
         if (++_unsavedChangesCount >= UnsavedChangesThreshold)
         {
-            SaveTimeDataToFile(true);
-            _unsavedChangesCount = 0;
+            if (Interlocked.Increment(ref _unsavedChangesCount) >= UnsavedChangesThreshold)
+            {
+                Interlocked.Exchange(ref _unsavedChangesCount, 0);
+                SaveTimeDataToFile(true);
+            }
         }
     }
 
@@ -133,12 +138,15 @@ public static class LoadTimeEstimator
 
             // Atomic-ish write: temp then replace
             var tmp = TimeFilePath + ".tmp";
-            File.WriteAllText(tmp, toml);
+            lock (SaveLock)
+            {
+                File.WriteAllText(tmp, toml);
 
-            if (File.Exists(TimeFilePath))
-                File.Replace(tmp, TimeFilePath, destinationBackupFileName: null);
-            else
-                File.Move(tmp, TimeFilePath);
+                if (File.Exists(TimeFilePath))
+                    File.Replace(tmp, TimeFilePath, destinationBackupFileName: null);
+                else
+                    File.Move(tmp, TimeFilePath);
+            }
 
             if (!suppressLogging)
                 Logger.Info("[LoadTimeEstimator] Successfully saved time data.");

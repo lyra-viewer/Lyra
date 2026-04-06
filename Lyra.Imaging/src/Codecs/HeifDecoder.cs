@@ -93,7 +93,7 @@ internal class HeifDecoder : IImageDecoder
         }
         catch (Exception e)
         {
-            Logger.Warning($"[HeifDecoder] Image could not be loaded: {path}\n{e}");
+            Logger.Warning($"[HeifDecoder] Image could not be loaded: {path}\n{e.Message}");
             throw;
         }
 

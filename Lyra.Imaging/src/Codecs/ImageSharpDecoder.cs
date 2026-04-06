@@ -63,7 +63,7 @@ internal class ImageSharpDecoder : IImageDecoder
         }
         catch (Exception e)
         {
-            Logger.Warning($"[ImageSharpDecoder] Image could not be loaded: {path}\n{e}");
+            Logger.Warning($"[ImageSharpDecoder] Image could not be loaded: {path}\n{e.Message}");
             throw;
         }
     }
