@@ -43,6 +43,8 @@ public abstract class ComponentBase : IComponent
     public float? MaxHeight { get; set; }
 
     public Padding Padding { get; set; }
+    
+    public ResizeEdge ResizeEdges { get; set; } = ResizeEdge.None;
 
     // --------------------------------------------------------
     //  Alignment
@@ -81,7 +83,11 @@ public abstract class ComponentBase : IComponent
     //  Visuals
     // --------------------------------------------------------
 
-    public SKColor? BackgroundColor { get; set; } = Palette.Transparent;
+    /// <summary>
+    /// Background fill rendered at ArrangedBounds before content.
+    /// Null means no background is drawn (the default).
+    /// </summary>
+    public SKColor? BackgroundColor { get; set; }
 
     // --------------------------------------------------------
     //  Hit-testing
@@ -95,6 +101,12 @@ public abstract class ComponentBase : IComponent
 
     public SKSize DesiredSize { get; protected set; }
     public SKRect ArrangedBounds { get; set; }
+
+    /// <summary>
+    /// ArrangedBounds deflated by Padding.
+    /// Computed once during Arrange and reused in Render.
+    /// </summary>
+    protected SKRect ContentBounds { get; private set; }
 
     // --------------------------------------------------------
     //  Subclass overrides — work in content space (no padding)
@@ -126,6 +138,12 @@ public abstract class ComponentBase : IComponent
 
         if (MaxHeight.HasValue)
             contentAvailable = contentAvailable with { Height = Math.Min(contentAvailable.Height, MaxHeight.Value) };
+        
+        if (HorizontalSize == SizeMode.Fixed && Width.HasValue)
+            contentAvailable = contentAvailable with { Width = Math.Min(contentAvailable.Width, Width.Value) };
+
+        if (VerticalSize == SizeMode.Fixed && Height.HasValue)
+            contentAvailable = contentAvailable with { Height = Math.Min(contentAvailable.Height, Height.Value) };
 
         var contentSize = MeasureContent(contentAvailable);
 
@@ -133,6 +151,7 @@ public abstract class ComponentBase : IComponent
         {
             SizeMode.Expand => contentAvailable.Width,
             SizeMode.Fixed => Width ?? contentSize.Width,
+            SizeMode.Flexible => Math.Min(contentSize.Width, contentAvailable.Width),
             _ => contentSize.Width
         };
 
@@ -140,6 +159,7 @@ public abstract class ComponentBase : IComponent
         {
             SizeMode.Expand => contentAvailable.Height,
             SizeMode.Fixed => Height ?? contentSize.Height,
+            SizeMode.Flexible => Math.Min(contentSize.Height, contentAvailable.Height),
             _ => contentSize.Height
         };
 
@@ -161,13 +181,33 @@ public abstract class ComponentBase : IComponent
     }
 
     // --------------------------------------------------------
+    //  Resolve
+    // --------------------------------------------------------
+    //  Top-down pass between Measure and Arrange.
+    //  Containers override ResolveContent to distribute space
+    //  among Flexible children and re-measure them at adjusted
+    //  sizes. Leaf components do nothing.
+    // --------------------------------------------------------
+
+    public void Resolve()
+    {
+        if (!Present)
+            return;
+
+        ResolveContent();
+    }
+
+    protected virtual void ResolveContent() { }
+
+    // --------------------------------------------------------
     //  Arrange
     // --------------------------------------------------------
 
     public void Arrange(SKRect finalBounds)
     {
         ArrangedBounds = finalBounds;
-        ArrangeContent(GetContentBounds());
+        ContentBounds = DeflateByPadding(finalBounds);
+        ArrangeContent(ContentBounds);
     }
 
     // --------------------------------------------------------
@@ -183,23 +223,21 @@ public abstract class ComponentBase : IComponent
         if (!IsEffectivelyVisible)
             return;
 
-        if (BackgroundColor.HasValue && BackgroundColor.Value != Palette.Transparent)
+        if (BackgroundColor.HasValue)
         {
             using var bgPaint = new SKPaint { Color = BackgroundColor.Value };
             canvas.DrawRect(ArrangedBounds, bgPaint);
         }
 
-        var contentBounds = GetContentBounds();
-
         if (!IsEffectivelyEnabled)
         {
             canvas.SaveLayer(DisabledPaint);
-            RenderContent(canvas, contentBounds);
+            RenderContent(canvas, ContentBounds);
             canvas.Restore();
             return;
         }
 
-        RenderContent(canvas, contentBounds);
+        RenderContent(canvas, ContentBounds);
     }
 
     // --------------------------------------------------------
@@ -234,9 +272,9 @@ public abstract class ComponentBase : IComponent
     //  Helpers
     // --------------------------------------------------------
 
-    private SKRect GetContentBounds() => new(
-        ArrangedBounds.Left + Padding.Left,
-        ArrangedBounds.Top + Padding.Top,
-        ArrangedBounds.Right - Padding.Right,
-        ArrangedBounds.Bottom - Padding.Bottom);
+    private SKRect DeflateByPadding(SKRect bounds) => new(
+        bounds.Left + Padding.Left,
+        bounds.Top + Padding.Top,
+        bounds.Right - Padding.Right,
+        bounds.Bottom - Padding.Bottom);
 }

@@ -42,4 +42,7 @@ public static class Palette
     // Borders
     public static readonly SKColor Border = new(100, 100, 100);
     public static readonly SKColor BorderActive = new(150, 150, 150);
+    
+    // Panels / surfaces
+    public static readonly SKColor Panel = new(25, 25, 25, 220);
 }
