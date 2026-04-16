@@ -14,7 +14,7 @@ namespace Lyra.UI;
 /// Components that are not Present, not Visible, or not Enabled
 /// are excluded from hit-testing.
 /// </summary>
-public class UIContext : IDisposable
+public partial class UIContext : IDisposable
 {
     // --------------------------------------------------------
     //  State
@@ -38,6 +38,9 @@ public class UIContext : IDisposable
         if (Root is null)
             return false;
 
+        if (TryStartResize(logicalPoint))
+            return true;
+
         var hit = HitTest(Root, logicalPoint);
         hit?.OnPointerDown(logicalPoint);
         return hit != null;
@@ -45,6 +48,9 @@ public class UIContext : IDisposable
 
     public bool HandlePointerUp(SKPoint logicalPoint)
     {
+        if (TryEndResize())
+            return true;
+
         if (Root is null)
             return false;
 
@@ -58,6 +64,13 @@ public class UIContext : IDisposable
         if (Root is null)
             return false;
 
+        if (TryHandleResizeDrag(logicalPoint))
+            return true;
+
+        // Not dragging - update cursor for edge proximity
+        UpdateResizeCursor(logicalPoint);
+
+        // Normal hover tracking
         var hit = HitTest(Root, logicalPoint);
 
         if (hit != _hoveredComponent)
@@ -70,25 +83,29 @@ public class UIContext : IDisposable
         hit?.OnPointerMove(logicalPoint);
         return hit != null;
     }
-    
+
     public bool HandleScroll(SKPoint logicalPoint, float deltaX, float deltaY)
     {
         if (Root is null)
             return false;
- 
+
         var hit = HitTest(Root, logicalPoint);
- 
-        // Bubble up through parent chain until an IScrollable consumes it.
-        IComponent? current = hit;
-        while (current != null)
+        var foundScrollable = false;
+
+        while (hit != null)
         {
-            if (current is IScrollable scrollable && scrollable.OnScroll(deltaX, deltaY))
-                return true;
- 
-            current = current.Parent;
+            if (hit is IScrollable scrollable)
+            {
+                foundScrollable = true;
+
+                if (scrollable.OnScroll(deltaX, deltaY))
+                    return true; // consumed
+            }
+
+            hit = hit.Parent;
         }
- 
-        return false;
+
+        return foundScrollable;
     }
 
     // --------------------------------------------------------
@@ -101,9 +118,6 @@ public class UIContext : IDisposable
 
     private static IComponent? HitTest(IComponent component, SKPoint point)
     {
-        if (component.Transient)
-            return null;
-
         if (!component.Present)
             return null;
 
@@ -126,7 +140,7 @@ public class UIContext : IDisposable
             }
         }
 
-        return component;
+        return component.Transient ? null : component;
     }
 
     // --------------------------------------------------------
