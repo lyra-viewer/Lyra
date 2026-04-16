@@ -160,6 +160,10 @@ internal class ImageLoader
                 return;
             }
 
+            var largeContent = composite.Content as RasterLargeContent;
+            if (largeContent is not null)
+                largeContent.TilesProgressChanged += _ => composite.SignalProgress();
+
             composite.SignalReady();
 
             // Promote to Complete if:
@@ -169,8 +173,12 @@ internal class ImageLoader
                 composite.SignalComplete();
             else if (composite.State == CompositeState.Ready)
             {
-                if (composite.Content is not RasterLargeContent large || !large.HasTiles || (large.TilesTotal is int total && large.TilesReady >= total))
+                if (largeContent is null
+                    || !largeContent.HasTiles
+                    || (largeContent.TilesTotal is int total && largeContent.TilesReady >= total))
+                {
                     composite.SignalComplete();
+                }
             }
         }
         catch (OperationCanceledException)

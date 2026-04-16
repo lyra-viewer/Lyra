@@ -34,6 +34,11 @@ public sealed class RasterLargeContent : ICompositeContent
     public int TilesReady => Volatile.Read(ref _tilesReady);
     public int? TilesTotal { get; private set; }
 
+    public event Action<RasterLargeContent>? TilesProgressChanged;
+
+    private long _lastProgressTicks;
+    private const long ProgressThrottleMs = 33;
+
     public void SetTilesTotal(int total)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(total);
@@ -43,9 +48,19 @@ public sealed class RasterLargeContent : ICompositeContent
 
     public void IncrementTileReady()
     {
-        Interlocked.Increment(ref _tilesReady);
-    }
+        var ready = Interlocked.Increment(ref _tilesReady);
+        var total = TilesTotal;
 
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref _lastProgressTicks);
+        var isLast = total is { } t && ready >= t;
+
+        if (isLast || now - last >= ProgressThrottleMs)
+        {
+            Interlocked.Exchange(ref _lastProgressTicks, now);
+            TilesProgressChanged?.Invoke(this);
+        }
+    }
 
     public void SetPreview(SKImage? preview)
     {

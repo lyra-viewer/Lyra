@@ -130,6 +130,7 @@ internal static class MetadataProcessor
 
         // todo TgaHeaderDirectory
         // todo BmpHeaderDirectory
+        // todo PhotoshopDirectory
     }
 
     private static string AssignValue(string currentValue, string newValue, Priority newValuePriority)

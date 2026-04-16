@@ -33,8 +33,9 @@ public sealed class Composite : IDisposable
     private int _readySignaled;
     private int _completeSignaled;
     public double LoadTimeEstimated;
-    
+
     public event Action<Composite>? Completed;
+    public event Action<Composite>? ProgressChanged;
 
     // Content
     public ICompositeContent? Content;
@@ -46,7 +47,7 @@ public sealed class Composite : IDisposable
     public bool IsGrayscale;
 
     // Derived sizes for UI/zoom/pan: always prefer Full dims, else fall back to best known dims from content.
-    public float LogicalWidth  => FullWidth  ?? Content?.DecodedWidth  ?? 0f;
+    public float LogicalWidth => FullWidth ?? Content?.DecodedWidth ?? 0f;
     public float LogicalHeight => FullHeight ?? Content?.DecodedHeight ?? 0f;
 
     public bool IsEmpty => Content is null;
@@ -69,6 +70,8 @@ public sealed class Composite : IDisposable
 
         if (State == CompositeState.Loading)
             State = CompositeState.Ready;
+
+        ProgressChanged?.Invoke(this);
     }
 
     internal void SignalComplete()
@@ -85,8 +88,11 @@ public sealed class Composite : IDisposable
         if (State is CompositeState.Loading or CompositeState.Ready)
             State = CompositeState.Complete;
 
+        ProgressChanged?.Invoke(this);
         Completed?.Invoke(this);
     }
+
+    internal void SignalProgress() => ProgressChanged?.Invoke(this);
 
     public void Dispose()
     {
@@ -102,8 +108,8 @@ public enum CompositeState
 {
     Pending,
     Loading,
-    Ready,     // preview / full usable (tiles may still stream)
-    Complete,  // everything finished (e.g., tiles fully decoded)
+    Ready, // preview / full usable (tiles may still stream)
+    Complete, // everything finished (e.g., tiles fully decoded)
     Failed,
     Cancelled,
     Disposed
