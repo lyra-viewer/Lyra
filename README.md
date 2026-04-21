@@ -48,10 +48,12 @@ Built for anyone who relies on images as a core resource in their workflow:
 ## Key Features
 
 - Fast navigation through large directories of images or texture assets.
+- **Directory tree sidebar** for browsing the filesystem without leaving the viewer.
 - **SVG** support for previewing scalable vector assets.
-- **Adjustable background** modes to improve visibility of transparent images
+- **Adjustable background** modes to improve visibility of transparent images.
 - Sampling toggle, useful for **pixel-perfect** graphics or UI assets.
-- **EXIF metadata** display for viewing embedded image information.
+- **EXIF metadata** and format-specific information panel.
+- **PSD layer hierarchy** panel showing group structure, layer names, and visibility state.
 - Zoom-to-cursor and panning for intuitive inspection at any scale.
 - Reasonable support for modern image formats, with limited support for older formats that refuse to die.
 
@@ -134,6 +136,9 @@ generalizes well to any image-heavy workflow.
 
 Lyra currently focuses on decoding the flattened **Image Data** section of Photoshop files, rather than individual
 layers. This design choice prioritizes performance and fast previewing.
+
+For PSD / PSB files, Lyra also surfaces the **layer hierarchy** in the sidebar - showing group structure, layer names,
+and visibility state - independently of the flattened composite decode.
 
 This is explicitly documented because the Image Data section is not strictly mandatory in the PSD specification and,
 in some edge cases, may be missing or may not fully represent the document as it appears when opened in Photoshop.
@@ -236,7 +241,7 @@ The PSD decoder is intentionally structured to allow future expansion.
 
 | Library              | Purpose                                                                | License       | Repository                                                        |
 |----------------------|------------------------------------------------------------------------|---------------|-------------------------------------------------------------------|
-| SDL3-CS              | Core graphics, input, and windowing                                    | zlib          | [github](https://github.com/ethereal-developers-club/SDL3-CS)     |
+| SDL3-CS              | Core graphics, input, and windowing                                    | zlib          | [github](https://github.com/edwardgushchin/SDL3-CS)     |
 | SkiaSharp            | Hardware-accelerated 2D rendering                                      | BSD-3-Clause  | [github](https://github.com/mono/SkiaSharp)                       |
 | Svg.Skia             | SVG parsing and rendering                                              | MIT           | [github](https://github.com/wieslawsoltes/Svg.Skia)               |
 | SixLabors.ImageSharp | Support for TGA, TIFF, and legacy formats                              | Apache 2.0    | [github](https://github.com/SixLabors/ImageSharp)                 |

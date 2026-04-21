@@ -169,6 +169,7 @@ public partial class SdlCore
                     recurseSubdirs: null,
                     out var singleDirectory,
                     out var topDirectory,
+                    out var allDirectories,
                     out var dropContext,
                     cancellationToken: session.Cts.Token,
                     onFileEnumerated: () =>
@@ -194,7 +195,7 @@ public partial class SdlCore
                 // Apply results back on the main thread
                 DispatchToMain(() =>
                 {
-                    DirectoryNavigator.ApplyCollection(files, dropContext, singleDirectory, topDirectory);
+                    DirectoryNavigator.ApplyCollection(files, allDirectories, dropContext, singleDirectory, topDirectory);
                     LoadImage();
                     RaiseWindow(_window);
                 }, requireWarm: true);

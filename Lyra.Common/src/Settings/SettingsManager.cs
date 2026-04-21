@@ -6,7 +6,7 @@ using Tomlyn;
 using Tomlyn.Model;
 using Tomlyn.Parsing;
 using static Lyra.Common.Settings.AppSettings;
-using static Lyra.Common.Settings.UiSettings;
+using static Lyra.Common.Settings.UISettings;
 
 namespace Lyra.Common.Settings;
 
@@ -15,10 +15,10 @@ public static class SettingsManager
     private static readonly string AppSettingsFilepath = LyraIO.GetAppSettingsFile();
     private static readonly string UiSettingsFilepath = LyraIO.GetUiSettingsFile();
 
-    private const int CurrentVersion = 2;
+    private const int CurrentVersion = 3;
 
     public static AppSettings AppSettings = DefaultAppSettings;
-    public static UiSettings UiSettings = DefaultUiSettings;
+    public static UISettings UiSettings = DefaultUiSettings;
 
     public static void LoadSettings()
     {
@@ -28,7 +28,7 @@ public static class SettingsManager
             LoadUiSettings();
     }
 
-    private static string BuildUserSettingsToml(UiSettings s)
+    private static string BuildUserSettingsToml(UISettings s)
     {
         return $"""
                 # Lyra Ui Settings (overwritten on exit)
@@ -36,9 +36,10 @@ public static class SettingsManager
 
                 sampling_mode = {(int)s.SamplingMode}
                 background_mode = {(int)s.BackgroundMode}
-                info_level = {(int)s.InfoLevel}
-                help_bar_visible = {s.HelpBarVisible.ToString().ToLowerInvariant()}
-
+                info_visible = {s.InfoVisible.ToString().ToLowerInvariant()}
+                help_visible = {s.HelpVisible.ToString().ToLowerInvariant()}
+                sidebar_visible = {s.SidebarVisible.ToString().ToLowerInvariant()}
+                
                 """;
     }
 
@@ -128,8 +129,9 @@ public static class SettingsManager
 
         var samplingRaw = GetInt(table, "sampling_mode", (int)DefaultUiSettings.SamplingMode);
         var backgroundRaw = GetInt(table, "background_mode", (int)DefaultUiSettings.BackgroundMode);
-        var infoRaw = GetInt(table, "info_level", (int)DefaultUiSettings.InfoLevel);
-        var help = GetBool(table, "help_bar_visible", DefaultUiSettings.HelpBarVisible);
+        var info = GetBool(table, "info_visible", DefaultUiSettings.InfoVisible);
+        var help = GetBool(table, "help_visible", DefaultUiSettings.HelpVisible);
+        var sidebar = GetBool(table, "sidebar_visible", DefaultUiSettings.SidebarVisible);
 
         var sampling = Enum.IsDefined(typeof(SamplingMode), samplingRaw)
             ? (SamplingMode)samplingRaw
@@ -145,17 +147,10 @@ public static class SettingsManager
         if (!Enum.IsDefined(typeof(BackgroundMode), backgroundRaw))
             Logger.Warning($"[SettingsManager] Invalid background_mode={backgroundRaw}, using default {(int)DefaultUiSettings.BackgroundMode}");
 
-        var info = Enum.IsDefined(typeof(InfoMode), infoRaw)
-            ? (InfoMode)infoRaw
-            : DefaultUiSettings.InfoLevel;
-
-        if (!Enum.IsDefined(typeof(InfoMode), infoRaw))
-            Logger.Warning($"[SettingsManager] Invalid info_level={infoRaw}, using default {(int)DefaultUiSettings.InfoLevel}");
-
-        UiSettings = new UiSettings(sampling, background, info, help);
+        UiSettings = new UISettings(sampling, background, info, help, sidebar);
     }
 
-    public static void SaveUiSettings(UiSettings uiSettings)
+    public static void SaveUiSettings(UISettings uiSettings)
     {
         if (!AppSettings.PreserveUiSettings)
             return;

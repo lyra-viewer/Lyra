@@ -9,12 +9,13 @@ public static class FilePathProcessor
     public static FileLoaderRecursion FileLoaderRecursion { get; set; } = FileLoaderRecursion.AsDesigned;
     public static bool IncludeHidden { get; set; } = false;
     public static bool FollowSymlinks { get; set; } = false;
-    
+
     public static List<string> ProcessImagePaths(
         List<string> paths,
         bool? recurseSubdirs,
         out bool? singleDirectory,
         out string? topDirectory,
+        out List<string> allDirectories,
         out FileDropContext dropContext,
         CancellationToken cancellationToken,
         Action? onFileEnumerated = null,
@@ -22,6 +23,7 @@ public static class FilePathProcessor
     {
         singleDirectory = null;
         topDirectory = null;
+        allDirectories = [];
 
         dropContext = AnalyzeDrop(paths);
         if (dropContext.ExplicitPaths.Count == 0)
@@ -35,7 +37,7 @@ public static class FilePathProcessor
         var plan = BuildPlan(dropContext);
 
         // Enumerate, filter supported, and sort.
-        var supported = CollectSupportedFiles(plan, recurse, cancellationToken, onFileEnumerated, onSupportedFileDiscovered);
+        var supported = CollectSupportedFiles(plan, recurse, out allDirectories, cancellationToken, onFileEnumerated, onSupportedFileDiscovered);
 
         // UI metadata
         var uniqueDirs = GetUniqueDirectories(supported);
@@ -133,11 +135,13 @@ public static class FilePathProcessor
     private static List<string> CollectSupportedFiles(
         EnumerationPlan plan,
         bool recurseSubdirs,
+        out List<string> allDirectories,
         CancellationToken cancellationToken,
         Action? onFileEnumerated,
         Action? onSupportedFileDiscovered)
     {
         var all = new HashSet<string>(PathComparer.CommonPathComparer);
+        var dirSet = new HashSet<string>(PathComparer.CommonPathComparer);
 
         foreach (var f in plan.ExplicitFiles)
         {
@@ -147,6 +151,11 @@ public static class FilePathProcessor
 
             // Count as "processed" for UI purposes.
             onFileEnumerated?.Invoke();
+
+            // Collect parent dir of explicit files.
+            var parentDir = Path.GetDirectoryName(f);
+            if (!string.IsNullOrWhiteSpace(parentDir))
+                dirSet.Add(NormalizeDirectory(parentDir));
 
             // Fast-filter before filling the set; the final pipeline still sorts.
             if (IsSupportedFile(f) && all.Add(f))
@@ -160,7 +169,7 @@ public static class FilePathProcessor
             if (cancellationToken.IsCancellationRequested)
                 break;
 
-            foreach (var f in EnumerateFilesIterative(dir, recurseSubdirs, cancellationToken))
+            foreach (var f in EnumerateFilesIterative(dir, recurseSubdirs, dirSet, cancellationToken))
             {
                 onFileEnumerated?.Invoke();
 
@@ -175,6 +184,8 @@ public static class FilePathProcessor
             if (cancellationToken.IsCancellationRequested)
                 break;
         }
+
+        allDirectories = dirSet.OrderBy(d => d, StringComparer.Ordinal).ToList();
 
         // Keep supported + stable ordering
         return all
@@ -217,7 +228,7 @@ public static class FilePathProcessor
         return GetTopDirectory(candidateDirs);
     }
 
-    private static IEnumerable<string> EnumerateFilesIterative(string root, bool recurseSubdirs, CancellationToken cancellationToken = default)
+    private static IEnumerable<string> EnumerateFilesIterative(string root, bool recurseSubdirs, HashSet<string>? visitedDirectories, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(root))
             yield break;
@@ -237,6 +248,9 @@ public static class FilePathProcessor
 
             if (!visited.Add(canon))
                 continue;
+
+            // Track every visited directory for the full tree.
+            visitedDirectories?.Add(NormalizeDirectory(dir));
 
             IEnumerable<string> filesHere;
             try

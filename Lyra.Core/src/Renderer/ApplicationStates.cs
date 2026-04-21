@@ -1,17 +1,22 @@
-namespace Lyra.Renderer.Overlay;
+using Lyra.FileLoader;
+using Lyra.SdlCore;
+
+namespace Lyra.Renderer;
 
 public readonly record struct ApplicationStates(
-    string CollectionType,
+    CollectionType CollectionType,
     int CollectionIndex,
     int CollectionCount,
     int? DirectoryIndex,
     int? DirectoryCount,
     
     int Zoom,
-    string DisplayMode,
+    DisplayMode DisplayMode,
     string SamplingMode,
     
-    bool ShowExif,
+    bool InfoVisible,
+    bool HelpVisible,
+    bool SidebarVisible,
     
     bool DropActive,
     bool DropAborted,

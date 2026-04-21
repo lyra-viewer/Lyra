@@ -39,7 +39,9 @@ internal abstract class FloatRgbaDecoderBase : IImageDecoder
                 var floatSpan = new Span<float>((void*)ptr, floatCount);
                 var byteSpan = new Span<byte>((void*)bitmap.GetPixels(), checked(width * height * 4));
 
-                ConvertPixels(floatSpan, byteSpan, width, height, ct, out composite.IsGrayscale);
+                ConvertPixels(floatSpan, byteSpan, width, height, ct, out var isGrayscale);
+                
+                composite.FormatSpecific["GrayScale"] = isGrayscale.ToString();
             }
 
             ct.ThrowIfCancellationRequested();

@@ -10,7 +10,7 @@
 
     <ItemGroup>
         <PackageReference Include="LibHeifSharp" Version="3.2.0"/>
-        <PackageReference Include="Lyra.Psd" Version="0.1.2" />
+        <PackageReference Include="Lyra.Psd" Version="0.1.3" />
         <PackageReference Include="MetadataExtractor" Version="2.9.2" />
         <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12"/>
         <PackageReference Include="SkiaSharp" Version="3.119.2" />

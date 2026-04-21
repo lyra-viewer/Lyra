@@ -12,12 +12,30 @@ public static class DirectoryNavigator
 
     private static string? _topDirectory;
 
-    public static void ApplyCollection(List<string> files, FileDropContext dropContext, bool? singleDirectory, string? topDirectory)
+    /// All directories visited during file enumeration, including
+    /// intermediate ones with no supported images. Used to build
+    /// the complete directory tree in the UI.
+    private static List<string> _allDirectories = [];
+
+    /// <summary>
+    /// Incremented on every structural change (ApplyCollection, Purge).
+    /// UIManager checks this to avoid rebuilding the directory tree every frame.
+    /// </summary>
+    private static int _version;
+
+    private static List<DirEntry>? _cachedFullTree;
+    private static int _cachedFullTreeVersion = -1;
+
+    public static int Version => _version;
+
+    public static void ApplyCollection(List<string> files, List<string> allDirectories, FileDropContext dropContext, bool? singleDirectory, string? topDirectory)
     {
         _topDirectory = topDirectory;
+        _allDirectories = allDirectories;
         _collectionType = DecideCollectionType(dropContext);
 
         ApplyCollectionInternal(files, dropContext.AnchorPath, singleDirectory);
+        _version++;
     }
 
     private static void ApplyCollectionInternal(List<string> files, string? anchorCandidate, bool? singleDirectory)
@@ -108,7 +126,7 @@ public static class DirectoryNavigator
             return;
         }
 
-        // Already at edge → jump to neighbor directory's opposite edge
+        // Already at edge -> jump to neighbor directory's opposite edge
         var neighborProbe = goToStart ? start - 1 : end + 1;
         if ((uint)neighborProbe >= (uint)_imageList.Count)
         {
@@ -128,10 +146,11 @@ public static class DirectoryNavigator
     public static void Purge(string filePath)
     {
         var idx = _imageList.FindIndex(f => PathComparer.Equals(f, filePath));
-        if (idx < 0) 
+        if (idx < 0)
             return;
 
         _imageList.RemoveAt(idx);
+        _version++;
 
         if (_imageList.Count == 0)
         {
@@ -257,6 +276,91 @@ public static class DirectoryNavigator
     public static CollectionType GetCollectionType()
     {
         return _imageList.Count == 0 ? CollectionType.Undefined : _collectionType;
+    }
+
+    /// <summary>
+    /// Returns sorted unique normalized directory paths from the image list.
+    /// </summary>
+    public static List<string> GetDirectoryPaths()
+    {
+        if (_imageList.Count == 0)
+            return [];
+
+        var dirs = new HashSet<string>(PathComparer.CommonPathComparer);
+        foreach (var path in _imageList)
+        {
+            var dir = GetNormalizedDir(path);
+            if (dir != null)
+                dirs.Add(dir);
+        }
+
+        var sorted = dirs.ToList();
+        sorted.Sort(StringComparer.Ordinal);
+        return sorted;
+    }
+
+    /// <summary>
+    /// Returns all directories from the enumeration, including intermediate
+    /// ones that contain no images. Each entry is marked with HasImages.
+    /// Cached by version - returns the same list reference until the next
+    /// structural change (ApplyCollection, Purge).
+    /// </summary>
+    public static List<DirEntry> GetFullDirectoryTree()
+    {
+        if (_cachedFullTreeVersion == _version && _cachedFullTree != null)
+            return _cachedFullTree;
+
+        if (_allDirectories.Count == 0)
+        {
+            _cachedFullTree = [];
+            _cachedFullTreeVersion = _version;
+            return _cachedFullTree;
+        }
+
+        var withImages = new HashSet<string>(GetDirectoryPaths(), PathComparer.CommonPathComparer);
+
+        _cachedFullTree = _allDirectories
+            .Select(d => new DirEntry(d, withImages.Contains(d)))
+            .ToList();
+        _cachedFullTreeVersion = _version;
+        return _cachedFullTree;
+    }
+
+    /// <summary>
+    /// Returns an immutable snapshot of the navigator's current state for
+    /// the UI layer. Called every frame; the tree list is cached by version.
+    /// </summary>
+    public static DirectorySnapshot GetSnapshot() =>
+        new(_version, _topDirectory, GetFullDirectoryTree(), GetCurrentDirectory());
+
+    /// <summary>
+    /// Returns the normalized directory of the current image.
+    /// </summary>
+    public static string? GetCurrentDirectory()
+    {
+        var current = GetCurrent();
+        return current != null ? GetNormalizedDir(current) : null;
+    }
+
+    /// <summary>
+    /// Moves to the first image in the given directory.
+    /// Parameter must be a normalized absolute directory path
+    /// (same format as returned by GetDirectoryPaths).
+    /// Returns true if a matching image was found.
+    /// </summary>
+    public static bool MoveToFirstInDirectory(string normalizedDir)
+    {
+        for (var i = 0; i < _imageList.Count; i++)
+        {
+            var dir = GetNormalizedDir(_imageList[i]);
+            if (dir != null && PathComparer.Equals(dir, normalizedDir))
+            {
+                _currentIndex = i;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static CollectionType DecideCollectionType(FileDropContext ctx)

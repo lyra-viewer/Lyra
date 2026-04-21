@@ -35,6 +35,7 @@ public partial class SdlCore
             { Scancode.Alpha0, ToggleDisplayMode },
             { Scancode.S, ToggleSampling },
             { Scancode.H, ToggleHelp },
+            { Scancode.U, ToggleSidebar },
             { Scancode.Return, OpenFileExplorer }
         };
     }
@@ -196,7 +197,12 @@ public partial class SdlCore
 
     private void ToggleHelp()
     {
-        _renderer.ToggleHelpBar();
+        _renderer.ToggleHelp();
+    }
+
+    private void ToggleSidebar()
+    {
+        _renderer.ToggleSidebar();
     }
 
     private void OpenFileExplorer()

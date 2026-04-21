@@ -7,6 +7,7 @@ using Lyra.FileLoader;
 using Lyra.Imaging;
 using Lyra.Imaging.Content;
 using Lyra.Renderer;
+using Lyra.UI.SupportingTypes;
 using SkiaSharp;
 using static SDL3.SDL;
 
@@ -14,11 +15,29 @@ namespace Lyra.SdlCore;
 
 public partial class SdlCore : IDisposable
 {
+    // -------------------------------------------------------------------------
+    //  Window / renderer
+    // -------------------------------------------------------------------------
+
     private IntPtr _window;
     private SkiaRendererBase _renderer = null!;
     private bool _running = true;
 
     private readonly DropProgressTracker _dropProgressTracker = new();
+
+    // -------------------------------------------------------------------------
+    //  Frame pacing
+    // -------------------------------------------------------------------------
+
+    // Safety cap for "vsync forced off" situations.
+    private const int MaxFps = 240;
+    private const ulong NsPerSecond = 1_000_000_000UL;
+    private const ulong TargetFrameNs = NsPerSecond / MaxFps;
+    private ulong _nextFrameDeadlineNs;
+
+    // -------------------------------------------------------------------------
+    //  Cold start
+    // -------------------------------------------------------------------------
 
     // IMPORTANT: Certain window operations (bring-to-front, fullscreen) are
     // unreliable if performed too early, even when confirmed by SDL events.
@@ -28,15 +47,10 @@ public partial class SdlCore : IDisposable
     private int _coldStartFramesPending;
     private const int WindowWarmupFrames = 30;
     private readonly List<Action> _deferredUntilWarm = [];
-    private readonly ConcurrentQueue<Action> _mainThreadQueue = new();
-    // ----------------------------------------------------------------------
 
-    // Safety cap for “vsync forced off” situations.
-    private const int MaxFps = 240;
-    private const ulong NsPerSecond = 1_000_000_000UL;
-    private const ulong TargetFrameNs = NsPerSecond / MaxFps;
-    private ulong _nextFrameDeadlineNs;
-    // ----------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    //  Image / display state
+    // -------------------------------------------------------------------------
 
     private Composite? _composite;
     private int _zoomPercentage = 100;
@@ -44,6 +58,22 @@ public partial class SdlCore : IDisposable
 
     private const int PreloadDepth = 3;
     private const int CleanupSafeRange = 4;
+
+    // -------------------------------------------------------------------------
+    //  Cursor
+    // -------------------------------------------------------------------------
+
+    private nint _currentCursor;
+
+    // -------------------------------------------------------------------------
+    //  Threading
+    // -------------------------------------------------------------------------
+
+    private readonly ConcurrentQueue<Action> _mainThreadQueue = new();
+
+    // =========================================================================
+    //  Constructor
+    // =========================================================================
 
     public SdlCore()
     {
@@ -61,6 +91,10 @@ public partial class SdlCore : IDisposable
         // TODO Load from arguments
         // LoadImage();
     }
+
+    // =========================================================================
+    //  Initialization
+    // =========================================================================
 
     private void InitializeWindowAndRenderer()
     {
@@ -89,6 +123,8 @@ public partial class SdlCore : IDisposable
         SetWindowMinimumSize(_window, 640, 480);
         SetWindowFocusable(_window, true);
         RefreshDisplayInfo();
+        SetupCursorCallback();
+        SetupDirectoryPickerCallback();
 
         if (SettingsManager.AppSettings.WindowStateOnStart == WindowState.Fullscreen)
             SetFullscreen(true);
@@ -107,45 +143,9 @@ public partial class SdlCore : IDisposable
         return (1280, 800);
     }
 
-    private void LoadImage(NavigationDirection direction = NavigationDirection.None)
-    {
-        PurgeNotExistingFiles(direction);
-
-        var keepPaths = DirectoryNavigator.GetRange(CleanupSafeRange);
-        ImageStore.Cleanup(keepPaths);
-
-        var currentPath = DirectoryNavigator.GetCurrent();
-        if (currentPath == null)
-        {
-            _composite = null;
-            _panHelper = null;
-        }
-        else
-        {
-            _composite = ImageStore.GetImage(currentPath);
-            var preloadPaths = DirectoryNavigator.GetRange(PreloadDepth);
-            ImageStore.Preload(preloadPaths);
-            _displayMode = DimensionHelper.GetInitialDisplayMode(_window, _composite, out _zoomPercentage);
-            _panHelper = new PanHelper(_window, _composite, _zoomPercentage);
-        }
-
-        _renderer.SetComposite(_composite);
-        _renderer.SetOffset(SKPoint.Empty);
-        _renderer.SetDisplayMode(_displayMode);
-        _renderer.SetZoom(_zoomPercentage);
-    }
-
-    private void PurgeNotExistingFiles(NavigationDirection direction = NavigationDirection.None)
-    {
-        while (DirectoryNavigator.GetCurrent() is { } candidate && !File.Exists(candidate))
-        {
-            DirectoryNavigator.Purge(candidate);
-            ImageStore.Purge(candidate);
-
-            if (direction == NavigationDirection.Backward && DirectoryNavigator.HasPrevious())
-                DirectoryNavigator.MoveToPrevious();
-        }
-    }
+    // =========================================================================
+    //  Main loop
+    // =========================================================================
 
     public void Run()
     {
@@ -154,6 +154,7 @@ public partial class SdlCore : IDisposable
             DrainMainThreadQueue();
             HandleEvents();
             RecalculateDisplayModeIfNecessary();
+            _renderer.RefreshUI(_composite);
             _renderer.Render();
 
             GLSwapWindow(_window);
@@ -167,31 +168,44 @@ public partial class SdlCore : IDisposable
             }
             else
             {
-                // Running late! Resync so there is no drift.
+                // Running late - resync to avoid drift.
                 _nextFrameDeadlineNs = now + TargetFrameNs;
             }
 
-            // Cold start deffer
-            if (!_coldStartSafe)
-            {
-                if (--_coldStartFramesPending <= 0)
-                {
-                    _coldStartSafe = true;
-                    // Deferred actions will be flushed by DrainMainThreadQueue once warm.
-                }
-            }
+            // Advance cold start countdown
+            if (!_coldStartSafe && --_coldStartFramesPending <= 0)
+                _coldStartSafe = true;
+        }
+    }
+
+    private void RecalculateDisplayModeIfNecessary()
+    {
+        if (_composite == null || _panHelper == null)
+            return;
+
+        if (!_composite.IsEmpty && _displayMode == DisplayMode.Undefined)
+        {
+            _displayMode = DimensionHelper.GetInitialDisplayMode(_window, _composite, out _zoomPercentage);
+
+            _renderer.SetDisplayMode(_displayMode);
+            _renderer.SetZoom(_zoomPercentage);
+
+            _panHelper.UpdateZoom(_zoomPercentage);
+            _panHelper.CurrentOffset = SKPoint.Empty;
+            _panHelper.Clamp();
+            _renderer.SetOffset(_panHelper.CurrentOffset);
         }
     }
 
     private void DrainMainThreadQueue()
     {
-        while (_mainThreadQueue.TryDequeue(out var a))
-            a();
+        while (_mainThreadQueue.TryDequeue(out var action))
+            action();
 
         if (_coldStartSafe && _deferredUntilWarm.Count > 0)
         {
-            foreach (var a in _deferredUntilWarm)
-                a();
+            foreach (var action in _deferredUntilWarm)
+                action();
             _deferredUntilWarm.Clear();
         }
     }
@@ -224,24 +238,105 @@ public partial class SdlCore : IDisposable
         _coldStartSafe = false;
     }
 
-    private void RecalculateDisplayModeIfNecessary()
+    // =========================================================================
+    //  Image loading
+    // =========================================================================
+
+    private void LoadImage(NavigationDirection direction = NavigationDirection.None)
     {
-        if (_composite == null || _panHelper == null)
-            return;
+        PurgeNotExistingFiles(direction);
 
-        if (!_composite.IsEmpty && _displayMode == DisplayMode.Undefined)
+        var keepPaths = DirectoryNavigator.GetRange(CleanupSafeRange);
+        ImageStore.Cleanup(keepPaths);
+
+        // Detach from the outgoing composite before it's replaced.
+        if (_composite is not null)
+            _composite.ProgressChanged -= OnCompositeProgress;
+
+        var currentPath = DirectoryNavigator.GetCurrent();
+        if (currentPath == null)
         {
+            _composite = null;
+            _panHelper = null;
+        }
+        else
+        {
+            _composite = ImageStore.GetImage(currentPath);
+            _composite.ProgressChanged += OnCompositeProgress;
+
+            var preloadPaths = DirectoryNavigator.GetRange(PreloadDepth);
+            ImageStore.Preload(preloadPaths);
             _displayMode = DimensionHelper.GetInitialDisplayMode(_window, _composite, out _zoomPercentage);
+            _panHelper = new PanHelper(_window, _composite, _zoomPercentage);
+        }
 
-            _renderer.SetDisplayMode(_displayMode);
-            _renderer.SetZoom(_zoomPercentage);
+        _renderer.SetComposite(_composite);
+        _renderer.SetOffset(SKPoint.Empty);
+        _renderer.SetDisplayMode(_displayMode);
+        _renderer.SetZoom(_zoomPercentage);
+    }
 
-            _panHelper.UpdateZoom(_zoomPercentage);
-            _panHelper.CurrentOffset = SKPoint.Empty;
-            _panHelper.Clamp();
-            _renderer.SetOffset(_panHelper.CurrentOffset);
+    private void PurgeNotExistingFiles(NavigationDirection direction = NavigationDirection.None)
+    {
+        while (DirectoryNavigator.GetCurrent() is { } candidate && !File.Exists(candidate))
+        {
+            DirectoryNavigator.Purge(candidate);
+            ImageStore.Purge(candidate);
+
+            if (direction == NavigationDirection.Backward && DirectoryNavigator.HasPrevious())
+                DirectoryNavigator.MoveToPrevious();
         }
     }
+
+    // =========================================================================
+    //  Callbacks & event handlers
+    // =========================================================================
+
+    private void SetupCursorCallback()
+    {
+        _renderer.UIManager.SetCursorCallback(cursor =>
+        {
+            var sdlCursor = cursor switch
+            {
+                CursorType.ResizeEW => CreateSystemCursor(SystemCursor.EWResize),
+                CursorType.ResizeNS => CreateSystemCursor(SystemCursor.NSResize),
+                CursorType.ResizeNWSE => CreateSystemCursor(SystemCursor.NWSEResize),
+                CursorType.ResizeNESW => CreateSystemCursor(SystemCursor.NESWResize),
+                _ => CreateSystemCursor(SystemCursor.Default)
+            };
+
+            SetCursor(sdlCursor);
+
+            if (_currentCursor != nint.Zero)
+                DestroyCursor(_currentCursor);
+
+            _currentCursor = sdlCursor;
+        });
+    }
+
+    private void SetupDirectoryPickerCallback()
+    {
+        _renderer.UIManager.DirectoryPicked += OnDirectoryPicked;
+    }
+
+    private void OnCompositeProgress(Composite c)
+    {
+        DispatchToMain(() => _renderer.UIManager.RefreshCurrent());
+    }
+
+    private void OnDirectoryPicked(string absoluteDir)
+    {
+        var currentDir = DirectoryNavigator.GetCurrentDirectory();
+        if (string.Equals(currentDir, absoluteDir, StringComparison.Ordinal))
+            return; // already in this directory
+
+        if (DirectoryNavigator.MoveToFirstInDirectory(absoluteDir))
+            LoadImage();
+    }
+
+    // =========================================================================
+    //  Lifecycle
+    // =========================================================================
 
     private void ExitApplication()
     {
@@ -253,6 +348,9 @@ public partial class SdlCore : IDisposable
     public void Dispose()
     {
         Logger.Info("[Core] Disposing...");
+
+        if (_composite is not null)
+            _composite.ProgressChanged -= OnCompositeProgress;
 
         var userSettings = _renderer.ExportUiSettings();
         SettingsManager.SaveUiSettings(userSettings);

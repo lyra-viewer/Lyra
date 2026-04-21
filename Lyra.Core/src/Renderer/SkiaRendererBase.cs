@@ -5,7 +5,7 @@ using Lyra.Common.SystemExtensions;
 using Lyra.DropStatusProvider;
 using Lyra.FileLoader;
 using Lyra.Imaging.Content;
-using Lyra.Renderer.Overlay;
+using Lyra.Renderer.GUI;
 using Lyra.SdlCore;
 using SkiaSharp;
 using static Lyra.Common.Events.EventManager;
@@ -25,15 +25,15 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     private SamplingMode _samplingMode;
     private BackgroundMode _backgroundMode;
-    private InfoMode _infoMode;
-    private bool _helpBarVisible;
+
+    private bool _infoVisible;
+    private bool _helpVisible;
+    private bool _sidebarVisible;
 
     private readonly ICompositeContentDrawer _contentDrawer;
     private readonly IDropProgressProvider _dropProgressProvider;
 
-    private readonly ImageInfoOverlay _imageInfoOverlay;
-    private readonly HelpBarOverlay _helpBarOverlay;
-    private readonly CenteredTextOverlay _centeredOverlay;
+    public UIManager UIManager { get; private set; }
 
     private readonly string _backend;
 
@@ -49,16 +49,15 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
         Subscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
 
-        _imageInfoOverlay = new ImageInfoOverlay();
-        _helpBarOverlay = new HelpBarOverlay();
-        _centeredOverlay = new CenteredTextOverlay();
-
         _contentDrawer = new SkiaCompositeContentDrawer();
-        
+
         _samplingMode = SettingsManager.UiSettings.SamplingMode;
         _backgroundMode = SettingsManager.UiSettings.BackgroundMode;
-        _infoMode = SettingsManager.UiSettings.InfoLevel;
-        _helpBarVisible = SettingsManager.UiSettings.HelpBarVisible;
+        _infoVisible = SettingsManager.UiSettings.InfoVisible;
+        _helpVisible = SettingsManager.UiSettings.HelpVisible;
+        _sidebarVisible = SettingsManager.UiSettings.SidebarVisible;
+
+        UIManager = new UIManager(DisplayScale);
     }
 
     protected abstract SKSurface CreateSurface();
@@ -88,7 +87,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
             RenderBackground(canvas);
             RenderComposite(canvas);
-            RenderOverlay(canvas);
+            UpdateStatusOverlay();
+            RenderUI(canvas);
 
             AfterRender(surface);
         }
@@ -97,6 +97,19 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             if (DisposeSurfaceAfterRender)
                 surface.Dispose();
         }
+    }
+
+    private void RenderUI(SKCanvas canvas)
+    {
+        canvas.Save();
+        canvas.Scale(DisplayScale);
+        UIManager.Render(canvas);
+        canvas.Restore();
+    }
+
+    public void RefreshUI(Composite? composite)
+    {
+        UIManager.Refresh(UIState.Create(composite, GetApplicationStates(), DirectoryNavigator.GetSnapshot(), DirectoryNavigator.GetNavigation()));
     }
 
     private void RenderBackground(SKCanvas canvas)
@@ -136,7 +149,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         {
             var destFull = new SKRect(0, 0, logicalSize.Width, logicalSize.Height);
 
-            var visibleFull = ViewportMath.ComputeVisibleFullRect(
+            var visibleFull = ComputeVisibleFullRect(
                 imageW: logicalSize.Width,
                 imageH: logicalSize.Height,
                 windowPxW: WindowWidth,
@@ -174,35 +187,35 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         canvas.Restore();
     }
 
-    private void RenderOverlay(SKCanvas canvas)
+    /// <summary>
+    /// Pushes the current status text to the StatusLayer.
+    /// Decision logic stays here (closest to composite and drop state);
+    /// UIManager just forwards to the layer.
+    /// </summary>
+    private void UpdateStatusOverlay()
     {
-        var logicalWidth = WindowWidth / DisplayScale;
-        var logicalHeight = WindowHeight / DisplayScale;
         var textColor = _backgroundMode == BackgroundMode.White ? SKColors.Black : SKColors.White;
-
-        canvas.Save();
-        canvas.Scale(DisplayScale);
-        
-        if (_infoMode != InfoMode.None)
-            _imageInfoOverlay.Render(canvas, logicalWidth, logicalHeight, textColor, (_composite, GetApplicationStates()));
-
-        if (_helpBarVisible)
-            _helpBarOverlay.Render(canvas, logicalWidth, logicalHeight, textColor, (_composite, GetApplicationStates()));
 
         var drop = _dropProgressProvider.GetDropStatus();
         if (drop is { Active: true, FilesEnumerated: > 300 })
         {
-            _centeredOverlay.Render(canvas, logicalWidth, logicalHeight, textColor, $"{drop.FilesSupported} images found, {drop.FilesEnumerated} files scanned...");
+            UIManager.SetStatusOverlay($"{drop.FilesSupported} images found, {drop.FilesEnumerated} files scanned...", textColor);
+            return;
         }
-        else
+
+        if (_composite == null || _composite.State == CompositeState.Failed)
         {
-            if (_composite == null || _composite.State == CompositeState.Failed)
-                _centeredOverlay.Render(canvas, logicalWidth, logicalHeight, textColor, "No image");
-            else if (_composite.State == CompositeState.Loading)
-                _centeredOverlay.Render(canvas, logicalWidth, logicalHeight, textColor, "Loading...");
+            UIManager.SetStatusOverlay("No image", textColor);
+            return;
         }
-        
-        canvas.Restore();
+
+        if (_composite.State == CompositeState.Loading)
+        {
+            UIManager.SetStatusOverlay("Loading...", textColor);
+            return;
+        }
+
+        UIManager.SetStatusOverlay(null, default);
     }
 
     private void DrawCheckerboardPattern(SKCanvas canvas)
@@ -225,22 +238,24 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         }
     }
 
-    private ApplicationStates GetApplicationStates()
+    public ApplicationStates GetApplicationStates()
     {
         var navigation = DirectoryNavigator.GetNavigation();
         var drop = _dropProgressProvider.GetDropStatus();
 
         return new ApplicationStates
         {
-            CollectionType = DirectoryNavigator.GetCollectionType().Description(),
+            CollectionType = DirectoryNavigator.GetCollectionType(),
             CollectionIndex = navigation.CollectionIndex,
             CollectionCount = navigation.CollectionCount,
             DirectoryIndex = navigation.DirectoryIndex,
             DirectoryCount = navigation.DirectoryCount,
             Zoom = _zoomPercentage,
-            DisplayMode = _displayMode.Description(),
+            DisplayMode = _displayMode,
             SamplingMode = GetSamplingModeDescription(),
-            ShowExif = _infoMode == InfoMode.WithExif,
+            InfoVisible = _infoVisible,
+            HelpVisible = _helpVisible,
+            SidebarVisible = _sidebarVisible,
             DropActive = drop.Active,
             DropAborted = drop.Aborted,
             DropPathsEnqueued = drop.PathsEnqueued,
@@ -264,6 +279,9 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         DisplayScale = e.Scale;
 
         OnDrawableSizeChangedInternal(WindowWidth, WindowHeight, DisplayScale);
+
+        UIManager.DisplayScale = DisplayScale;
+        UIManager.Invalidate();
     }
 
     public void SetComposite(Composite? composite) => _composite = composite;
@@ -283,19 +301,49 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     public void ToggleBackground()
         => _backgroundMode = (BackgroundMode)(((int)_backgroundMode + 1) % Enum.GetValues<BackgroundMode>().Length);
 
-    public void ToggleInfo()
-        => _infoMode = (InfoMode)(((int)_infoMode + 1) % Enum.GetValues<InfoMode>().Length);
+    public void ToggleInfo() => _infoVisible = !_infoVisible;
 
-    public void ToggleHelpBar()
-        => _helpBarVisible = !_helpBarVisible;
+    public void ToggleHelp() => _helpVisible = !_helpVisible;
 
-    public UiSettings ExportUiSettings()
+    public void ToggleSidebar() => _sidebarVisible = !_sidebarVisible;
+
+    public UISettings ExportUiSettings()
     {
-        return new UiSettings(_samplingMode, _backgroundMode, _infoMode, _helpBarVisible);
+        return new UISettings(_samplingMode, _backgroundMode, _infoVisible, _helpVisible, _sidebarVisible);
     }
 
     public virtual void Dispose()
     {
         Unsubscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
+        UIManager.Dispose();
+    }
+
+    private static SKRect ComputeVisibleFullRect(float imageW, float imageH, int windowPxW, int windowPxH, float displayScale, int zoomPercentage, SKPoint offsetPx)
+    {
+        var zoom = zoomPercentage / 100f;
+
+        // Window in logical units
+        var logicalW = windowPxW / displayScale;
+        var logicalH = windowPxH / displayScale;
+
+        // Image drawn size in logical units
+        var drawW = imageW * zoom;
+        var drawH = imageH * zoom;
+
+        // Image top-left in logical window space (matches RenderCentered)
+        var imageLeft = (logicalW - drawW) / 2f + offsetPx.X / displayScale;
+        var imageTop = (logicalH - drawH) / 2f + offsetPx.Y / displayScale;
+
+        // Convert window rect (0..logicalW/H) to image-space by inverse transform
+        var visible = new SKRect(
+            (0 - imageLeft) / zoom,
+            (0 - imageTop) / zoom,
+            (logicalW - imageLeft) / zoom,
+            (logicalH - imageTop) / zoom
+        );
+
+        // Clamp to image bounds
+        var bounds = new SKRect(0, 0, imageW, imageH);
+        return SKRect.Intersect(visible, bounds);
     }
 }

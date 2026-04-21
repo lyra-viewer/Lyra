@@ -52,7 +52,7 @@ public partial class SdlCore
                     break;
 
                 case EventType.WindowShown:
-                case EventType.WindowDisplayChanged:    
+                case EventType.WindowDisplayChanged:
                 case EventType.WindowDisplayScaleChanged:
                     RefreshDisplayInfo();
                     break;
@@ -88,7 +88,7 @@ public partial class SdlCore
     private void RefreshDisplayInfo()
     {
         Logger.Info("[EventHandler] Refreshing display info.");
-        
+
         var displayScale = GetWindowDisplayScale(_window);
         var displayId = GetDisplayForWindow(_window);
         GetDisplayBounds(displayId, out var displayBounds);
@@ -97,6 +97,9 @@ public partial class SdlCore
 
     private void OnMouseButtonDown(Event e)
     {
+        if (_renderer.UIManager.HandlePointerDown(e.Motion.X, e.Motion.Y))
+            return;
+
         switch (e.Button.Button)
         {
             case ButtonLeft:
@@ -108,12 +111,17 @@ public partial class SdlCore
 
     private void OnMouseButtonUp(Event e)
     {
+        if (_isPanning && IsPanButton(e.Button.Button))
+        {
+            StopPanning();
+            return;
+        }
+
+        if (_renderer.UIManager.HandlePointerUp(e.Motion.X, e.Motion.Y))
+            return;
+
         switch (e.Button.Button)
         {
-            case ButtonLeft:
-            case ButtonMiddle when SettingsManager.AppSettings.MidMouseButtonFunction == MidMouseButtonFunction.Pan:
-                StopPanning();
-                break;
             case ButtonMiddle when SettingsManager.AppSettings.MidMouseButtonFunction == MidMouseButtonFunction.Exit:
                 HandleEscape();
                 break;
@@ -122,13 +130,23 @@ public partial class SdlCore
 
     private void OnMouseMotion(Event e)
     {
+        _renderer.UIManager.HandlePointerMove(e.Motion.X, e.Motion.Y);
+
         if (_isPanning)
             HandlePanning(e.Motion.X, e.Motion.Y);
     }
 
     private void OnMouseWheel(Event e)
     {
+        if (_renderer.UIManager.HandleScroll(e.Wheel.MouseX, e.Wheel.MouseY, e.Wheel.X, e.Wheel.Y))
+            return;
+
+
         GetMouseState(out var mouseX, out var mouseY);
         ZoomAtPoint(mouseX, mouseY, e.Wheel.Y);
     }
+    
+    private static bool IsPanButton(byte button) =>
+        button == ButtonLeft ||
+        (button == ButtonMiddle && SettingsManager.AppSettings.MidMouseButtonFunction == MidMouseButtonFunction.Pan);
 }

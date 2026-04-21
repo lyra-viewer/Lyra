@@ -2,6 +2,7 @@ using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.ConstraintsProvider;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Pipeline;
 using Lyra.Psd;
 using Lyra.Psd.Core.Decode.Composite;
 using Lyra.Psd.Core.SectionData;
@@ -25,6 +26,8 @@ internal class PsdDecoder : IImageDecoder
         var path = composite.FileInfo.FullName;
         composite.DecoderName = GetType().Name;
         Logger.Debug($"[PsdDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
+        
+        composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
 
         ct.ThrowIfCancellationRequested();
 
