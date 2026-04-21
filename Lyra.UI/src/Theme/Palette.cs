@@ -16,6 +16,9 @@ public static class Palette
     // Solid amber accent
     public static readonly SKColor SelectedForeground = new(235, 175, 70);
 
+    // Selection / pick highlight
+    public static readonly SKColor SelectedBackground = new(255, 255, 255, 25);
+
     // Text on light backgrounds
     public static readonly SKColor ForegroundDark = new(28, 30, 33);
 

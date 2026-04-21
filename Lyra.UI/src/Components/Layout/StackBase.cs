@@ -432,6 +432,18 @@ public abstract class StackBase : ComponentBase, IContainer
             first = false;
 
             var childMain = GetMain(child.DesiredSize);
+
+            // Scrollable children must be constrained to remaining space
+            // so their ViewportSize reflects the actual visible area.
+            // Without this, a Shrink-sized ListView inside a constrained
+            // container gets arranged at full content height, making
+            // ViewportSize == ContentSize and the scrollbar inoperative.
+            if (child is IScrollable)
+            {
+                var remainingMain = Math.Max(0, mainTotal - mainOffset);
+                childMain = Math.Min(childMain, remainingMain);
+            }
+
             var childCross = GetCrossSizeMode(child) == SizeMode.Expand
                 ? crossTotal
                 : GetCross(child.DesiredSize);

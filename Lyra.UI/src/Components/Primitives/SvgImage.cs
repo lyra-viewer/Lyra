@@ -1,4 +1,3 @@
-using System.Reflection;
 using SkiaSharp;
 using Svg.Skia;
 
@@ -7,11 +6,24 @@ namespace Lyra.UI.Components.Primitives;
 public class SvgImage : ImageBase
 {
     private SKPicture? _picture;
+    private readonly bool _ownsPicture;
 
+    /// Wraps a cached SKPicture from ResourceLoader.
+    /// Caller retains ownership - this instance does not dispose the picture.
+    public SvgImage(SKPicture picture, float width, float height)
+    {
+        ImageWidth = width;
+        ImageHeight = height;
+        _picture = picture;
+        _ownsPicture = false;
+    }
+
+    /// Loads from a file path. This instance owns and disposes the picture.
     public SvgImage(string svgPath, float width, float height)
     {
         ImageWidth = width;
         ImageHeight = height;
+        _ownsPicture = true;
 
         if (!File.Exists(svgPath))
             return;
@@ -20,33 +32,13 @@ public class SvgImage : ImageBase
         LoadSvg(stream);
     }
 
+    /// Loads from a stream. This instance owns and disposes the picture.
     public SvgImage(Stream svgStream, float width, float height)
     {
         ImageWidth = width;
         ImageHeight = height;
+        _ownsPicture = true;
         LoadSvg(svgStream);
-    }
-
-    // Private constructor for the factory
-    private SvgImage(float width, float height)
-    {
-        ImageWidth = width;
-        ImageHeight = height;
-    }
-
-    private static readonly Assembly UiAssembly = typeof(SvgImage).Assembly;
-
-    public static SvgImage FromResource(string resourcePath, float width, float height)
-    {
-        var image = new SvgImage(width, height);
-
-        var manifestName = UiAssembly.GetName().Name + "." + resourcePath.Replace('/', '.').Replace('\\', '.');
-
-        using var stream = UiAssembly.GetManifestResourceStream(manifestName);
-        if (stream != null)
-            image.LoadSvg(stream);
-
-        return image;
     }
 
     private void LoadSvg(Stream stream)
@@ -85,7 +77,7 @@ public class SvgImage : ImageBase
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && _ownsPicture)
         {
             _picture?.Dispose();
             _picture = null;

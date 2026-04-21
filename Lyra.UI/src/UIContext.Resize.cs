@@ -11,6 +11,8 @@ namespace Lyra.UI;
 //
 //  Edge detection runs before normal hit-testing so resize zones
 //  at the boundary of a container take priority over child clicks.
+//  Resize targets are searched top-down across layers, respecting
+//  BlocksInput - a modal layer prevents resizing in layers below.
 //
 //  During a drag, pointer events are captured - no hover tracking
 //  or child forwarding occurs until the drag ends.
@@ -75,10 +77,7 @@ public partial class UIContext
     /// </summary>
     private bool TryStartResize(SKPoint point)
     {
-        if (Root is null)
-            return false;
-
-        var target = FindResizeTarget(Root, point);
+        var target = FindResizeTargetAcrossLayers(point);
         if (target is null)
             return false;
 
@@ -156,13 +155,7 @@ public partial class UIContext
     /// </summary>
     private CursorType UpdateResizeCursor(SKPoint point)
     {
-        if (Root is null)
-        {
-            RequestCursor(CursorType.Default);
-            return CursorType.Default;
-        }
-
-        var target = FindResizeTarget(Root, point);
+        var target = FindResizeTargetAcrossLayers(point);
         if (target is null)
         {
             RequestCursor(CursorType.Default);
@@ -172,6 +165,34 @@ public partial class UIContext
         var cursor = GetCursorForEdge(target.Value.edge);
         RequestCursor(cursor);
         return cursor;
+    }
+
+    // --------------------------------------------------------
+    //  Layer-aware resize target search
+    // --------------------------------------------------------
+
+    /// <summary>
+    /// Searches layers top-down for a resize target.
+    /// Respects BlocksInput - a blocking layer prevents
+    /// resize detection in layers below.
+    /// </summary>
+    private (IComponent component, ResizeEdge edge)? FindResizeTargetAcrossLayers(SKPoint point)
+    {
+        for (var i = _layers.Count - 1; i >= 0; i--)
+        {
+            var layer = _layers[i];
+            if (layer.Root is null)
+                continue;
+
+            var target = FindResizeTarget(layer.Root, point);
+            if (target.HasValue)
+                return target;
+
+            if (layer.BlocksInput)
+                return null;
+        }
+
+        return null;
     }
 
     // --------------------------------------------------------
@@ -193,7 +214,7 @@ public partial class UIContext
             if (edge != ResizeEdge.None)
                 return (component, edge);
         }
-    
+
         // Then recurse into children (back-to-front for z-order)
         if (component is IContainer container)
         {
