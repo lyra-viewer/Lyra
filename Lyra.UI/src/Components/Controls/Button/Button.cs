@@ -6,7 +6,6 @@ namespace Lyra.UI.Components.Controls.Button;
 
 public class Button : ComponentBase
 {
-    // TODO [Export]
     private readonly Label _label;
 
     // External events

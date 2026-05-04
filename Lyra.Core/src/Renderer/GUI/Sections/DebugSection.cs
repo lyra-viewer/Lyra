@@ -2,6 +2,7 @@ using Lyra.Common.SystemExtensions;
 using Lyra.Renderer.GUI.Support;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
+using Lyra.UI.Components.Controls.Button;
 using Lyra.UI.Components.Layout;
 using Lyra.UI.Components.Primitives;
 using Lyra.UI.SupportingTypes;
@@ -163,6 +164,17 @@ public sealed class DebugSection : IUISection
 
     public void SetPointer(float x, float y) => _pointerValue.Text = $"{x:F1}, {y:F1}";
 
+    public void SetHover(IComponent? hovered)
+    {
+        var description = hovered switch
+        {
+            Button btn => $"Button \"{btn.Text}\"",
+            null       => "-",
+            _          => hovered.GetType().Name
+        };
+        SetHit(description);
+    }
+    
     public void SetHit(string hitDescription) => _hitValue.Text = hitDescription;
 
     public void SetAction(string actionDescription) => _actionValue.Text = actionDescription;

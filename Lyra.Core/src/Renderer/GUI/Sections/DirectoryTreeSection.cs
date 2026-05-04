@@ -95,6 +95,7 @@ public sealed class DirectoryTreeSection : IUISection, IDisposable
     private static Label RenderNode(TreeNode<DirEntry> node, bool isPicked) =>
         new(node.Data.CollapsedDisplayName ?? PathTreeBuilder.DisplayName(node.Data.Path))
         {
+            Padding = new Padding(0, 1, 0, 1),
             Color = isPicked ? Palette.SelectedForeground
                 : node.Data.HasImages ? Palette.Foreground
                 : Palette.Dim
