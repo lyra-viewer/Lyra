@@ -2,10 +2,11 @@ using System.Collections.Concurrent;
 
 namespace Lyra.Imaging.Pipeline;
 
-internal sealed class PreloadTaskScheduler : TaskScheduler
+internal sealed class PreloadTaskScheduler : TaskScheduler, IDisposable
 {
     private readonly BlockingCollection<Task> _tasks = new();
     private readonly List<Thread> _threads;
+    private bool _disposed;
 
     public PreloadTaskScheduler(int maxDegreeOfParallelism)
     {
@@ -19,7 +20,7 @@ internal sealed class PreloadTaskScheduler : TaskScheduler
                 Name = $"PreloadWorker-{i}",
                 Priority = ThreadPriority.BelowNormal
             };
-            
+
             _threads.Add(thread);
             thread.Start();
         }
@@ -34,4 +35,18 @@ internal sealed class PreloadTaskScheduler : TaskScheduler
     protected override IEnumerable<Task> GetScheduledTasks() => _tasks.ToArray();
     protected override void QueueTask(Task task) => _tasks.Add(task);
     protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) => false;
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+
+        _tasks.CompleteAdding();
+
+        foreach (var thread in _threads)
+            thread.Join();
+
+        _tasks.Dispose();
+    }
 }

@@ -1,6 +1,7 @@
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Pipeline;
 using SkiaSharp;
 using static System.Threading.Thread;
 
@@ -21,7 +22,9 @@ internal class SkiaDecoder : IImageDecoder
         var path = composite.FileInfo.FullName;
         composite.DecoderName = GetType().Name;
         Logger.Debug($"[SkiaDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
-
+        
+        composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
+        
         try
         {
             ct.ThrowIfCancellationRequested();

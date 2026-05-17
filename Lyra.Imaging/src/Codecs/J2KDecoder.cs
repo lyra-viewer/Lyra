@@ -51,8 +51,8 @@ internal class J2KDecoder : IImageDecoder
                         throw new InvalidOperationException($"[J2KDecoder] Failed to decode: {path}");
                     }
 
-                    if (width <= 0 || height <= 0 || nativeStrideBytes <= 0)
-                        throw new InvalidOperationException($"[J2KDecoder] Invalid decoded image geometry: {width}x{height}, stride={nativeStrideBytes}");
+                    DecoderValidation.RequireSaneDimensions("J2KDecoder", width, height);
+                    DecoderValidation.RequireValidStride("J2KDecoder", nativeStrideBytes, width);
 
                     ct.ThrowIfCancellationRequested();
 
@@ -88,8 +88,8 @@ internal class J2KDecoder : IImageDecoder
                         if ((y & 0x3F) == 0)
                             ct.ThrowIfCancellationRequested();
 
-                        var srcRow = src + (nint)y * nativeStrideBytes;
-                        var dstRow = dst + (nint)y * dstStride;
+                        var srcRow = src + (nint)y * (nint)nativeStrideBytes;
+                        var dstRow = dst + (nint)y * (nint)dstStride;
 
                         for (var x = 0; x < width; x++)
                         {
@@ -157,7 +157,7 @@ internal class J2KDecoder : IImageDecoder
     {
         for (var y = 0; y < height; y++)
         {
-            var row = src + (nint)y * stride;
+            var row = src + (nint)y * (nint)stride;
             for (var x = 0; x < width; x++)
             {
                 if (row[x * 4 + 3] != 255)
@@ -172,7 +172,7 @@ internal class J2KDecoder : IImageDecoder
     {
         for (var y = 0; y < height; y++)
         {
-            Buffer.MemoryCopy(src + (nint)y * srcStride, dst + (nint)y * dstStride, dstStride, bytesPerRow);
+            Buffer.MemoryCopy(src + (nint)y * (nint)srcStride, dst + (nint)y * (nint)dstStride, dstStride, bytesPerRow);
         }
     }
 
@@ -183,7 +183,7 @@ internal class J2KDecoder : IImageDecoder
 
         for (var y = 0; y < height; y++)
         {
-            var row = src + (nint)y * stride;
+            var row = src + (nint)y * (nint)stride;
             for (var x = 0; x < width; x++)
             {
                 var i = x * 4;

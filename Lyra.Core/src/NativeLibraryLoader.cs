@@ -124,10 +124,21 @@ internal static class NativeLibraryLoader
         // Homebrew (macOS only) - for Homebrew-dependent distribution
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            // Common brew lib dirs
-            SearchDirs.Add("/opt/homebrew/lib"); // Apple Silicon
-            SearchDirs.Add("/usr/local/lib");    // Intel
-            
+            // Honor a custom $HOMEBREW_PREFIX first (relocated installs,
+            // user-owned prefixes, multi-user dev setups).
+            var brewPrefix = Environment.GetEnvironmentVariable("HOMEBREW_PREFIX");
+            if (!string.IsNullOrWhiteSpace(brewPrefix))
+            {
+                SearchDirs.Add(Path.Combine(brewPrefix, "lib"));
+                SearchDirs.Add(Path.Combine(brewPrefix, "opt", "sdl3", "lib"));
+                SearchDirs.Add(Path.Combine(brewPrefix, "opt", "libheif", "lib"));
+                SearchDirs.Add(Path.Combine(brewPrefix, "opt", "openexr", "lib"));
+            }
+
+            // Standard Homebrew layouts (Apple Silicon, then Intel).
+            SearchDirs.Add("/opt/homebrew/lib");
+            SearchDirs.Add("/usr/local/lib");
+
             SearchDirs.Add("/opt/homebrew/opt/sdl3/lib");
             SearchDirs.Add("/usr/local/opt/sdl3/lib");
 
@@ -170,11 +181,18 @@ internal static class NativeLibraryLoader
 #endif
     }
 
+    private static IntPtr TryLoad(string identifier)
+    {
+        return PathDictionary.TryGetValue(identifier, out var path)
+            ? NativeLibrary.Load(path)
+            : IntPtr.Zero;
+    }
+
     private static IntPtr ResolveSdl(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
         return libraryName switch
         {
-            "SDL3" or "SDL3.dll" or "libSDL3.so" or "libSDL3.dylib" => NativeLibrary.Load(PathDictionary["SDL3"]),
+            "SDL3" or "SDL3.dll" or "libSDL3.so" or "libSDL3.dylib" => TryLoad("SDL3"),
             _ => IntPtr.Zero
         };
     }
@@ -183,7 +201,7 @@ internal static class NativeLibraryLoader
     {
         return libraryName switch
         {
-            "libSkiaSharp" or "libSkiaSharp.dll" or "libSkiaSharp.so" or "libSkiaSharp.dylib" => NativeLibrary.Load(PathDictionary["SKIA"]),
+            "libSkiaSharp" or "libSkiaSharp.dll" or "libSkiaSharp.so" or "libSkiaSharp.dylib" => TryLoad("SKIA"),
             _ => IntPtr.Zero
         };
     }
@@ -192,7 +210,7 @@ internal static class NativeLibraryLoader
     {
         return libraryName switch
         {
-            "libheif" or "libheif.dll" or "libheif.so" or "libheif.dylib" => NativeLibrary.Load(PathDictionary["LIBHEIF"]),
+            "libheif" or "libheif.dll" or "libheif.so" or "libheif.dylib" => TryLoad("LIBHEIF"),
             _ => IntPtr.Zero
         };
     }
@@ -201,9 +219,9 @@ internal static class NativeLibraryLoader
     {
         return libraryName switch
         {
-            "libexr" or "libexr.dll" or "libexr.so" or "libexr.dylib" => NativeLibrary.Load(PathDictionary["EXR"]),
-            "libhdr" or "libhdr.dll" or "libhdr.so" or "libhdr.dylib" => NativeLibrary.Load(PathDictionary["HDR"]),
-            "libj2k" or "libj2k.dll" or "libj2k.so" or "libj2k.dylib" => NativeLibrary.Load(PathDictionary["J2K"]),
+            "libexr" or "libexr.dll" or "libexr.so" or "libexr.dylib" => TryLoad("EXR"),
+            "libhdr" or "libhdr.dll" or "libhdr.so" or "libhdr.dylib" => TryLoad("HDR"),
+            "libj2k" or "libj2k.dll" or "libj2k.so" or "libj2k.dylib" => TryLoad("J2K"),
             _ => IntPtr.Zero
         };
     }

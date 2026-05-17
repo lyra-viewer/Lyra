@@ -166,11 +166,11 @@ public class Button : ComponentBase
         if (!IsEffectivelyEnabled)
             return;
 
-        if (!_isPressed)
-            return;
-
+        var wasPressed = _isPressed;
         _isPressed = false;
-        OnClick();
+
+        if (wasPressed && _isHovered)
+            OnClick();
     }
 
     public override void OnPointerEnter()
@@ -184,7 +184,6 @@ public class Button : ComponentBase
     public override void OnPointerLeave()
     {
         _isHovered = false;
-        _isPressed = false;
     }
 
     // --------------------------------------------------------

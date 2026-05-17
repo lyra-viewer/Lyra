@@ -28,6 +28,8 @@ internal abstract class FloatRgbaDecoderBase : IImageDecoder
         {
             ct.ThrowIfCancellationRequested();
 
+            DecoderValidation.RequireSaneDimensions(GetType().Name, width, height, bytesPerPixel: sizeof(float) * 4);
+
             var totalPixels = checked(width * height);
             var floatCount = checked(totalPixels * 4);
 
@@ -93,6 +95,9 @@ internal abstract class FloatRgbaDecoderBase : IImageDecoder
 
     private static byte ToneMap(float value)
     {
+        if (float.IsNaN(value))
+            return 0;
+
         value = MathF.Pow(MathF.Max(value, 0), 1f / 2.2f) * 255f;
         return (byte)Math.Clamp(value, 0, 255);
     }

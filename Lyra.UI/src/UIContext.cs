@@ -102,6 +102,12 @@ public partial class UIContext : IDisposable
     private IComponent? _hoveredComponent;
     public IComponent? HoveredComponent => _hoveredComponent;
 
+    // Pointer capture: the component that received PointerDown owns the
+    // subsequent PointerUp regardless of where the pointer ends up. This
+    // is what lets a Button decide whether to fire Click (released-over)
+    // or cancel (released-elsewhere) instead of getting a stuck _isPressed.
+    private IComponent? _capturedComponent;
+
     public void Invalidate() => IsDirty = true;
     public void ClearDirty() => IsDirty = false;
 
@@ -128,6 +134,7 @@ public partial class UIContext : IDisposable
             var hit = HitTest(layer.Root, logicalPoint);
             if (hit != null)
             {
+                _capturedComponent = hit;
                 hit.OnPointerDown(logicalPoint);
                 return true;
             }
@@ -143,6 +150,17 @@ public partial class UIContext : IDisposable
     {
         if (TryEndResize())
             return true;
+
+        // If a component captured the press, route the release back to it
+        // even when the pointer is no longer over it. This is what lets a
+        // Button cleanly distinguish "released over me" from "press cancelled".
+        if (_capturedComponent is not null)
+        {
+            var captured = _capturedComponent;
+            _capturedComponent = null;
+            captured.OnPointerUp(logicalPoint);
+            return true;
+        }
 
         for (var i = _layers.Count - 1; i >= 0; i--)
         {

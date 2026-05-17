@@ -5,7 +5,7 @@ using Lyra.Imaging.Content;
 
 namespace Lyra.Imaging.Pipeline;
 
-internal class ImageLoader
+internal class ImageLoader : IDisposable
 {
     #region Nested Types & Delegates
 
@@ -32,8 +32,14 @@ internal class ImageLoader
     #region Fields
 
     private readonly ConcurrentDictionary<string, Lazy<ImageJob>> _images = new();
-    private readonly TaskFactory _preloadTaskFactory = new(new PreloadTaskScheduler(2));
+    private readonly PreloadTaskScheduler _preloadScheduler = new(2);
+    private readonly TaskFactory _preloadTaskFactory;
     private volatile Composite? _currentImage;
+
+    public ImageLoader()
+    {
+        _preloadTaskFactory = new TaskFactory(_preloadScheduler);
+    }
 
     #endregion
 
@@ -81,10 +87,10 @@ internal class ImageLoader
         RemoveMatching(key => PathComparer.Equals(key, path), "Purge:");
     }
 
-    /// <summary>Disposes everything and cancels in-flight jobs.</summary>
-    public void DisposeAll()
+    public void Dispose()
     {
         RemoveMatching(_ => true, "Disposing:");
+        _preloadScheduler.Dispose();
     }
 
     #endregion

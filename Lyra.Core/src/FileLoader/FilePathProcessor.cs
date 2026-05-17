@@ -228,14 +228,20 @@ public static class FilePathProcessor
         return GetTopDirectory(candidateDirs);
     }
 
+    // Hard cap on traversal depth. Protects against pathological filesystems
+    // (deeply nested trees, symlink chains that the visited-set can't catch
+    // because canonicalization fell back to the unresolved path).
+    private const int MaxTraversalDepth = 256;
+
     private static IEnumerable<string> EnumerateFilesIterative(string root, bool recurseSubdirs, HashSet<string>? visitedDirectories, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(root))
             yield break;
 
-        var stack = new Stack<string>();
+        var stack = new Stack<(string Dir, int Depth)>();
         var visited = new HashSet<string>(PathComparer.CommonPathComparer);
-        stack.Push(root);
+        var depthCappedLogged = false;
+        stack.Push((root, 0));
 
         while (stack.Count > 0)
         {
@@ -243,7 +249,7 @@ public static class FilePathProcessor
             if (cancellationToken.IsCancellationRequested)
                 yield break;
 
-            var dir = stack.Pop();
+            var (dir, depth) = stack.Pop();
             var canon = GetCanonicalPath(dir, FollowSymlinks);
 
             if (!visited.Add(canon))
@@ -272,6 +278,17 @@ public static class FilePathProcessor
             if (!recurseSubdirs)
                 continue;
 
+            if (depth >= MaxTraversalDepth)
+            {
+                if (!depthCappedLogged)
+                {
+                    Logger.Warning($"[FilePathProcessor] Max traversal depth ({MaxTraversalDepth}) reached at '{dir}'; descendants skipped.");
+                    depthCappedLogged = true;
+                }
+
+                continue;
+            }
+
             IEnumerable<string> subdirs;
             try
             {
@@ -291,7 +308,7 @@ public static class FilePathProcessor
                 if (!FollowSymlinks && IsSymlinkOrReparsePoint(sub))
                     continue;
 
-                stack.Push(sub);
+                stack.Push((sub, depth + 1));
             }
         }
     }

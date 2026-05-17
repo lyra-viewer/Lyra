@@ -40,6 +40,6 @@ public static class ImageStore
     public static void SaveAndDispose()
     {
         LoadTimeEstimator.SaveTimeDataToFile();
-        ImageLoader.DisposeAll();
+        ImageLoader.Dispose();
     }
 }

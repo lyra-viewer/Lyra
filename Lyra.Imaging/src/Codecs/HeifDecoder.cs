@@ -25,6 +25,8 @@ internal class HeifDecoder : IImageDecoder
             using var heifContext = new HeifContext(path);
             using var imageHandle = heifContext.GetPrimaryImageHandle();
 
+            PopulateFormatSpecific(composite, heifContext, imageHandle, path);
+
             // Decode as 8-bit RGBA interleaved.
             using var decodedImage = imageHandle.Decode(HeifColorspace.Rgb, HeifChroma.InterleavedRgba32);
 
@@ -46,6 +48,9 @@ internal class HeifDecoder : IImageDecoder
 
             var srcStride = plane.Stride;
 
+            DecoderValidation.RequireSaneDimensions("HeifDecoder", width, height);
+            DecoderValidation.RequireValidStride("HeifDecoder", srcStride, width);
+
             var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
             var bitmap = new SKBitmap(info);
 
@@ -57,7 +62,7 @@ internal class HeifDecoder : IImageDecoder
                     byte* srcBase = (byte*)src;
                     byte* dst = (byte*)dstBase;
 
-                    var bytesPerPixel = 4;
+                    const int bytesPerPixel = 4;
                     var rowBytes = width * bytesPerPixel;
 
                     var dstStride = bitmap.RowBytes;
@@ -68,8 +73,8 @@ internal class HeifDecoder : IImageDecoder
                     {
                         ct.ThrowIfCancellationRequested();
 
-                        var srcRow = srcBase + (y * srcStride);
-                        var dstRow = dst + (y * dstStride);
+                        var srcRow = srcBase + (nint)y * (nint)srcStride;
+                        var dstRow = dst + (nint)y * (nint)dstStride;
 
                         Buffer.MemoryCopy(srcRow, dstRow, dstStride, copyBytes);
                     }
@@ -98,5 +103,78 @@ internal class HeifDecoder : IImageDecoder
         }
 
         return Task.CompletedTask;
+    }
+    
+    private static void PopulateFormatSpecific(Composite composite, HeifContext context, HeifImageHandle handle, string path)
+    {
+        composite.FormatSpecific["Codec"] = DetectHeifBrand(path);
+
+        // TryAdd(composite, "Bit Depth", () => $"{handle.LumaBitsPerPixel}-bit");
+        TryAdd(composite, "Has Alpha", () => handle.HasAlphaChannel.ToString());
+        TryAdd(composite, "Depth Map", () => handle.HasDepthImage ? "Yes" : "No");
+
+        try
+        {
+            var thumbs = handle.GetThumbnailImageIds();
+            if (thumbs is { Count: > 0 })
+                composite.FormatSpecific["Thumbnails"] = thumbs.Count.ToString();
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"[HeifDecoder] Thumbnail enumeration failed: {ex.Message}");
+        }
+
+        try
+        {
+            var topIds = context.GetTopLevelImageIds();
+            if (topIds is { Count: > 1 })
+                composite.FormatSpecific["Top-level Images"] = topIds.Count.ToString();
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"[HeifDecoder] Top-level enumeration failed: {ex.Message}");
+        }
+    }
+
+    private static void TryAdd(Composite composite, string key, Func<string> producer)
+    {
+        try
+        {
+            composite.FormatSpecific[key] = producer();
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"[HeifDecoder] FormatSpecific '{key}' failed: {ex.Message}");
+        }
+    }
+
+    private static string DetectHeifBrand(string path)
+    {
+        try
+        {
+            using var fs = File.OpenRead(path);
+            Span<byte> buf = stackalloc byte[32];
+            var read = fs.Read(buf);
+            if (read < 12)
+                return "Unknown";
+
+            // ISOBMFF ftyp box layout:
+            //   [0..4)  box size
+            //   [4..8)  "ftyp"
+            //   [8..12) major brand
+            var brand = System.Text.Encoding.ASCII.GetString(buf.Slice(8, 4));
+            return brand switch
+            {
+                "heic" or "heix" or "heim" or "heis" => "HEVC",
+                "avif" or "avis" => "AV1",
+                "jpeg" or "jpgs" => "JPEG",
+                "mif1" or "msf1" => "HEIF (generic)",
+                _ => brand
+            };
+        }
+        catch
+        {
+            return "Unknown";
+        }
     }
 }
