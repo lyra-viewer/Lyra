@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Lyra.Common.Settings;
 using Lyra.DropStatusProvider;
 using Lyra.SdlCore;
 using SkiaSharp;
@@ -9,12 +10,12 @@ namespace Lyra.Renderer;
 public sealed class SkiaMetalRenderer : SkiaRendererBase
 {
     // SDL3 metal glue
-    private readonly IntPtr _metalView;   // SDL_MetalView (typedef void*)
-    private readonly IntPtr _metalLayer;  // CAMetalLayer*
+    private readonly IntPtr _metalView; // SDL_MetalView (typedef void*)
+    private readonly IntPtr _metalLayer; // CAMetalLayer*
 
     // Metal objects
-    private readonly IntPtr _device;      // id<MTLDevice>
-    private readonly IntPtr _queue;       // id<MTLCommandQueue>
+    private readonly IntPtr _device; // id<MTLDevice>
+    private readonly IntPtr _queue; // id<MTLCommandQueue>
 
     private readonly GRMtlBackendContext _mtlBackend;
     private readonly GRContext _grContext;
@@ -28,8 +29,8 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     // MTLPixelFormatBGRA8Unorm (stable value)
     private const ulong MTLPixelFormatBGRA8Unorm = 80;
 
-    public SkiaMetalRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider)
-        : base(drawableSize, dropProgressProvider, "Metal")
+    public SkiaMetalRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState)
+        : base(drawableSize, dropProgressProvider, viewState, "Metal")
     {
         _metalView = MetalCreateView(window);
         if (_metalView == IntPtr.Zero)
@@ -42,7 +43,7 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
         _device = MetalNative.MTLCreateSystemDefaultDevice();
         if (_device == IntPtr.Zero)
             throw new InvalidOperationException("MTLCreateSystemDefaultDevice returned null.");
-        
+
         // layer.device = device
         ObjC.SendVoid_IntPtr(_metalLayer, ObjC.Sel("setDevice:"), _device);
         // layer.pixelFormat = BGRA8
@@ -55,7 +56,7 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
         // queue = [device newCommandQueue]
         _queue = ObjC.Send_IntPtr(_device, ObjC.Sel("newCommandQueue"));
         if (_queue == IntPtr.Zero)
-            throw new InvalidOperationException("Failed to create MTLCommandQueue (newCommandQueue)." );
+            throw new InvalidOperationException("Failed to create MTLCommandQueue (newCommandQueue).");
 
         _mtlBackend = new GRMtlBackendContext
         {
@@ -64,8 +65,8 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
         };
 
         _grContext = GRContext.CreateMetal(_mtlBackend)
-            ?? throw new InvalidOperationException("GRContext.CreateMetal returned null. Is SkiaSharp built with Metal support?" );
-        
+                     ?? throw new InvalidOperationException("GRContext.CreateMetal returned null. Is SkiaSharp built with Metal support?");
+
         _grContext.SetResourceCacheLimit(512 * 1024 * 1024); // 512 MB
     }
 
@@ -95,7 +96,7 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
         // Metal surfaces are TopLeft in most integrations.
         // Color type should match the CAMetalLayer pixel format (BGRA8Unorm).
         return SKSurface.Create(_grContext, _currentRenderTarget, GRSurfaceOrigin.TopLeft, SKColorType.Bgra8888)
-            ?? throw new InvalidOperationException("SKSurface.Create returned null for Metal render target.");
+               ?? throw new InvalidOperationException("SKSurface.Create returned null for Metal render target.");
     }
 
     protected override void AfterRender(SKSurface surface)
@@ -177,7 +178,7 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
         [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
         private static extern void objc_msgSend_Void_Bool(IntPtr receiver, IntPtr selector, bool arg1);
 
-        public static IntPtr Sel(string name) 
+        public static IntPtr Sel(string name)
             => sel_registerName(name);
 
         public static IntPtr GetClass(string name)

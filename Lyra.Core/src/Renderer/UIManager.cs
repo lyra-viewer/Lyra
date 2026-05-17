@@ -1,7 +1,7 @@
+using Lyra.Common.Settings.Enums;
 using Lyra.Renderer.GUI;
 using Lyra.Renderer.GUI.Layers;
 using Lyra.UI;
-using Lyra.UI.Components.Controls.Button;
 using Lyra.UI.SupportingTypes;
 using SkiaSharp;
 
@@ -18,7 +18,7 @@ namespace Lyra.Renderer;
 //  Layer structure (bottom to top):
 //    - StatusLayer  - centered status text (No image, Loading...)
 //    - MainLayer    - primary UI tree (info pane, sidebar, sections)
-//    - (future) PopupLayer  - context menus, tooltips  (BlocksInput)
+//    - PopupLayer   - dropdowns, context menus  (BlocksInput, lazy)
 //    - (future) ModalLayer  - settings, dialogs        (BlocksInput + BlocksVisual)
 // ============================================================================
 public class UIManager : IDisposable
@@ -29,14 +29,9 @@ public class UIManager : IDisposable
     private readonly MainLayer _mainLayer;
 
     /// <summary>
-    /// Fired when the user picks a directory in the sidebar tree.
-    /// Parameter is the normalized absolute directory path.
+    /// User-driven UI events (menu clicks, tree picks, dropdown changes).
     /// </summary>
-    public event Action<string>? DirectoryPicked
-    {
-        add => _mainLayer.DirectoryPicked += value;
-        remove => _mainLayer.DirectoryPicked -= value;
-    }
+    public IUIEvents Events => _mainLayer;
 
     public float DisplayScale { get; set; }
 
@@ -73,6 +68,30 @@ public class UIManager : IDisposable
     public void RefreshCurrent() => _mainLayer.RefreshCurrent();
 
     // --------------------------------------------------------
+    //  Programmatic dropdown sync (driven by keyboard toggles)
+    // --------------------------------------------------------
+
+    /// <summary>
+    /// Updates the background dropdown's selected value to match the
+    /// renderer state. Does not fire <see cref="IUIEvents.BackgroundModeChanged"/>.
+    /// </summary>
+    public void SetBackgroundMode(BackgroundMode mode)
+    {
+        _mainLayer.SetBackgroundMode(mode);
+        Invalidate();
+    }
+
+    /// <summary>
+    /// Updates the sampling dropdown's selected value to match the
+    /// renderer state. Does not fire <see cref="IUIEvents.SamplingModeChanged"/>.
+    /// </summary>
+    public void SetSamplingMode(SamplingMode mode)
+    {
+        _mainLayer.SetSamplingMode(mode);
+        Invalidate();
+    }
+
+    // --------------------------------------------------------
     //  Render
     // --------------------------------------------------------
 
@@ -107,16 +126,7 @@ public class UIManager : IDisposable
     {
         _mainLayer.SetDebugPointer(x, y);
         _context.HandlePointerMove(new SKPoint(x, y));
-
-        var hovered = _context.HoveredComponent;
-        var hitDescription = hovered switch
-        {
-            Button btn => $"Button \"{btn.Text}\"",
-            null => "-",
-            _ => hovered.GetType().Name
-        };
-        _mainLayer.SetDebugHit(hitDescription);
-
+        _mainLayer.SetDebugHover(_context.HoveredComponent);
         _context.Invalidate();
     }
 

@@ -24,6 +24,7 @@ public partial class SdlCore : IDisposable
     private bool _running = true;
 
     private readonly DropProgressTracker _dropProgressTracker = new();
+    private readonly ViewState _viewState = new(SettingsManager.UiSettings);
 
     // -------------------------------------------------------------------------
     //  Frame pacing
@@ -109,11 +110,11 @@ public partial class SdlCore : IDisposable
         {
             case Backend.OpenGL:
                 _window = CreateWindow("Lyra Viewer (OpenGL)", w, h, flags | WindowFlags.OpenGL);
-                _renderer = new SkiaOpenGlRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropProgressTracker);
+                _renderer = new SkiaOpenGlRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropProgressTracker, _viewState);
                 break;
             case Backend.Metal:
                 _window = CreateWindow("Lyra Viewer (Metal)", w, h, flags | WindowFlags.Metal);
-                _renderer = new SkiaMetalRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropProgressTracker);
+                _renderer = new SkiaMetalRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropProgressTracker, _viewState);
                 break;
             default:
                 throw new ArgumentOutOfRangeException();
@@ -124,7 +125,7 @@ public partial class SdlCore : IDisposable
         SetWindowFocusable(_window, true);
         RefreshDisplayInfo();
         SetupCursorCallback();
-        SetupDirectoryPickerCallback();
+        SetupUICallbacks();
 
         if (SettingsManager.AppSettings.WindowStateOnStart == WindowState.Fullscreen)
             SetFullscreen(true);
@@ -314,9 +315,26 @@ public partial class SdlCore : IDisposable
         });
     }
 
-    private void SetupDirectoryPickerCallback()
+    private void SetupUICallbacks()
     {
-        _renderer.UIManager.DirectoryPicked += OnDirectoryPicked;
+        var events = _renderer.UIManager.Events;
+
+        // User-driven UI events (menu clicks, tree picks, dropdown changes)
+        events.OpenFileRequested      += OnOpenFileRequested;
+        events.OpenDirectoryRequested += OnOpenDirectoryRequested;
+        events.QuitRequested          += ExitApplication;
+        events.FullscreenRequested    += ToggleFullscreen;
+        events.DirectoryPicked        += OnDirectoryPicked;
+
+        // Dropdown changes route into ViewState (single source of truth).
+        events.BackgroundModeChanged  += _viewState.SetBackgroundMode;
+        events.SamplingModeChanged    += _viewState.SetSamplingMode;
+
+        // ViewState changes auto-sync the dropdowns. UIManager.Set* is
+        // documented as not re-firing, and ViewState's equality guard
+        // is a second line of defense against feedback loops.
+        _viewState.BackgroundModeChanged += _renderer.UIManager.SetBackgroundMode;
+        _viewState.SamplingModeChanged   += _renderer.UIManager.SetSamplingMode;
     }
 
     private void OnCompositeProgress(Composite c)
@@ -352,8 +370,7 @@ public partial class SdlCore : IDisposable
         if (_composite is not null)
             _composite.ProgressChanged -= OnCompositeProgress;
 
-        var userSettings = _renderer.ExportUiSettings();
-        SettingsManager.SaveUiSettings(userSettings);
+        SettingsManager.SaveUiSettings(_viewState.Export());
 
         _renderer.Dispose();
         ImageStore.SaveAndDispose();

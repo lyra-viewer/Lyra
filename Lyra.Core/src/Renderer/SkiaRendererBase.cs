@@ -23,13 +23,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     private DisplayMode _displayMode = DisplayMode.Undefined;
     private int _zoomPercentage = 100;
 
-    private SamplingMode _samplingMode;
-    private BackgroundMode _backgroundMode;
-
-    private bool _infoVisible;
-    private bool _helpVisible;
-    private bool _sidebarVisible;
-
+    private readonly ViewState _viewState;
     private readonly ICompositeContentDrawer _contentDrawer;
     private readonly IDropProgressProvider _dropProgressProvider;
 
@@ -37,9 +31,13 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     private readonly string _backend;
 
-    protected SkiaRendererBase(PixelSize drawableSize, IDropProgressProvider dropProgressProvider, string backend)
+    protected SkiaRendererBase(PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, string backend)
     {
+        ArgumentNullException.ThrowIfNull(dropProgressProvider);
+        ArgumentNullException.ThrowIfNull(viewState);
+
         _backend = backend;
+        _viewState = viewState;
 
         WindowWidth = drawableSize.PixelWidth;
         WindowHeight = drawableSize.PixelHeight;
@@ -50,12 +48,6 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         Subscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
 
         _contentDrawer = new SkiaCompositeContentDrawer();
-
-        _samplingMode = SettingsManager.UiSettings.SamplingMode;
-        _backgroundMode = SettingsManager.UiSettings.BackgroundMode;
-        _infoVisible = SettingsManager.UiSettings.InfoVisible;
-        _helpVisible = SettingsManager.UiSettings.HelpVisible;
-        _sidebarVisible = SettingsManager.UiSettings.SidebarVisible;
 
         UIManager = new UIManager(DisplayScale);
     }
@@ -114,7 +106,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     private void RenderBackground(SKCanvas canvas)
     {
-        switch (_backgroundMode)
+        switch (_viewState.BackgroundMode)
         {
             case BackgroundMode.White:
                 canvas.Clear(SKColors.White);
@@ -134,7 +126,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         if (_composite?.Content == null)
             return;
 
-        var sampling = _samplingMode switch
+        var sampling = _viewState.SamplingMode switch
         {
             SamplingMode.Linear => new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear),
             SamplingMode.Nearest => new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.Nearest),
@@ -194,7 +186,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     /// </summary>
     private void UpdateStatusOverlay()
     {
-        var textColor = _backgroundMode == BackgroundMode.White ? SKColors.Black : SKColors.White;
+        var textColor = _viewState.BackgroundMode == BackgroundMode.White ? SKColors.Black : SKColors.White;
 
         var drop = _dropProgressProvider.GetDropStatus();
         if (drop is { Active: true, FilesEnumerated: > 300 })
@@ -253,9 +245,9 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             Zoom = _zoomPercentage,
             DisplayMode = _displayMode,
             SamplingMode = GetSamplingModeDescription(),
-            InfoVisible = _infoVisible,
-            HelpVisible = _helpVisible,
-            SidebarVisible = _sidebarVisible,
+            InfoVisible = _viewState.InfoVisible,
+            HelpVisible = _viewState.HelpVisible,
+            SidebarVisible = _viewState.SidebarVisible,
             DropActive = drop.Active,
             DropAborted = drop.Aborted,
             DropPathsEnqueued = drop.PathsEnqueued,
@@ -269,7 +261,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     {
         return _composite?.Content?.Kind == CompositeContentKind.Vector
             ? "Disabled (resolution-independent)"
-            : _samplingMode.Description();
+            : _viewState.SamplingMode.Description();
     }
 
     public void OnDrawableSizeChanged(DrawableSizeChangedEvent e)
@@ -291,26 +283,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     public void SetDisplayMode(DisplayMode displayMode) => _displayMode = displayMode;
 
     public void SetZoom(int zoomPercentage) => _zoomPercentage = zoomPercentage;
-
-    public void ToggleSampling()
-    {
-        if (_composite?.Content?.Kind != CompositeContentKind.Vector)
-            _samplingMode = (SamplingMode)(((int)_samplingMode + 1) % Enum.GetValues<SamplingMode>().Length);
-    }
-
-    public void ToggleBackground()
-        => _backgroundMode = (BackgroundMode)(((int)_backgroundMode + 1) % Enum.GetValues<BackgroundMode>().Length);
-
-    public void ToggleInfo() => _infoVisible = !_infoVisible;
-
-    public void ToggleHelp() => _helpVisible = !_helpVisible;
-
-    public void ToggleSidebar() => _sidebarVisible = !_sidebarVisible;
-
-    public UISettings ExportUiSettings()
-    {
-        return new UISettings(_samplingMode, _backgroundMode, _infoVisible, _helpVisible, _sidebarVisible);
-    }
+    
+    public bool IsCompositeVector => _composite?.Content?.Kind == CompositeContentKind.Vector;
 
     public virtual void Dispose()
     {

@@ -28,6 +28,18 @@ public partial class SdlCore
     private const int BatchSize = 256;
     private const int DropStatsUpdateIntervalMs = 250;
 
+    private void IngestPaths(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0)
+            return;
+
+        OnDropBegin();
+        foreach (var p in paths)
+            EnqueueDroppedPath(p);
+        
+        OnDropComplete();
+    }
+    
     private void OnDropBegin()
     {
         Logger.Info("[DragAndDrop] File drop started.");
@@ -60,12 +72,16 @@ public partial class SdlCore
 
     private void OnDropFile(Event e)
     {
+        var path = Marshal.PtrToStringUTF8(e.Drop.Data);
+        EnqueueDroppedPath(path);
+    }
+
+    private void EnqueueDroppedPath(string? path)
+    {
         var session = _drop;
         if (session is null || !session.AcceptFiles)
             return;
 
-        var droppedFilePtr = e.Drop.Data;
-        var path = Marshal.PtrToStringUTF8(droppedFilePtr);
         if (string.IsNullOrWhiteSpace(path))
             return;
 

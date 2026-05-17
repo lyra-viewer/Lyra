@@ -1,7 +1,9 @@
+using Lyra.Common.Settings.Enums;
 using Lyra.FileLoader;
 using Lyra.Renderer.GUI.Sections;
 using Lyra.Renderer.GUI.Support;
 using Lyra.UI;
+using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Layout;
 using Lyra.UI.SupportingTypes;
@@ -18,9 +20,15 @@ namespace Lyra.Renderer.GUI.Layers;
 //  Refresh() pushes UIState to all sections and updates visibility.
 //  Debug helpers expose the debug section for input diagnostics
 //  without leaking section internals to UIManager.
+//
+//  Layout is driven by a single _entries table that declares each
+//  section's placement (LeftPane vs Sidebar) and whether its
+//  Collapsible should flex with available height.
 // ============================================================================
-public class MainLayer : IDisposable
+public class MainLayer : IUIEvents, IDisposable
 {
+    private const float SidebarSpacing = 4f;
+
     private readonly UIContext _context;
     private readonly KeyColumnRegistry _keyColumnRegistry = new();
 
@@ -34,26 +42,27 @@ public class MainLayer : IDisposable
     private readonly HelpSection _helpSection;
     private readonly DebugSection _debugSection;
 
-    private readonly IUISection[] _sections;
-
+    private readonly SectionEntry[] _entries;
     private readonly VStack _sidebar;
 
     private UIState? _lastState;
 
     public Layer Layer { get; }
 
-    /// <summary>
-    /// Fired when the user picks a directory in the sidebar tree.
-    /// Parameter is the normalized absolute directory path.
-    /// </summary>
+    public event Action? OpenFileRequested;
+    public event Action? OpenDirectoryRequested;
+    public event Action? FullscreenRequested;
+    public event Action? QuitRequested;
     public event Action<string>? DirectoryPicked;
+    public event Action<BackgroundMode>? BackgroundModeChanged;
+    public event Action<SamplingMode>? SamplingModeChanged;
 
     public MainLayer(UIContext context)
     {
         _context = context;
 
         _infoSection = new InfoSection();
-        _menuSection = new MenuSection();
+        _menuSection = new MenuSection(_context);
         _directoryTreeSection = new DirectoryTreeSection();
         _exifSection = new ExifSection(_keyColumnRegistry);
         _formatSection = new FormatSection(_keyColumnRegistry);
@@ -62,19 +71,26 @@ public class MainLayer : IDisposable
         _debugSection = new DebugSection();
 
         // Cross-section wiring
-        _menuSection.ButtonClicked += text => _debugSection.SetAction(text);
+        _menuSection.OpenFileClicked += () => OnMenu("OPEN", OpenFileRequested);
+        _menuSection.OpenDirectoryClicked += () => OnMenu("OPEN DIR", OpenDirectoryRequested);
+        _menuSection.FullscreenClicked += () => OnMenu("FULL SCREEN", FullscreenRequested);
+        _menuSection.QuitClicked += () => OnMenu("QUIT", QuitRequested);
+        _menuSection.BackgroundModeChanged += mode => OnMenu("BACKGROUND", BackgroundModeChanged, mode);
+        _menuSection.SamplingModeChanged += mode => OnMenu("SAMPLING", SamplingModeChanged, mode);
         _directoryTreeSection.DirectoryPicked += path => DirectoryPicked?.Invoke(path);
 
-        _sections =
+        // Single source of truth for section layout.
+        // Order within Sidebar entries determines vertical display order.
+        _entries =
         [
-            _infoSection,
-            _menuSection,
-            _directoryTreeSection,
-            _exifSection,
-            _formatSection,
-            _layersSection,
-            _helpSection,
-            _debugSection
+            new SectionEntry(_infoSection, SectionPlacement.LeftPane),
+            new SectionEntry(_menuSection, SectionPlacement.Sidebar),
+            new SectionEntry(_directoryTreeSection, SectionPlacement.Sidebar, _directoryTreeSection.Collapsible),
+            new SectionEntry(_exifSection, SectionPlacement.Sidebar, _exifSection.Collapsible),
+            new SectionEntry(_formatSection, SectionPlacement.Sidebar, _formatSection.Collapsible),
+            new SectionEntry(_layersSection, SectionPlacement.Sidebar, _layersSection.Collapsible),
+            new SectionEntry(_debugSection, SectionPlacement.Sidebar),
+            new SectionEntry(_helpSection, SectionPlacement.LeftPane),
         ];
 
         _sidebar = BuildSidebar();
@@ -116,11 +132,35 @@ public class MainLayer : IDisposable
 
         _keyColumnRegistry.BeginFrame();
 
-        foreach (var section in _sections)
-            section.Refresh(state);
+        foreach (var entry in _entries)
+            entry.Section.Refresh(state);
 
         _context.Invalidate();
     }
+
+    // --------------------------------------------------------
+    //  Menu event helpers
+    // --------------------------------------------------------
+
+    private void OnMenu(string action, Action? invoke)
+    {
+        _debugSection.SetAction(action);
+        invoke?.Invoke();
+    }
+
+    private void OnMenu<T>(string actionPrefix, Action<T>? invoke, T value)
+    {
+        _debugSection.SetAction($"{actionPrefix} {value}");
+        invoke?.Invoke(value);
+    }
+
+    // --------------------------------------------------------
+    //  Programmatic dropdown sync (driven by keyboard toggles)
+    // --------------------------------------------------------
+
+    public void SetBackgroundMode(BackgroundMode mode) => _menuSection.SetBackgroundMode(mode);
+
+    public void SetSamplingMode(SamplingMode mode) => _menuSection.SetSamplingMode(mode);
 
     // --------------------------------------------------------
     //  Debug helpers
@@ -128,7 +168,7 @@ public class MainLayer : IDisposable
 
     public void SetDebugPointer(float x, float y) => _debugSection.SetPointer(x, y);
 
-    public void SetDebugHit(string description) => _debugSection.SetHit(description);
+    public void SetDebugHover(IComponent? hovered) => _debugSection.SetHover(hovered);
 
     // --------------------------------------------------------
     //  Tree construction
@@ -169,18 +209,17 @@ public class MainLayer : IDisposable
 
     private VStack BuildSidebar()
     {
+        var sidebarEntries = _entries
+            .Where(e => e.Placement == SectionPlacement.Sidebar)
+            .ToArray();
+
         // Data-bearing collapsibles participate in surplus distribution
         // when expanded, but collapse to header-only when closed.
-        Collapsible[] flexibleCollapsibles =
-        [
-            _directoryTreeSection.Collapsible,
-            _exifSection.Collapsible,
-            _formatSection.Collapsible,
-            _layersSection.Collapsible
-        ];
-
-        foreach (var c in flexibleCollapsibles)
+        foreach (var entry in sidebarEntries)
         {
+            if (entry.Flexible is not { } c)
+                continue;
+
             c.VerticalSize = c.IsExpanded ? SizeMode.Flexible : SizeMode.Shrink;
             c.Toggled += () => c.VerticalSize = c.IsExpanded ? SizeMode.Flexible : SizeMode.Shrink;
         }
@@ -195,22 +234,13 @@ public class MainLayer : IDisposable
             MaxWidth = 800,
             ResizeEdges = ResizeEdge.Left,
             Spacing = SidebarSpacing,
-            Padding = new Padding(8),
+            Padding = new Padding(4),
             BackgroundColor = Palette.Panel
         };
-        sidebar.AddComponents(
-            _menuSection.Root,
-            _directoryTreeSection.Root,
-            _exifSection.Root,
-            _formatSection.Root,
-            _layersSection.Root,
-            _debugSection.Root
-        );
+        sidebar.AddComponents(sidebarEntries.Select(e => e.Section.Root).ToArray());
 
         return sidebar;
     }
-
-    private const float SidebarSpacing = 4f;
 
     // --------------------------------------------------------
     //  Dispose
@@ -218,12 +248,24 @@ public class MainLayer : IDisposable
 
     public void Dispose()
     {
-        foreach (var section in _sections)
+        foreach (var entry in _entries)
         {
-            if (section is IDisposable disposable)
+            if (entry.Section is IDisposable disposable)
                 disposable.Dispose();
         }
 
         // Component tree disposed by Layer via UIContext.Dispose.
     }
+
+    // --------------------------------------------------------
+    //  Layout descriptor types
+    // --------------------------------------------------------
+
+    private enum SectionPlacement
+    {
+        LeftPane,
+        Sidebar
+    }
+
+    private record SectionEntry(IUISection Section, SectionPlacement Placement, Collapsible? Flexible = null);
 }

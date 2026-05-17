@@ -74,7 +74,7 @@ public partial class SdlCore
             scanAction.Invoke();
         }
     }
-    
+
     private void HandleEscape()
     {
         if (_dropProgressTracker.GetDropStatus().Active)
@@ -141,19 +141,19 @@ public partial class SdlCore
             LoadImage(NavigationDirection.Forward);
         }
     }
-    
+
     private int _lastWindowWidth;
     private int _lastWindowHeight;
     private int _lastWindowX;
     private int _lastWindowY;
-    
+
     private void ToggleFullscreen() => SetFullscreen(!_isFullscreen);
-    
+
     private void SetFullscreen(bool fullscreen)
     {
         if (fullscreen == _isFullscreen)
             return;
-        
+
         if (fullscreen)
         {
             GetWindowSize(_window, out _lastWindowWidth, out _lastWindowHeight);
@@ -182,28 +182,19 @@ public partial class SdlCore
 
     private void ToggleSampling()
     {
-        _renderer.ToggleSampling();
+        if (_renderer.IsCompositeVector)
+            return;
+
+        _viewState.ToggleSampling();
     }
 
-    private void ToggleBackground()
-    {
-        _renderer.ToggleBackground();
-    }
+    private void ToggleBackground() => _viewState.ToggleBackground();
 
-    private void ToggleInfo()
-    {
-        _renderer.ToggleInfo();
-    }
+    private void ToggleInfo() => _viewState.ToggleInfo();
 
-    private void ToggleHelp()
-    {
-        _renderer.ToggleHelp();
-    }
+    private void ToggleHelp() => _viewState.ToggleHelp();
 
-    private void ToggleSidebar()
-    {
-        _renderer.ToggleSidebar();
-    }
+    private void ToggleSidebar() => _viewState.ToggleSidebar();
 
     private void OpenFileExplorer()
     {
@@ -270,7 +261,7 @@ public partial class SdlCore
         _panHelper.Clamp();
         _renderer.SetOffset(_panHelper.CurrentOffset);
     }
-    
+
     private static int GetNextZoom(int currentZoom, float direction)
     {
         // direction > 0 → zoom in

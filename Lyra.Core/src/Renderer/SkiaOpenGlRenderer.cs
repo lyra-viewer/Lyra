@@ -1,4 +1,5 @@
 using Lyra.Common;
+using Lyra.Common.Settings;
 using Lyra.DropStatusProvider;
 using Lyra.SdlCore;
 using SkiaSharp;
@@ -16,8 +17,8 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
     private GRBackendRenderTarget? _renderTarget;
     private bool _surfaceDirty = true;
 
-    public SkiaOpenGlRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider)
-        : base(drawableSize, dropProgressProvider, "OpenGL")
+    public SkiaOpenGlRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState)
+        : base(drawableSize, dropProgressProvider, viewState, "OpenGL")
     {
         _window = window;
 
