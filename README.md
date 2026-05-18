@@ -20,6 +20,7 @@
     - [PSD Color Mode Support](#psd-color-mode-support)
     - [PSB Support](#psb-support)
     - [ICC Color Profiles](#icc-color-profiles)
+    - [Displayed PSD Information](#displayed-psd-information)
     - [Future Direction](#future-direction)
 - [Keyboard Shortcuts & Controls](#keyboard-shortcuts--controls)
     - [macOS Specific](#macos-specific)
@@ -33,6 +34,8 @@
     - [Data](#data)
 
 ## Overview
+
+![Screenshot](docs/images/screenshot.png)
 
 Lyra is a high-performance, minimalist image viewer designed for speed, fluid navigation, and precision.
 It handles modern and professional image formats without the overhead of full editing suites or Electron-based tools.
@@ -188,6 +191,21 @@ heuristic or hard-coded CMYK assumptions.
 > This behavior is not a defect of the files themselves, but a direct consequence of CMYK data being interpreted
 > without a defined color profile.
 
+### Displayed PSD Information
+
+When viewing a PSD or PSB file, Lyra surfaces document-level metadata and the full layer hierarchy through dedicated
+sidebar sections. This information is extracted directly from the binary file structure during decoding.
+
+**PSD Layers**
+
+The **PSD Layers** section presents the full layer hierarchy as a tree view, reconstructed from the flat layer record
+list stored in the file. Groups are displayed with their child count and can be expanded or collapsed.
+
+This display is read-only and independent of the flattened composite decode - Lyra does not render individual
+layer contents, but provides the structural overview that is otherwise only visible inside Photoshop.
+
+<img src="docs/images/psd-gui-example.png" width="400">
+
 ### Future Direction
 
 The PSD decoder is intentionally structured to allow future expansion.
@@ -297,5 +315,3 @@ If any configuration file is missing or malformed, Lyra falls back to built-in d
 Deleting everything under these directories is always safe - Lyra will start fresh with default settings.
 
 ---
-
-![Screenshot](docs/images/screenshot.jpg)
