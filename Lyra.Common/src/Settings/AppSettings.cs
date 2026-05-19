@@ -8,7 +8,8 @@ public readonly record struct AppSettings(
     MidMouseButtonFunction MidMouseButtonFunction,
     int InfoTextSize,
     int HelpTextSize,
-    bool PreserveUiSettings
+    bool PreserveUiSettings,
+    bool Debug
 )
 {
     public static readonly AppSettings DefaultAppSettings = new(
@@ -17,6 +18,7 @@ public readonly record struct AppSettings(
         MidMouseButtonFunction.Pan,
         14,
         12,
-        PreserveUiSettings: true
+        PreserveUiSettings: true,
+        Debug: false
     );
 }

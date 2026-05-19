@@ -69,6 +69,9 @@ public static class SettingsManager
                 info_text_size = {s.InfoTextSize}
                 help_text_size = {s.HelpTextSize}
                 
+                # Debug mode:
+                debug = {s.Debug.ToString().ToLowerInvariant()}
+                
                 """;
     }
 
@@ -92,6 +95,7 @@ public static class SettingsManager
         var helpTextSize = Math.Clamp(GetInt(table, "help_text_size", DefaultAppSettings.HelpTextSize), 4, 72);
         
         var preserveUi = GetBool(table, "preserve_ui_settings", DefaultAppSettings.PreserveUiSettings);
+        var debug = GetBool(table, "debug", DefaultAppSettings.Debug);
         
         var renderer = DefaultAppSettings.Renderer;
         if (TryParseByAlias(rendererAlias, out Backend parsedBackend))
@@ -111,7 +115,7 @@ public static class SettingsManager
         else
             Logger.Warning($"[SettingsManager] Unknown mid_mouse_button_function '{midAlias}', using default '{midMouseButton.Alias()}'");
 
-        AppSettings = new AppSettings(renderer, windowState, midMouseButton, infoTextSize, helpTextSize, preserveUi);
+        AppSettings = new AppSettings(renderer, windowState, midMouseButton, infoTextSize, helpTextSize, preserveUi, debug);
     }
 
     private static void LoadUiSettings()

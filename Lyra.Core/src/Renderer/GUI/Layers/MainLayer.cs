@@ -1,3 +1,4 @@
+using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
 using Lyra.FileLoader;
 using Lyra.Renderer.GUI.Sections;
@@ -92,6 +93,12 @@ public class MainLayer : IUIEvents, IDisposable
             new SectionEntry(_debugSection, SectionPlacement.Sidebar),
             new SectionEntry(_helpSection, SectionPlacement.LeftPane),
         ];
+        
+#if DEBUG
+        _debugSection.Root.Present = true;
+#else
+        _debugSection.Root.Present = SettingsManager.AppSettings.Debug;
+#endif
 
         _sidebar = BuildSidebar();
         Layer = BuildLayer();
