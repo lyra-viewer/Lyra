@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using HarfBuzzSharp;
 using LibHeifSharp;
 using Lyra.Common;
 using SDL3;
@@ -64,6 +65,11 @@ internal static class NativeLibraryLoader
                 "SKIA", RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "libSkiaSharp.dll" :
                 RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "libSkiaSharp.so" :
                 "libSkiaSharp.dylib"
+            },
+            {
+                "HBSHARP", RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "libHarfBuzzSharp.dll" :
+                RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "libHarfBuzzSharp.so" :
+                "libHarfBuzzSharp.dylib"
             }
 #endif
         };
@@ -178,6 +184,7 @@ internal static class NativeLibraryLoader
 
 #if !DEBUG
         NativeLibrary.SetDllImportResolver(typeof(SKImage).Assembly, ResolveSkia);
+        NativeLibrary.SetDllImportResolver(typeof(Blob).Assembly, ResolveHarfBuzz);
 #endif
     }
 
@@ -202,6 +209,15 @@ internal static class NativeLibraryLoader
         return libraryName switch
         {
             "libSkiaSharp" or "libSkiaSharp.dll" or "libSkiaSharp.so" or "libSkiaSharp.dylib" => TryLoad("SKIA"),
+            _ => IntPtr.Zero
+        };
+    }
+
+    private static IntPtr ResolveHarfBuzz(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+    {
+        return libraryName switch
+        {
+            "libHarfBuzzSharp" or "libHarfBuzzSharp.dll" or "libHarfBuzzSharp.so" or "libHarfBuzzSharp.dylib" => TryLoad("HBSHARP"),
             _ => IntPtr.Zero
         };
     }
