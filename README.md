@@ -170,6 +170,8 @@ Lyra fully supports PSB (Photoshop Big Document Format) files.
 - Successfully tested with ~3 GB PSB files
 - Uses streaming / tiled decoding internally where possible to avoid loading entire images eagerly
 
+![PSB Large](docs/images/psd-large.png)
+
 ### ICC Color Profiles
 
 Lyra honors embedded ICC color profiles whenever they are present.
