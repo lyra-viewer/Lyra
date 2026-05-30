@@ -4,50 +4,91 @@ namespace Lyra.UI.Theme;
 
 public static class Palette
 {
-    // Backgrounds
-    public static readonly SKColor Background = new(38, 40, 43);
     public static readonly SKColor Transparent = new(0, 0, 0, 0);
+    
+    public static readonly Theme Default = new()
+    {
+        Background          = new SKColor(38, 40, 43),
+
+        Foreground          = new SKColor(205, 208, 212),
+        Muted               = new SKColor(165, 168, 172),
+        Dim                 = new SKColor(135, 138, 143),
+
+        SelectedForeground  = new SKColor(235, 175, 70),
+        SelectedBackground  = new SKColor(255, 255, 255, 25),
+        ForegroundDark      = new SKColor(28, 30, 33),
+
+        Primary             = new SKColor(82, 86, 92),
+        HoverPrimary        = new SKColor(72, 76, 82),
+        PressedPrimary      = new SKColor(62, 66, 72),
+
+        Disabled            = new SKColor(0, 0, 0, 102),
+
+        Accent              = new SKColor(238, 240, 243),
+        HoverAccent         = new SKColor(218, 220, 223),
+        PressedAccent       = new SKColor(198, 200, 203),
+
+        Danger              = new SKColor(155, 45, 45),
+        HoverDanger         = new SKColor(170, 55, 55),
+        PressedDanger       = new SKColor(135, 38, 38),
+
+        Subtle              = new SKColor(255, 255, 255, 10),
+        HoverSubtle         = new SKColor(255, 255, 255, 30),
+        PressedSubtle       = new SKColor(255, 255, 255, 40),
+
+        Border              = new SKColor(255, 255, 255, 25),
+        BorderActive        = new SKColor(255, 255, 255, 60),
+
+        Panel               = new SKColor(22, 24, 27, 220),
+    };
+
+    private static Theme _current = Default;
+
+    public static void Apply(Theme theme) => _current = theme;
+
+    // Backgrounds
+    public static SKColor Background => _current.Background;
 
     // Text
-    public static readonly SKColor Foreground = new(205, 208, 212);
-    public static readonly SKColor Muted = new(165, 168, 172);
-    public static readonly SKColor Dim = new(135, 138, 143);
+    public static SKColor Foreground => _current.Foreground;
+    public static SKColor Muted => _current.Muted;
+    public static SKColor Dim => _current.Dim;
 
     // Solid amber accent
-    public static readonly SKColor SelectedForeground = new(235, 175, 70);
+    public static SKColor SelectedForeground => _current.SelectedForeground;
 
     // Selection / pick highlight
-    public static readonly SKColor SelectedBackground = new(255, 255, 255, 25);
+    public static SKColor SelectedBackground => _current.SelectedBackground;
 
     // Text on light backgrounds
-    public static readonly SKColor ForegroundDark = new(28, 30, 33);
+    public static SKColor ForegroundDark => _current.ForegroundDark;
 
     // Default (secondary) button — hover/pressed go DARKER (preserved convention)
-    public static readonly SKColor Primary = new(82, 86, 92);
-    public static readonly SKColor HoverPrimary = new(72, 76, 82);
-    public static readonly SKColor PressedPrimary = new(62, 66, 72);
+    public static SKColor Primary => _current.Primary;
+    public static SKColor HoverPrimary => _current.HoverPrimary;
+    public static SKColor PressedPrimary => _current.PressedPrimary;
 
-    public static readonly SKColor Disabled = new(0, 0, 0, 102);
+    public static SKColor Disabled => _current.Disabled;
 
     // Accent (primary) button
-    public static readonly SKColor Accent = new(238, 240, 243);
-    public static readonly SKColor HoverAccent = new(218, 220, 223);
-    public static readonly SKColor PressedAccent = new(198, 200, 203);
+    public static SKColor Accent => _current.Accent;
+    public static SKColor HoverAccent => _current.HoverAccent;
+    public static SKColor PressedAccent => _current.PressedAccent;
 
     // Danger
-    public static readonly SKColor Danger = new(155, 45, 45);
-    public static readonly SKColor HoverDanger = new(170, 55, 55);
-    public static readonly SKColor PressedDanger = new(135, 38, 38);
+    public static SKColor Danger => _current.Danger;
+    public static SKColor HoverDanger => _current.HoverDanger;
+    public static SKColor PressedDanger => _current.PressedDanger;
 
     // Subtle
-    public static readonly SKColor Subtle = new(255, 255, 255, 10);
-    public static readonly SKColor HoverSubtle = new(255, 255, 255, 30);
-    public static readonly SKColor PressedSubtle = new(255, 255, 255, 40);
+    public static SKColor Subtle => _current.Subtle;
+    public static SKColor HoverSubtle => _current.HoverSubtle;
+    public static SKColor PressedSubtle => _current.PressedSubtle;
 
     // Borders
-    public static readonly SKColor Border = new(255, 255, 255, 25);
-    public static readonly SKColor BorderActive = new(255, 255, 255, 60);
+    public static SKColor Border => _current.Border;
+    public static SKColor BorderActive => _current.BorderActive;
 
     // Panels / surfaces
-    public static readonly SKColor Panel = new(22, 24, 27, 220);
+    public static SKColor Panel => _current.Panel;
 }

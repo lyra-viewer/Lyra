@@ -14,6 +14,10 @@ static class Program
         NativeLibraryLoader.Initialize();
         SettingsManager.LoadSettings();
 
+        // NOTE: Some earlier Debug logs might escape capture in Release builds due to execution order.
+        if (SettingsManager.AppSettings.Debug)
+            Logger.SetLogDebugMode(true);
+
         try
         {
             using var viewer = new SdlCore.SdlCore();
@@ -31,7 +35,6 @@ static class Program
         Logger.SetLogDebugMode(true);
         Logger.SetLogStrategy(Logger.LogStrategy.Both);
 #else
-        Logger.SetLogDebugMode(false);
         Logger.SetLogStrategy(Logger.LogStrategy.File);
 #endif
         Logger.ClearLog();

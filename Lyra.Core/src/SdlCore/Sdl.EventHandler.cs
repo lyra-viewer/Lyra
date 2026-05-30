@@ -77,7 +77,7 @@ public partial class SdlCore
     private void OnWindowResized()
     {
         var bounds = DimensionHelper.GetDrawableSize(_window);
-        Logger.Debug($"[EventHandler] Drawable size changed: {bounds.PixelWidth}x{bounds.PixelHeight}; Scale: x{bounds.Scale}");
+        Logger.Info($"[EventHandler] Drawable size changed: {bounds.PixelWidth}x{bounds.PixelHeight}; Scale: x{bounds.Scale}");
 
         if (_displayMode == DisplayMode.FitToScreen && _composite != null)
             UpdateFitToScreen();

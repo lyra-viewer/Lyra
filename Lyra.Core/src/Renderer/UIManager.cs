@@ -1,8 +1,11 @@
+using Lyra.Common;
+using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
 using Lyra.Renderer.GUI;
 using Lyra.Renderer.GUI.Layers;
 using Lyra.UI;
 using Lyra.UI.SupportingTypes;
+using Lyra.UI.Theme;
 using SkiaSharp;
 
 namespace Lyra.Renderer;
@@ -38,11 +41,62 @@ public class UIManager : IDisposable
     public UIManager(float displayScale)
     {
         DisplayScale = displayScale;
+        
+        LoadConfiguredTheme();
 
         // Layers are added in bottom-to-top order.
         _statusLayer = new StatusLayer(_context);
         _mainLayer = new MainLayer(_context);
     }
+
+    private static void LoadConfiguredTheme()
+    {
+        var colors = ThemeLoader.LoadColors(SettingsManager.AppSettings.Theme);
+        Palette.Apply(BuildTheme(colors));
+    }
+
+    private static Theme BuildTheme(IReadOnlyDictionary<string, Color32> c)
+    {
+        var d = Palette.Default;
+        return new Theme
+        {
+            Background          = Pick(c, "background", d.Background),
+
+            Foreground          = Pick(c, "foreground", d.Foreground),
+            Muted               = Pick(c, "muted", d.Muted),
+            Dim                 = Pick(c, "dim", d.Dim),
+
+            SelectedForeground  = Pick(c, "selected_foreground", d.SelectedForeground),
+            SelectedBackground  = Pick(c, "selected_background", d.SelectedBackground),
+            ForegroundDark      = Pick(c, "foreground_dark", d.ForegroundDark),
+
+            Primary             = Pick(c, "primary", d.Primary),
+            HoverPrimary        = Pick(c, "hover_primary", d.HoverPrimary),
+            PressedPrimary      = Pick(c, "pressed_primary", d.PressedPrimary),
+
+            Disabled            = Pick(c, "disabled", d.Disabled),
+
+            Accent              = Pick(c, "accent", d.Accent),
+            HoverAccent         = Pick(c, "hover_accent", d.HoverAccent),
+            PressedAccent       = Pick(c, "pressed_accent", d.PressedAccent),
+
+            Danger              = Pick(c, "danger", d.Danger),
+            HoverDanger         = Pick(c, "hover_danger", d.HoverDanger),
+            PressedDanger       = Pick(c, "pressed_danger", d.PressedDanger),
+
+            Subtle              = Pick(c, "subtle", d.Subtle),
+            HoverSubtle         = Pick(c, "hover_subtle", d.HoverSubtle),
+            PressedSubtle       = Pick(c, "pressed_subtle", d.PressedSubtle),
+
+            Border              = Pick(c, "border", d.Border),
+            BorderActive        = Pick(c, "border_active", d.BorderActive),
+
+            Panel               = Pick(c, "panel", d.Panel),
+        };
+    }
+
+    private static SKColor Pick(IReadOnlyDictionary<string, Color32> colors, string key, SKColor fallback)
+        => colors.TryGetValue(key, out var c) ? new SKColor(c.R, c.G, c.B, c.A) : fallback;
 
     // --------------------------------------------------------
     //  Status overlay

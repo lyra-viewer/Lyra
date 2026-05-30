@@ -9,7 +9,8 @@ public readonly record struct AppSettings(
     int InfoTextSize,
     int HelpTextSize,
     bool PreserveUiSettings,
-    bool Debug
+    bool Debug,
+    string Theme
 )
 {
     public static readonly AppSettings DefaultAppSettings = new(
@@ -19,6 +20,7 @@ public readonly record struct AppSettings(
         14,
         12,
         PreserveUiSettings: true,
-        Debug: false
+        Debug: false,
+        Theme: ""
     );
 }

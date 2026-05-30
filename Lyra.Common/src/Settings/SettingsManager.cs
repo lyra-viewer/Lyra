@@ -15,7 +15,7 @@ public static class SettingsManager
     private static readonly string AppSettingsFilepath = LyraIO.GetAppSettingsFile();
     private static readonly string UiSettingsFilepath = LyraIO.GetUiSettingsFile();
 
-    private const int CurrentVersion = 3;
+    private const int CurrentVersion = 4;
 
     public static AppSettings AppSettings = DefaultAppSettings;
     public static UISettings UiSettings = DefaultUiSettings;
@@ -69,9 +69,13 @@ public static class SettingsManager
                 info_text_size = {s.InfoTextSize}
                 help_text_size = {s.HelpTextSize}
                 
+                # Active theme (file name in the themes/ directory, without extension).
+                # Leave blank to use the built-in default palette.
+                theme = "{s.Theme}"
+                
                 # Debug mode:
                 debug = {s.Debug.ToString().ToLowerInvariant()}
-                
+
                 """;
     }
 
@@ -96,7 +100,8 @@ public static class SettingsManager
         
         var preserveUi = GetBool(table, "preserve_ui_settings", DefaultAppSettings.PreserveUiSettings);
         var debug = GetBool(table, "debug", DefaultAppSettings.Debug);
-        
+        var theme = GetString(table, "theme", DefaultAppSettings.Theme);
+
         var renderer = DefaultAppSettings.Renderer;
         if (TryParseByAlias(rendererAlias, out Backend parsedBackend))
             renderer = parsedBackend;
@@ -115,7 +120,7 @@ public static class SettingsManager
         else
             Logger.Warning($"[SettingsManager] Unknown mid_mouse_button_function '{midAlias}', using default '{midMouseButton.Alias()}'");
 
-        AppSettings = new AppSettings(renderer, windowState, midMouseButton, infoTextSize, helpTextSize, preserveUi, debug);
+        AppSettings = new AppSettings(renderer, windowState, midMouseButton, infoTextSize, helpTextSize, preserveUi, debug, theme);
     }
 
     private static void LoadUiSettings()
