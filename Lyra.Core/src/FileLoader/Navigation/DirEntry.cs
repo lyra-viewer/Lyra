@@ -1,4 +1,4 @@
-namespace Lyra.FileLoader;
+namespace Lyra.FileLoader.Navigation;
 
 public record DirEntry(
     string Path,

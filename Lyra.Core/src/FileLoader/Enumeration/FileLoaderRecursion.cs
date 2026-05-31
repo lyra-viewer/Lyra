@@ -1,4 +1,4 @@
-namespace Lyra.FileLoader;
+namespace Lyra.FileLoader.Enumeration;
 
 public enum FileLoaderRecursion
 {

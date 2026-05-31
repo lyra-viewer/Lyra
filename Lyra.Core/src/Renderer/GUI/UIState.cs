@@ -1,4 +1,5 @@
 using Lyra.FileLoader;
+using Lyra.FileLoader.Navigation;
 using Lyra.Imaging.Content;
 
 namespace Lyra.Renderer.GUI;

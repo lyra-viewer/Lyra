@@ -51,30 +51,6 @@ public sealed class MenuSection : IUISection
         };
         openRow.AddComponents(openFileButton, openDirButton);
 
-        _backgroundDropdown = new DropDownMenu<BackgroundMode>(
-            popupHost,
-            Enum.GetValues<BackgroundMode>(),
-            m => m.Description(),
-            SettingsManager.UiSettings.BackgroundMode,
-            headerDisplay: m => $"BACKGROUND: {m.Description()}")
-        {
-            HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(0, 4f, 0, 0f)
-        };
-        _backgroundDropdown.SelectionChanged += mode => BackgroundModeChanged?.Invoke(mode);
-
-        _samplingDropdown = new DropDownMenu<SamplingMode>(
-            popupHost,
-            Enum.GetValues<SamplingMode>(),
-            m => m.Description(),
-            SettingsManager.UiSettings.SamplingMode,
-            headerDisplay: m => $"SAMPLING: {m.Description()}")
-        {
-            HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(0, 4f, 0, 0f)
-        };
-        _samplingDropdown.SelectionChanged += mode => SamplingModeChanged?.Invoke(mode);
-
         var fullscreenButton = new Button("FULL SCREEN")
         {
             CornerRadius = 0f,
@@ -94,16 +70,46 @@ public sealed class MenuSection : IUISection
             HorizontalSize = SizeMode.Expand,
             Spacing = 4f,
             Transient = true,
-            Padding = new Padding(0, 4f, 0, 12f)
+            Padding = new Padding(0, 4f, 0, 0)
         };
         quitRow.AddComponents(fullscreenButton, quitButton);
+
+        _backgroundDropdown = new DropDownMenu<BackgroundMode>(
+            popupHost,
+            Enum.GetValues<BackgroundMode>(),
+            m => m.Description(),
+            SettingsManager.UiSettings.BackgroundMode,
+            headerDisplay: m => $"BACKGROUND: {m.Description()}")
+        {
+            HorizontalSize = SizeMode.Expand,
+            Padding = new Padding(0, 4f, 0, 0)
+        };
+        _backgroundDropdown.SelectionChanged += mode => BackgroundModeChanged?.Invoke(mode);
+
+        _samplingDropdown = new DropDownMenu<SamplingMode>(
+            popupHost,
+            Enum.GetValues<SamplingMode>(),
+            m => m.Description(),
+            SettingsManager.UiSettings.SamplingMode,
+            headerDisplay: m => $"SAMPLING: {m.Description()}")
+        {
+            HorizontalSize = SizeMode.Expand,
+            Padding = new Padding(0, 4f, 0, 0f)
+        };
+        _samplingDropdown.SelectionChanged += mode => SamplingModeChanged?.Invoke(mode);
+
+        var bottomSeparator = new HStack
+        {
+            HorizontalSize = SizeMode.Expand,
+            Transient = true,
+            Padding = new Padding(0, 0, 0, 12f)
+        };
 
         var collapsible = new Collapsible("MENU")
         {
             HorizontalSize = SizeMode.Expand
         };
-        collapsible.AddComponents(openRow, _backgroundDropdown, _samplingDropdown, quitRow);
-
+        collapsible.AddComponents(openRow, quitRow, _backgroundDropdown, _samplingDropdown, bottomSeparator);
         Collapsible = collapsible;
     }
 

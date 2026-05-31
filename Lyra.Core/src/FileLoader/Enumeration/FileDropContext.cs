@@ -1,4 +1,4 @@
-namespace Lyra.FileLoader;
+namespace Lyra.FileLoader.Enumeration;
 
 public record struct FileDropContext(
     IReadOnlyList<string> ExplicitPaths,
