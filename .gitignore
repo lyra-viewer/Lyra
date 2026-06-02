@@ -11,7 +11,7 @@ packaging/
 publish/
 build.sh
 build-macos.sh
-build-brew.sh
+build-linux.sh
 build-macos-homebrew.sh
 publish.sh
 
@@ -45,6 +45,7 @@ x64/
 x86/
 build/
 build-brew/
+build-macos/
 bld/
 [Bb]in/
 [Oo]bj/
