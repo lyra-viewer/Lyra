@@ -45,6 +45,17 @@ internal class SkiaDecoder : IImageDecoder
             bitmap.Erase(SKColors.Transparent);
 
             var result = codec.GetPixels(bitmap.Info, bitmap.GetPixels());
+            
+            // Tries to repair if the image is truncated JPEG
+            if (result == SKCodecResult.InvalidInput)
+            {
+                var repaired = TryDecodeJpegWithEoiRepair(path, bitmap);
+                if (repaired.HasValue)
+                {
+                    result = repaired.Value;
+                    Logger.Warning($"[SkiaDecoder] Recovered truncated JPEG via EOI repair: {path}");
+                }
+            }
 
             if (result == SKCodecResult.IncompleteInput)
                 Logger.Warning($"[SkiaDecoder] Incomplete input (truncated image): {path}");
@@ -75,5 +86,31 @@ internal class SkiaDecoder : IImageDecoder
         }
 
         return Task.CompletedTask;
+    }
+    
+    private static SKCodecResult? TryDecodeJpegWithEoiRepair(string path, SKBitmap bitmap)
+    {
+        var bytes = File.ReadAllBytes(path);
+
+        // JPEG SOI marker (FF D8).
+        if (bytes.Length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8)
+            return null;
+
+        // Already has an EOI marker - nothing to repair.
+        if (bytes[^2] == 0xFF && bytes[^1] == 0xD9)
+            return null;
+
+        var repaired = new byte[bytes.Length + 2];
+        bytes.CopyTo(repaired, 0);
+        repaired[^2] = 0xFF;
+        repaired[^1] = 0xD9;
+
+        using var stream = new MemoryStream(repaired, writable: false);
+        using var codec = SKCodec.Create(stream);
+        if (codec == null)
+            return null;
+
+        bitmap.Erase(SKColors.Transparent);
+        return codec.GetPixels(bitmap.Info, bitmap.GetPixels());
     }
 }
