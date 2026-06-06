@@ -1,7 +1,7 @@
 using Lyra.Common;
 using Lyra.Imaging.Interop;
 
-namespace Lyra.Imaging.Codecs;
+namespace Lyra.Imaging.Decoding.Decoders;
 
 internal class HdrDecoder : FloatRgbaDecoderBase
 {

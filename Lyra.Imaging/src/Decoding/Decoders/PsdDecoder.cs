@@ -8,8 +8,9 @@ using Lyra.Psd.Core.Decode.Composite;
 using Lyra.Psd.Core.SectionData;
 using SkiaSharp;
 using static System.Threading.Thread;
+using Lyra.Imaging.Decoding.Support;
 
-namespace Lyra.Imaging.Codecs;
+namespace Lyra.Imaging.Decoding.Decoders;
 
 internal class PsdDecoder : IImageDecoder
 {

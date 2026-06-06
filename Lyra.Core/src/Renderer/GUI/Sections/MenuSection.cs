@@ -23,6 +23,7 @@ public sealed class MenuSection : IUISection
     public event Action? OpenDirectoryClicked;
     public event Action? FullscreenClicked;
     public event Action? QuitClicked;
+    public event Action? ShowDuplicatesFinderClicked;
     public event Action<BackgroundMode>? BackgroundModeChanged;
     public event Action<SamplingMode>? SamplingModeChanged;
 
@@ -73,6 +74,22 @@ public sealed class MenuSection : IUISection
             Padding = new Padding(0, 4f, 0, 0)
         };
         quitRow.AddComponents(fullscreenButton, quitButton);
+        
+        var duplicatesFinderButton = new Button("DUPLICATES FINDER")
+        {
+            CornerRadius = 0f,
+            HorizontalSize = SizeMode.Expand
+        };
+        duplicatesFinderButton.Click += () => ShowDuplicatesFinderClicked?.Invoke();
+
+        var duplicatesFinderRow = new HStack
+        {
+            HorizontalSize = SizeMode.Expand,
+            Spacing = 4f,
+            Transient = true,
+            Padding = new Padding(0, 4f, 0, 0)
+        };
+        duplicatesFinderRow.AddComponents(duplicatesFinderButton);
 
         _backgroundDropdown = new DropDownMenu<BackgroundMode>(
             popupHost,
@@ -109,7 +126,7 @@ public sealed class MenuSection : IUISection
         {
             HorizontalSize = SizeMode.Expand
         };
-        collapsible.AddComponents(openRow, quitRow, _backgroundDropdown, _samplingDropdown, bottomSeparator);
+        collapsible.AddComponents(openRow, quitRow, duplicatesFinderRow, _backgroundDropdown, _samplingDropdown, bottomSeparator);
         Collapsible = collapsible;
     }
 

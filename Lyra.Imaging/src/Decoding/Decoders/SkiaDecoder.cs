@@ -4,10 +4,11 @@ using Lyra.Imaging.Content;
 using Lyra.Imaging.Pipeline;
 using SkiaSharp;
 using static System.Threading.Thread;
+using Lyra.Imaging.Decoding.Support;
 
-namespace Lyra.Imaging.Codecs;
+namespace Lyra.Imaging.Decoding.Decoders;
 
-internal class SkiaDecoder : IImageDecoder
+internal class SkiaDecoder : IImageDecoder, IThumbnailDecoder
 {
     public bool CanDecode(ImageFormatType format) => format
         is ImageFormatType.Bmp
@@ -22,9 +23,9 @@ internal class SkiaDecoder : IImageDecoder
         var path = composite.FileInfo.FullName;
         composite.DecoderName = GetType().Name;
         Logger.Debug($"[SkiaDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
-        
+
         composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
-        
+
         try
         {
             ct.ThrowIfCancellationRequested();
@@ -45,7 +46,7 @@ internal class SkiaDecoder : IImageDecoder
             bitmap.Erase(SKColors.Transparent);
 
             var result = codec.GetPixels(bitmap.Info, bitmap.GetPixels());
-            
+
             // Tries to repair if the image is truncated JPEG
             if (result == SKCodecResult.InvalidInput)
             {
@@ -87,7 +88,7 @@ internal class SkiaDecoder : IImageDecoder
 
         return Task.CompletedTask;
     }
-    
+
     private static SKCodecResult? TryDecodeJpegWithEoiRepair(string path, SKBitmap bitmap)
     {
         var bytes = File.ReadAllBytes(path);
@@ -112,5 +113,38 @@ internal class SkiaDecoder : IImageDecoder
 
         bitmap.Erase(SKColors.Transparent);
         return codec.GetPixels(bitmap.Info, bitmap.GetPixels());
+    }
+
+    public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        using var stream = DecoderIO.OpenSequentialRead(path);
+        using var codec = SKCodec.Create(stream);
+        if (codec is null)
+            return null;
+
+        var (fullWidth, fullHeight) = (codec.Info.Width, codec.Info.Height);
+        if (fullWidth <= 0 || fullHeight <= 0)
+            return null;
+
+        // Request a downscale; the codec snaps to the nearest scale it can do natively
+        // (JPEG: DCT 1, 1/2, 1/4, 1/8). For codecs without native scaling this returns
+        // the full size, and the final downscale to the hash grid happens in the caller.
+        var desiredScale = Math.Min(1f, (float)maxDimension / Math.Max(fullWidth, fullHeight));
+        var scaled = codec.GetScaledDimensions(desiredScale);
+
+        var info = new SKImageInfo(scaled.Width, scaled.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+        var bitmap = new SKBitmap(info);
+        bitmap.Erase(SKColors.Transparent); // deterministic output on truncated input
+
+        var result = codec.GetPixels(info, bitmap.GetPixels());
+        if (result is not (SKCodecResult.Success or SKCodecResult.IncompleteInput))
+        {
+            bitmap.Dispose();
+            return null;
+        }
+
+        return bitmap;
     }
 }

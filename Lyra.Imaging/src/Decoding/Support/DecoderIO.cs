@@ -1,4 +1,4 @@
-namespace Lyra.Imaging.Codecs;
+namespace Lyra.Imaging.Decoding.Support;
 
 public static class DecoderIO
 {

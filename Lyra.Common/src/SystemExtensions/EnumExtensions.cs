@@ -30,6 +30,26 @@ public static class EnumExtensions
         return System.Text.RegularExpressions.Regex
             .Replace(value.ToString(), "(\\B[A-Z])", " $1");
     }
+
+    public static bool TryParseByAlias<TEnum>(string alias, out TEnum value) where TEnum : struct, Enum
+    {
+        value = default;
+
+        if (string.IsNullOrWhiteSpace(alias))
+            return false;
+
+        foreach (var field in typeof(TEnum).GetFields(BindingFlags.Public | BindingFlags.Static))
+        {
+            var aliasAttr = field.GetCustomAttribute<AliasAttribute>();
+            if (aliasAttr != null && string.Equals(aliasAttr.Alias, alias, StringComparison.OrdinalIgnoreCase))
+            {
+                value = (TEnum)field.GetValue(null)!;
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
 
 [AttributeUsage(AttributeTargets.Field)]

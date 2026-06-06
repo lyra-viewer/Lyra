@@ -3,7 +3,9 @@ using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
 using Lyra.Common.SystemExtensions;
 using Lyra.DropStatusProvider;
-using Lyra.FileLoader;
+using Lyra.DuplicateStatusProvider;
+using Lyra.FileLoader.Navigation;
+using Lyra.FileLoader.Store;
 using Lyra.Imaging.Content;
 using Lyra.Renderer.GUI;
 using Lyra.SdlCore;
@@ -26,12 +28,13 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     private readonly ViewState _viewState;
     private readonly ICompositeContentDrawer _contentDrawer;
     private readonly IDropProgressProvider _dropProgressProvider;
+    private readonly IScanProgressProvider? _scanProgressProvider;
 
     public UIManager UIManager { get; private set; }
 
     private readonly string _backend;
 
-    protected SkiaRendererBase(PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, string backend)
+    protected SkiaRendererBase(PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, string backend, IScanProgressProvider? scanProgressProvider = null)
     {
         ArgumentNullException.ThrowIfNull(dropProgressProvider);
         ArgumentNullException.ThrowIfNull(viewState);
@@ -44,6 +47,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         DisplayScale = drawableSize.Scale;
 
         _dropProgressProvider = dropProgressProvider;
+        _scanProgressProvider = scanProgressProvider;
 
         Subscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
 
@@ -101,7 +105,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     public void RefreshUI(Composite? composite)
     {
-        UIManager.Refresh(UIState.Create(composite, GetApplicationStates(), DirectoryNavigator.GetSnapshot(), DirectoryNavigator.GetNavigation()));
+        UIManager.Refresh(UIState.Create(composite, GetApplicationStates(), DirectoryNavigator.GetSnapshot(), DirectoryNavigator.GetNavigation(), FileRecordDatabase.Current));
     }
 
     private void RenderBackground(SKCanvas canvas)
@@ -188,6 +192,12 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     {
         var textColor = _viewState.BackgroundMode == BackgroundMode.White ? SKColors.Black : SKColors.White;
 
+        if (_scanProgressProvider?.GetScanStatus() is { Active: true } scan)
+        {
+            UIManager.SetStatusOverlay(FormatScanStatus(scan), textColor);
+            return;
+        }
+
         var drop = _dropProgressProvider.GetDropStatus();
         if (drop is { Active: true, FilesEnumerated: > 300 })
         {
@@ -209,6 +219,15 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
         UIManager.SetStatusOverlay(null, default);
     }
+
+    private static string FormatScanStatus(ScanProgress scan) => scan.Phase switch
+    {
+        ScanPhase.Exact when scan.Total > 0      => $"Finding duplicates… hashing {scan.Done}/{scan.Total}",
+        ScanPhase.Exact                          => "Finding duplicates… measuring sizes",
+        ScanPhase.Perceptual when scan.Total > 0 => $"Perceptual scan… {scan.Done}/{scan.Total}",
+        ScanPhase.Perceptual                     => "Perceptual scan…",
+        _                                        => "Finding duplicates…"
+    };
 
     private void DrawCheckerboardPattern(SKCanvas canvas)
     {

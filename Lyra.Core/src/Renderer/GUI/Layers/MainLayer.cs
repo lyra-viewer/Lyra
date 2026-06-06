@@ -35,6 +35,7 @@ public class MainLayer : IUIEvents, IDisposable
     // Sections
     private readonly InfoSection _infoSection;
     private readonly MenuSection _menuSection;
+    private readonly DuplicatesFinderSection _duplicatesFinderSection;
     private readonly DirectoryTreeSection _directoryTreeSection;
     private readonly ExifSection _exifSection;
     private readonly FormatSection _formatSection;
@@ -53,6 +54,8 @@ public class MainLayer : IUIEvents, IDisposable
     public event Action? OpenDirectoryRequested;
     public event Action? FullscreenRequested;
     public event Action? QuitRequested;
+    public event Action? FindDuplicatesRequested;
+    public event Action? DuplicatesGoBackRequested;
     public event Action<string>? DirectoryPicked;
     public event Action<BackgroundMode>? BackgroundModeChanged;
     public event Action<SamplingMode>? SamplingModeChanged;
@@ -63,6 +66,7 @@ public class MainLayer : IUIEvents, IDisposable
 
         _infoSection = new InfoSection();
         _menuSection = new MenuSection(_context);
+        _duplicatesFinderSection = new DuplicatesFinderSection();
         _directoryTreeSection = new DirectoryTreeSection();
         _exifSection = new ExifSection(_keyColumnRegistry);
         _formatSection = new FormatSection(_keyColumnRegistry);
@@ -75,9 +79,14 @@ public class MainLayer : IUIEvents, IDisposable
         _menuSection.OpenDirectoryClicked += () => OnMenu("OPEN DIR", OpenDirectoryRequested);
         _menuSection.FullscreenClicked += () => OnMenu("FULL SCREEN", FullscreenRequested);
         _menuSection.QuitClicked += () => OnMenu("QUIT", QuitRequested);
+        _menuSection.ShowDuplicatesFinderClicked += () => { _debugSection.SetAction("DUPLICATES FINDER"); _duplicatesFinderSection.Show(); _context.Invalidate(); };
         _menuSection.BackgroundModeChanged += mode => OnMenu("BACKGROUND", BackgroundModeChanged, mode);
         _menuSection.SamplingModeChanged += mode => OnMenu("SAMPLING", SamplingModeChanged, mode);
         _directoryTreeSection.DirectoryPicked += path => DirectoryPicked?.Invoke(path);
+
+        _duplicatesFinderSection.FindClicked += () => OnMenu("FIND DUPLICATES", FindDuplicatesRequested);
+        _duplicatesFinderSection.GoBackClicked += () => OnMenu("DUPLICATES BACK", DuplicatesGoBackRequested);
+        _duplicatesFinderSection.CloseClicked += () => { _debugSection.SetAction("DUPLICATES CLOSE"); _duplicatesFinderSection.Hide(); _context.Invalidate(); };
 
         // Single source of truth for section layout.
         // Order within Sidebar entries determines vertical display order.
@@ -85,6 +94,7 @@ public class MainLayer : IUIEvents, IDisposable
         [
             new SectionEntry(_infoSection, SectionPlacement.LeftPane),
             new SectionEntry(_menuSection, SectionPlacement.Sidebar),
+            new SectionEntry(_duplicatesFinderSection, SectionPlacement.Sidebar),
             new SectionEntry(_directoryTreeSection, SectionPlacement.Sidebar, _directoryTreeSection.Collapsible),
             new SectionEntry(_exifSection, SectionPlacement.Sidebar, _exifSection.Collapsible),
             new SectionEntry(_formatSection, SectionPlacement.Sidebar, _formatSection.Collapsible),
@@ -167,6 +177,12 @@ public class MainLayer : IUIEvents, IDisposable
     public void SetBackgroundMode(BackgroundMode mode) => _menuSection.SetBackgroundMode(mode);
 
     public void SetSamplingMode(SamplingMode mode) => _menuSection.SetSamplingMode(mode);
+
+    public void SetDuplicatesState(bool inDuplicatesMode, bool noDuplicatesFound)
+    {
+        _duplicatesFinderSection.SetState(inDuplicatesMode, noDuplicatesFound);
+        _context.Invalidate();
+    }
 
     // --------------------------------------------------------
     //  Debug helpers

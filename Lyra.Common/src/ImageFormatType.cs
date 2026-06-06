@@ -60,10 +60,12 @@ public enum ImageFormatType
     [Description("PNG Image")]
     Png,
 
+    [NoPerceptualHash]
     [FileExtension([".psd"])]
     [Description("Adobe Photoshop Document")]
     Psd,
 
+    [NoPerceptualHash]
     [FileExtension([".psb"])]
     [Description("Adobe Photoshop Document")]
     Psb,
@@ -99,3 +101,6 @@ public class DisabledTypeAttribute : Attribute;
 
 [AttributeUsage(AttributeTargets.Field)]
 public class DisabledPreloadAttribute : Attribute;
+
+[AttributeUsage(AttributeTargets.Field)]
+public class NoPerceptualHashAttribute : Attribute;

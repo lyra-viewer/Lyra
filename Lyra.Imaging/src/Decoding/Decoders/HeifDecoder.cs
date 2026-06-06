@@ -5,8 +5,9 @@ using Lyra.Imaging.Content;
 using Lyra.Imaging.Pipeline;
 using SkiaSharp;
 using static System.Threading.Thread;
+using Lyra.Imaging.Decoding.Support;
 
-namespace Lyra.Imaging.Codecs;
+namespace Lyra.Imaging.Decoding.Decoders;
 
 internal class HeifDecoder : IImageDecoder
 {

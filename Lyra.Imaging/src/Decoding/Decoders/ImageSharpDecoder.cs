@@ -7,7 +7,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using SkiaSharp;
 using static System.Threading.Thread;
 
-namespace Lyra.Imaging.Codecs;
+namespace Lyra.Imaging.Decoding.Decoders;
 
 internal class ImageSharpDecoder : IImageDecoder
 {

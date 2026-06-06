@@ -1,0 +1,48 @@
+using Lyra.FileLoader.Navigation;
+
+namespace Lyra.SdlCore;
+
+// Duplicates UI orchestration: the scan itself lives in DuplicateScanService (SDL-free);
+// this partial only switches duplicates mode, refreshes the view, and reflects section state.
+public partial class SdlCore
+{
+    private void OnFindDuplicatesRequested()
+    {
+        // "New Search": leave duplicates mode and restore the full collection before rescanning.
+        if (DirectoryNavigator.IsDuplicatesMode)
+        {
+            DirectoryNavigator.ExitDuplicatesMode();
+            LoadImage();
+        }
+
+        _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false);
+        _duplicateScanService.Start();
+    }
+
+    private void OnDuplicatesGoBack()
+    {
+        if (!DirectoryNavigator.IsDuplicatesMode)
+            return;
+
+        DirectoryNavigator.ExitDuplicatesMode();
+        LoadImage();
+        _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false);
+    }
+
+    /// <summary>Scan finished (raised on the scan thread) - apply the result on the main thread.</summary>
+    private void OnDuplicateScanCompleted(int groupCount)
+    {
+        DispatchToMain(() =>
+        {
+            if (groupCount > 0 && DirectoryNavigator.EnterDuplicatesMode())
+            {
+                LoadImage();
+                _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: true, noDuplicatesFound: false);
+            }
+            else
+            {
+                _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: true);
+            }
+        });
+    }
+}

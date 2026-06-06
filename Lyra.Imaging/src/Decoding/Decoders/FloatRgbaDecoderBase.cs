@@ -3,8 +3,9 @@ using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using SkiaSharp;
 using static System.Threading.Thread;
+using Lyra.Imaging.Decoding.Support;
 
-namespace Lyra.Imaging.Codecs;
+namespace Lyra.Imaging.Decoding.Decoders;
 
 internal abstract class FloatRgbaDecoderBase : IImageDecoder
 {

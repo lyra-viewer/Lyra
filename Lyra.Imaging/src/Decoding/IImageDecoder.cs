@@ -1,7 +1,7 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
 
-namespace Lyra.Imaging.Codecs;
+namespace Lyra.Imaging.Decoding;
 
 internal interface IImageDecoder
 {

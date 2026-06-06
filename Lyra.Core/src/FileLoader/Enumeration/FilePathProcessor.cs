@@ -1,8 +1,8 @@
 using Lyra.Common;
-using Lyra.PathUtils;
+using Lyra.FileLoader.Store;
 using static Lyra.PathUtils.PathUtils;
 
-namespace Lyra.FileLoader;
+namespace Lyra.FileLoader.Enumeration;
 
 public static class FilePathProcessor
 {
@@ -10,24 +10,16 @@ public static class FilePathProcessor
     public static bool IncludeHidden { get; set; } = false;
     public static bool FollowSymlinks { get; set; } = false;
 
-    public static List<string> ProcessImagePaths(
+    public static CollectionLoadResult ProcessImagePaths(
         List<string> paths,
         bool? recurseSubdirs,
-        out bool? singleDirectory,
-        out string? topDirectory,
-        out List<string> allDirectories,
-        out FileDropContext dropContext,
         CancellationToken cancellationToken,
         Action? onFileEnumerated = null,
         Action? onSupportedFileDiscovered = null)
     {
-        singleDirectory = null;
-        topDirectory = null;
-        allDirectories = [];
-
-        dropContext = AnalyzeDrop(paths);
+        var dropContext = AnalyzeDrop(paths);
         if (dropContext.ExplicitPaths.Count == 0)
-            return [];
+            return CollectionLoadResult.Empty(dropContext);
 
         // Resolve recursion policy. "AsDesigned" defaults to multi-dir recursion.
         var designedRecurse = dropContext.ExplicitDirectories.Count > 1 || (dropContext.ExplicitDirectories.Count == 1 && DirectoryHasSubdirectories(dropContext.ExplicitDirectories[0]));
@@ -36,17 +28,19 @@ public static class FilePathProcessor
         // Build enumeration plan from explicit input facts.
         var plan = BuildPlan(dropContext);
 
-        // Enumerate, filter supported, and sort.
-        var supported = CollectSupportedFiles(plan, recurse, out allDirectories, cancellationToken, onFileEnumerated, onSupportedFileDiscovered);
+        // Enumerate and filter supported files. Each record carries its normalized
+        // directory, captured here while it is already known (no recomputation downstream).
+        var supported = CollectSupportedFiles(plan, recurse, out var allDirectories, cancellationToken, onFileEnumerated, onSupportedFileDiscovered);
 
-        // UI metadata
+        // UI / navigation metadata
         var uniqueDirs = GetUniqueDirectories(supported);
-        singleDirectory = uniqueDirs.Count == 1;
-        topDirectory = ComputeTopDirectory(dropContext.ExplicitPaths, supported, uniqueDirs);
+        var singleDirectory = uniqueDirs.Count == 1;
+        var topDirectory = ComputeTopDirectory(dropContext.ExplicitPaths, hasFiles: supported.Count > 0, uniqueDirs);
+        var collectionType = DecideCollectionType(dropContext);
 
         Logger.Info($"[FilePathProcessor] Collected {supported.Count} supported files. Recurse={recurse}, Input={dropContext.ExplicitPaths.Count}.");
 
-        return supported;
+        return new CollectionLoadResult(supported, allDirectories, singleDirectory, topDirectory, dropContext, collectionType);
     }
 
     private static FileDropContext AnalyzeDrop(IEnumerable<string>? paths)
@@ -132,7 +126,7 @@ public static class FilePathProcessor
         return new EnumerationPlan(ctx.ExplicitDirectories.ToList(), ctx.ExplicitFiles.ToList());
     }
 
-    private static List<string> CollectSupportedFiles(
+    private static List<FileRecord> CollectSupportedFiles(
         EnumerationPlan plan,
         bool recurseSubdirs,
         out List<string> allDirectories,
@@ -140,7 +134,9 @@ public static class FilePathProcessor
         Action? onFileEnumerated,
         Action? onSupportedFileDiscovered)
     {
-        var all = new HashSet<string>(PathComparer.CommonPathComparer);
+        // Full path -> its normalized directory. Dedup is by path; the directory is
+        // captured at discovery time so records never have to recompute it.
+        var all = new Dictionary<string, string>(PathComparer.CommonPathComparer);
         var dirSet = new HashSet<string>(PathComparer.CommonPathComparer);
 
         foreach (var f in plan.ExplicitFiles)
@@ -153,12 +149,12 @@ public static class FilePathProcessor
             onFileEnumerated?.Invoke();
 
             // Collect parent dir of explicit files.
-            var parentDir = Path.GetDirectoryName(f);
-            if (!string.IsNullOrWhiteSpace(parentDir))
-                dirSet.Add(NormalizeDirectory(parentDir));
+            var parentRaw = Path.GetDirectoryName(f);
+            var parentDir = string.IsNullOrWhiteSpace(parentRaw) ? string.Empty : NormalizeDirectory(parentRaw);
+            if (parentDir.Length > 0)
+                dirSet.Add(parentDir);
 
-            // Fast-filter before filling the set; the final pipeline still sorts.
-            if (IsSupportedFile(f) && all.Add(f))
+            if (IsSupportedFile(f) && all.TryAdd(f, parentDir))
                 onSupportedFileDiscovered?.Invoke();
         }
 
@@ -169,11 +165,11 @@ public static class FilePathProcessor
             if (cancellationToken.IsCancellationRequested)
                 break;
 
-            foreach (var f in EnumerateFilesIterative(dir, recurseSubdirs, dirSet, cancellationToken))
+            foreach (var (file, normalizedDir) in EnumerateFilesIterative(dir, recurseSubdirs, dirSet, cancellationToken))
             {
                 onFileEnumerated?.Invoke();
 
-                if (IsSupportedFile(f) && all.Add(f))
+                if (IsSupportedFile(file) && all.TryAdd(file, normalizedDir))
                     onSupportedFileDiscovered?.Invoke();
 
                 // Soft-cancel: stop after the current file.
@@ -187,35 +183,25 @@ public static class FilePathProcessor
 
         allDirectories = dirSet.OrderBy(d => d, StringComparer.Ordinal).ToList();
 
-        // Keep supported + stable ordering
         return all
-            .Select(full => new
-            {
-                Full = full,
-                Dir = NormalizeDirectory(Path.GetDirectoryName(full) ?? string.Empty),
-                Name = Path.GetFileName(full)
-            })
-            .OrderBy(x => x.Dir, PathComparer.CommonPathComparer)
-            .ThenBy(x => x.Name, NaturalStringComparer.Instance)
-            .Select(x => x.Full)
+            .Select(kv => new FileRecord(kv.Key, Path.GetFileName(kv.Key), kv.Value))
             .ToList();
 
         static bool IsSupportedFile(string fullPath) => ImageFormat.IsSupported(Path.GetExtension(fullPath));
     }
 
-    private static List<string> GetUniqueDirectories(List<string> supported)
+    private static List<string> GetUniqueDirectories(IReadOnlyList<FileRecord> supported)
     {
         return supported
-            .Select(Path.GetDirectoryName)
+            .Select(r => r.Directory)
             .Where(d => !string.IsNullOrWhiteSpace(d))
-            .Select(d => NormalizeDirectory(d!))
             .Distinct(PathComparer.CommonPathComparer)
             .ToList();
     }
 
-    private static string? ComputeTopDirectory(IReadOnlyList<string> input, List<string> supported, List<string> uniqueDirs)
+    private static string? ComputeTopDirectory(IReadOnlyList<string> input, bool hasFiles, List<string> uniqueDirs)
     {
-        if (supported.Count > 0)
+        if (hasFiles)
             return GetTopDirectory(uniqueDirs) ?? (uniqueDirs.Count == 1 ? uniqueDirs[0] : null);
 
         // No supported files found; fall back to dropped directories (for UI focus).
@@ -233,7 +219,7 @@ public static class FilePathProcessor
     // because canonicalization fell back to the unresolved path).
     private const int MaxTraversalDepth = 256;
 
-    private static IEnumerable<string> EnumerateFilesIterative(string root, bool recurseSubdirs, HashSet<string>? visitedDirectories, CancellationToken cancellationToken = default)
+    private static IEnumerable<(string File, string Dir)> EnumerateFilesIterative(string root, bool recurseSubdirs, HashSet<string>? visitedDirectories, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(root))
             yield break;
@@ -256,7 +242,8 @@ public static class FilePathProcessor
                 continue;
 
             // Track every visited directory for the full tree.
-            visitedDirectories?.Add(NormalizeDirectory(dir));
+            var normalizedDir = NormalizeDirectory(dir);
+            visitedDirectories?.Add(normalizedDir);
 
             IEnumerable<string> filesHere;
             try
@@ -272,7 +259,7 @@ public static class FilePathProcessor
             foreach (var f in filesHere)
             {
                 if (IncludeHidden || !IsHidden(f))
-                    yield return f;
+                    yield return (f, normalizedDir);
             }
 
             if (!recurseSubdirs)
@@ -311,5 +298,27 @@ public static class FilePathProcessor
                 stack.Push((sub, depth + 1));
             }
         }
+    }
+
+    private static CollectionType DecideCollectionType(FileDropContext ctx)
+    {
+        // SingleDirectoryCollection ("open with" semantics)
+        if (ctx.ExplicitFiles.Count == 1 && ctx.ExplicitDirectories.Count == 0 && ctx.IsSingleFileOpen)
+            return CollectionType.SingleDirectoryCollection;
+
+        // SingleDirectoryCollection (one directory if no subdirs, otherwise multi)
+        if (ctx.ExplicitDirectories.Count == 1 && ctx.ExplicitFiles.Count == 0)
+        {
+            return DirectoryHasSubdirectories(ctx.ExplicitDirectories[0])
+                ? CollectionType.MultiDirectorySelection
+                : CollectionType.SingleDirectoryCollection;
+        }
+
+        // SingleDirectorySelection (many files, same directory)
+        if (ctx.ExplicitFiles.Count > 1 && ctx.ExplicitDirectories.Count == 0 && ctx.IsSameDirectoryGroup)
+            return CollectionType.SingleDirectorySelection;
+
+        // MultiDirectorySelection
+        return CollectionType.MultiDirectorySelection;
     }
 }

@@ -3,7 +3,9 @@ using Lyra.Common;
 using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
 using Lyra.DropStatusProvider;
-using Lyra.FileLoader;
+using Lyra.FileLoader.Duplicates;
+using Lyra.FileLoader.Duplicates.Perceptual;
+using Lyra.FileLoader.Navigation;
 using Lyra.Imaging;
 using Lyra.Imaging.Content;
 using Lyra.Renderer;
@@ -24,6 +26,7 @@ public partial class SdlCore : IDisposable
     private bool _running = true;
 
     private readonly DropProgressTracker _dropProgressTracker = new();
+    private readonly DuplicateScanService _duplicateScanService = new(new ImagingThumbnailSource());
     private readonly ViewState _viewState = new(SettingsManager.UiSettings);
 
     // -------------------------------------------------------------------------
@@ -110,11 +113,11 @@ public partial class SdlCore : IDisposable
         {
             case Backend.OpenGL:
                 _window = CreateWindow("Lyra Viewer (OpenGL)", w, h, flags | WindowFlags.OpenGL);
-                _renderer = new SkiaOpenGlRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropProgressTracker, _viewState);
+                _renderer = new SkiaOpenGlRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropProgressTracker, _viewState, _duplicateScanService.Progress);
                 break;
             case Backend.Metal:
                 _window = CreateWindow("Lyra Viewer (Metal)", w, h, flags | WindowFlags.Metal);
-                _renderer = new SkiaMetalRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropProgressTracker, _viewState);
+                _renderer = new SkiaMetalRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropProgressTracker, _viewState, _duplicateScanService.Progress);
                 break;
             default:
                 throw new ArgumentOutOfRangeException();
@@ -320,15 +323,19 @@ public partial class SdlCore : IDisposable
         var events = _renderer.UIManager.Events;
 
         // User-driven UI events (menu clicks, tree picks, dropdown changes)
-        events.OpenFileRequested      += OnOpenFileRequested;
-        events.OpenDirectoryRequested += OnOpenDirectoryRequested;
-        events.QuitRequested          += ExitApplication;
-        events.FullscreenRequested    += ToggleFullscreen;
-        events.DirectoryPicked        += OnDirectoryPicked;
+        events.OpenFileRequested         += OnOpenFileRequested;
+        events.OpenDirectoryRequested    += OnOpenDirectoryRequested;
+        events.QuitRequested             += ExitApplication;
+        events.FullscreenRequested       += ToggleFullscreen;
+        events.FindDuplicatesRequested   += OnFindDuplicatesRequested;
+        events.DuplicatesGoBackRequested += OnDuplicatesGoBack;
+        events.DirectoryPicked           += OnDirectoryPicked;
+
+        _duplicateScanService.Completed  += OnDuplicateScanCompleted;
 
         // Dropdown changes route into ViewState (single source of truth).
-        events.BackgroundModeChanged  += _viewState.SetBackgroundMode;
-        events.SamplingModeChanged    += _viewState.SetSamplingMode;
+        events.BackgroundModeChanged     += _viewState.SetBackgroundMode;
+        events.SamplingModeChanged       += _viewState.SetSamplingMode;
 
         // ViewState changes auto-sync the dropdowns. UIManager.Set* is
         // documented as not re-firing, and ViewState's equality guard

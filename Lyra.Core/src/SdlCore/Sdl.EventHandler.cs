@@ -1,4 +1,5 @@
 using Lyra.Common;
+using Lyra.Common.Events;
 using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
 using static Lyra.Common.Events.EventManager;

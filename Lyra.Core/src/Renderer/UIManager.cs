@@ -145,6 +145,13 @@ public class UIManager : IDisposable
         Invalidate();
     }
 
+    /// <summary>Reflects duplicate-scan state on the Duplicates Finder section.</summary>
+    public void SetDuplicatesState(bool inDuplicatesMode, bool noDuplicatesFound)
+    {
+        _mainLayer.SetDuplicatesState(inDuplicatesMode, noDuplicatesFound);
+        Invalidate();
+    }
+
     // --------------------------------------------------------
     //  Render
     // --------------------------------------------------------
