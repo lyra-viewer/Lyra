@@ -7,6 +7,8 @@
 ## Contents
 
 - [Overview](#overview)
+    - [What Lyra is and what it isn't](#what-lyra-is-and-what-it-isnt)
+    - [Recommended hardware & known limitations](#recommended-hardware--known-limitations)
 - [Key Features](#key-features)
 - [Technical Details](#technical-details)
 - [Supported Image Formats](#supported-image-formats)
@@ -45,6 +47,24 @@ Built for anyone who relies on images as a core resource in their workflow:
 - Photographers reviewing large batches of exports
 - Developers inspecting UI assets, icons, and generated output
 - And ordinary advanced users
+
+### What Lyra is and what it isn't
+
+- Lyra is solely a viewer - nothing more. It opens and displays your files; it never writes to them, moves them, or
+  deletes them. Your files are always safe and untouched.
+- Lyra is not an Electron application. It is a native application built on SDL3 and Skia, with no embedded web
+  browser and no JavaScript runtime. It runs on .NET 9 and renders directly through your GPU, keeping performance at the
+  forefront of every decision.
+- Lyra does not connect to the internet. It has no telemetry, no update pings, no cloud sync, and no AI features.
+  Everything runs locally, offline, on your machine. Updates are manual - check for new releases and install them
+  through your package manager when you're ready. If there's a format, workflow, or feature you'd like to see, the right
+  place to say so is the [GitHub issue tracker](https://github.com/lyra-viewer/Lyra/issues).
+
+### Recommended hardware & known limitations
+
+Lyra is designed for capable, modern hardware - a dedicated GPU and SSD storage will get the best out of it. Not every
+limitation is Lyra's to solve: network shares over SMB are constrained to a single stream by the protocol itself and
+cannot be parallelised, so performance over a NAS or remote share will always be bounded by that ceiling.
 
 ---
 
@@ -152,16 +172,22 @@ in some edge cases, may be missing or may not fully represent the document as it
 
 ### PSD Color Mode Support
 
-| Color Mode                   | Channels    | Lyra Support |
-|------------------------------|-------------|--------------|
-| Bitmap                       | 1 (1-bit)   | Planned      |
-| Grayscale                    | 1           | Full         |
-| Duotone / Tritone / Quadtone | 1 + inks    | In progress  |
-| Indexed                      | 1 + palette | Full         |
-| RGB                          | 3           | Full         |
-| CMYK                         | 4           | Full         |
-| Lab                          | 3           | Planned      |
-| Multichannel                 | N           | Planned      |
+| Color Mode                   | Channels    | Lyra Support             |
+|------------------------------|-------------|--------------------------|
+| Bitmap                       | 1 (1-bit)   | Planned                  |
+| Grayscale                    | 1           | Full                     |
+| Duotone / Tritone / Quadtone | 1 + inks    | In progress (clean-room) |
+| Indexed                      | 1 + palette | Full                     |
+| RGB                          | 3           | Full                     |
+| CMYK                         | 4           | Full                     |
+| Lab                          | 3           | MVP                      |
+| Multichannel                 | N           | In progress (clean-room) |
+
+> _Legal Note:_ Duotone and Multichannel support is an independent, clean-room implementation. It was derived by
+> observing the documented PSD/PSB file structure, publicly available format references, and the contents of sample
+> files - not by decompiling, disassembling, or otherwise reverse-engineering Adobe software, and not from any Adobe
+> source code. Spot/named colors are rendered using the color values stored within each document; no proprietary color
+> libraries (e.g. PANTONE) are bundled.
 
 ### PSB Support
 
