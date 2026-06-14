@@ -47,6 +47,7 @@ x86/
 build/
 build-brew/
 build-macos/
+build-linux/
 bld/
 [Bb]in/
 [Oo]bj/

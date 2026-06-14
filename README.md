@@ -54,7 +54,6 @@ Built for anyone who relies on images as a core resource in their workflow:
 - **Directory tree sidebar** for browsing the filesystem without leaving the viewer.
 - **SVG** support for previewing scalable vector assets.
 - **Adjustable background** modes to improve visibility of transparent images.
-- Sampling toggle, useful for **pixel-perfect** graphics or UI assets.
 - **EXIF metadata** and format-specific information panel.
 - **PSD layer hierarchy** panel showing group structure, layer names, and visibility state.
 - Zoom-to-cursor and panning for intuitive inspection at any scale.

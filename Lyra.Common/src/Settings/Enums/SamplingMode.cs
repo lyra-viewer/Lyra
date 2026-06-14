@@ -4,15 +4,9 @@ namespace Lyra.Common.Settings.Enums;
 
 public enum SamplingMode
 {
-    [Description("Cubic (Smooth)")]
-    Cubic,
+    [Description("Pixel")]
+    Pixel,
 
-    [Description("Linear (Fast)")]
-    Linear,
-
-    [Description("Nearest (Pixelated)")]
-    Nearest,
-
-    [Description("Anti-aliasing OFF")]
-    None
+    [Description("Smooth")]
+    Smooth
 }

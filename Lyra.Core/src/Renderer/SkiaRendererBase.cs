@@ -132,10 +132,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
         var sampling = _viewState.SamplingMode switch
         {
-            SamplingMode.Linear => new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear),
-            SamplingMode.Nearest => new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.Nearest),
-            SamplingMode.None => SKSamplingOptions.Default,
-            SamplingMode.Cubic or _ => new SKSamplingOptions(new SKCubicResampler()),
+            SamplingMode.Smooth => new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear),
+            SamplingMode.Pixel or _ => new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None)
         };
 
         var logicalSize = new SKSize(_composite.LogicalWidth, _composite.LogicalHeight);

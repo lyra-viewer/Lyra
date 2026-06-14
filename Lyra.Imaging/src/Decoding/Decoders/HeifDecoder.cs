@@ -9,7 +9,7 @@ using Lyra.Imaging.Decoding.Support;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-internal class HeifDecoder : IImageDecoder
+internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
 {
     public bool CanDecode(ImageFormatType format) => format == ImageFormatType.Heif;
 
@@ -39,48 +39,7 @@ internal class HeifDecoder : IImageDecoder
                 composite.ExifInfo = MetadataProcessor.ParseMetadata(stream, path);
             }
 
-            var width = decodedImage.Width;
-            var height = decodedImage.Height;
-
-            var plane = decodedImage.GetPlane(HeifChannel.Interleaved);
-            var src = plane.Scan0;
-            if (src == IntPtr.Zero)
-                throw new InvalidOperationException("HEIF decode returned null interleaved plane.");
-
-            var srcStride = plane.Stride;
-
-            DecoderValidation.RequireSaneDimensions("HeifDecoder", width, height);
-            DecoderValidation.RequireValidStride("HeifDecoder", srcStride, width);
-
-            var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-            var bitmap = new SKBitmap(info);
-
-            unsafe
-            {
-                var dstSpan = bitmap.GetPixelSpan();
-                fixed (void* dstBase = &dstSpan.GetPinnableReference())
-                {
-                    byte* srcBase = (byte*)src;
-                    byte* dst = (byte*)dstBase;
-
-                    const int bytesPerPixel = 4;
-                    var rowBytes = width * bytesPerPixel;
-
-                    var dstStride = bitmap.RowBytes;
-
-                    var copyBytes = Math.Min(rowBytes, Math.Min(srcStride, dstStride));
-
-                    for (var y = 0; y < height; y++)
-                    {
-                        ct.ThrowIfCancellationRequested();
-
-                        var srcRow = srcBase + (nint)y * (nint)srcStride;
-                        var dstRow = dst + (nint)y * (nint)dstStride;
-
-                        Buffer.MemoryCopy(srcRow, dstRow, dstStride, copyBytes);
-                    }
-                }
-            }
+            var bitmap = DecodedImageToBitmap(decodedImage, ct);
 
             ct.ThrowIfCancellationRequested();
 
@@ -105,7 +64,102 @@ internal class HeifDecoder : IImageDecoder
 
         return Task.CompletedTask;
     }
+
+    public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        using var heifContext = new HeifContext(path);
+        using var primaryHandle = heifContext.GetPrimaryImageHandle();
+
+        var embedded = TryGetEmbeddedThumbnail(primaryHandle, maxDimension);
+        try
+        {
+            var handle = embedded ?? primaryHandle;
+            using var decodedImage = handle.Decode(HeifColorspace.Rgb, HeifChroma.InterleavedRgba32);
+
+            ct.ThrowIfCancellationRequested();
+            return DecodedImageToBitmap(decodedImage, ct);
+        }
+        finally
+        {
+            embedded?.Dispose();
+        }
+    }
     
+    private static HeifImageHandle? TryGetEmbeddedThumbnail(HeifImageHandle handle, int maxDimension)
+    {
+        try
+        {
+            var ids = handle.GetThumbnailImageIds();
+            if (ids is not { Count: > 0 })
+                return null;
+
+            foreach (var id in ids)
+            {
+                var thumb = handle.GetThumbnailImage(id);
+                if (Math.Max(thumb.Width, thumb.Height) >= maxDimension)
+                    return thumb;
+
+                thumb.Dispose();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"[HeifDecoder] Embedded thumbnail lookup failed: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    private static SKBitmap DecodedImageToBitmap(HeifImage decodedImage, CancellationToken ct)
+    {
+        var width = decodedImage.Width;
+        var height = decodedImage.Height;
+
+        var plane = decodedImage.GetPlane(HeifChannel.Interleaved);
+        var src = plane.Scan0;
+        if (src == IntPtr.Zero)
+            throw new InvalidOperationException("HEIF decode returned null interleaved plane.");
+
+        var srcStride = plane.Stride;
+
+        DecoderValidation.RequireSaneDimensions("HeifDecoder", width, height);
+        DecoderValidation.RequireValidStride("HeifDecoder", srcStride, width);
+
+        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+        var bitmap = new SKBitmap(info);
+
+        unsafe
+        {
+            var dstSpan = bitmap.GetPixelSpan();
+            fixed (void* dstBase = &dstSpan.GetPinnableReference())
+            {
+                byte* srcBase = (byte*)src;
+                byte* dst = (byte*)dstBase;
+
+                const int bytesPerPixel = 4;
+                var rowBytes = width * bytesPerPixel;
+
+                var dstStride = bitmap.RowBytes;
+
+                var copyBytes = Math.Min(rowBytes, Math.Min(srcStride, dstStride));
+
+                for (var y = 0; y < height; y++)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var srcRow = srcBase + (nint)y * (nint)srcStride;
+                    var dstRow = dst + (nint)y * (nint)dstStride;
+
+                    Buffer.MemoryCopy(srcRow, dstRow, dstStride, copyBytes);
+                }
+            }
+        }
+
+        return bitmap;
+    }
+
     private static void PopulateFormatSpecific(Composite composite, HeifContext context, HeifImageHandle handle, string path)
     {
         composite.FormatSpecific["Codec"] = DetectHeifBrand(path);
