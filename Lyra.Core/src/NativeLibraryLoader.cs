@@ -60,6 +60,11 @@ internal static class NativeLibraryLoader
                 RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "libj2k_native.so" :
                 "libj2k_native.dylib"
             },
+            {
+                "TIFF", RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "libtiff_native.dll" :
+                RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "libtiff_native.so" :
+                "libtiff_native.dylib"
+            },
 #if !DEBUG
             {
                 "SKIA", RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "libSkiaSharp.dll" :
@@ -238,6 +243,7 @@ internal static class NativeLibraryLoader
             "libexr" or "libexr.dll" or "libexr.so" or "libexr.dylib" => TryLoad("EXR"),
             "libhdr" or "libhdr.dll" or "libhdr.so" or "libhdr.dylib" => TryLoad("HDR"),
             "libj2k" or "libj2k.dll" or "libj2k.so" or "libj2k.dylib" => TryLoad("J2K"),
+            "libtiff" or "libtiff.dll" or "libtiff.so" or "libtiff.dylib" => TryLoad("TIFF"),
             _ => IntPtr.Zero
         };
     }

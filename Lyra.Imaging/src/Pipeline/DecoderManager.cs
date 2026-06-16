@@ -9,7 +9,8 @@ internal static class DecoderManager
     private static readonly List<IImageDecoder> Decoders =
     [
         new SkiaDecoder(),
-        new ImageSharpDecoder(),
+        new TgaDecoder(),
+        new TiffDecoder(),
         new HeifDecoder(),
         new ExrDecoder(),
         new HdrDecoder(),
