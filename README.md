@@ -90,8 +90,9 @@ The architecture is designed around fast, non-blocking image loading:
 - Decoded images are cached and adjacent files are preloaded in the background, so navigation feels instant even in large directories.
 - Large PSD/PSB files use streaming and tiled decoding to avoid loading entire documents into memory - tested with files exceeding 3 GB.
 
-Lyra integrates lightweight native interop wrappers for HDR and EXR decoding, and delegates format-specific work to focused libraries 
-rather than bundling large native dependencies. System libraries like libheif, OpenJPEG and OpenEXR are expected from the package manager (e.g. Homebrew).
+Lyra integrates lightweight native interop wrappers for HDR, EXR, JPEG 2000, and TIFF decoding, and delegates format-specific work to focused libraries 
+rather than bundling large native dependencies. Simpler formats such as TGA are handled by a small in-house managed decoder with no external dependency. 
+System libraries like libheif, OpenJPEG, OpenEXR and libtiff are expected from the package manager (e.g. Homebrew).
 Originally built for workflows involving texture maps, HDRIs, and assets exported from tools like Blender and Quixel Bridge - but the design 
 generalizes well to any image-heavy workflow.
 
@@ -127,6 +128,9 @@ generalizes well to any image-heavy workflow.
 |--------------|-------------------------------------------------|------------|
 | OpenEXR      | High-dynamic range, multi-channel raster format | `.exr`     |
 | Radiance HDR | High-dynamic range RGBE format                  | `.hdr`     |
+
+> _Note:_ EXR and HDR images are tone-mapped for display using the **ACES filmic** curve, so high-dynamic-range
+> highlights roll off smoothly instead of clipping harshly to white.
 
 ### GPU Formats
 
@@ -284,18 +288,18 @@ The PSD decoder is intentionally structured to allow future expansion.
 
 ## Dependencies
 
-| Library              | Purpose                                                                | License       | Repository                                                        |
-|----------------------|------------------------------------------------------------------------|---------------|-------------------------------------------------------------------|
-| SDL3-CS              | Core graphics, input, and windowing                                    | zlib          | [github](https://github.com/edwardgushchin/SDL3-CS)     |
-| SkiaSharp            | Hardware-accelerated 2D rendering                                      | BSD-3-Clause  | [github](https://github.com/mono/SkiaSharp)                       |
-| Svg.Skia             | SVG parsing and rendering                                              | MIT           | [github](https://github.com/wieslawsoltes/Svg.Skia)               |
-| SixLabors.ImageSharp | Support for TGA, TIFF, and legacy formats                              | Apache 2.0    | [github](https://github.com/SixLabors/ImageSharp)                 |
-| LibHeifSharp         | HEIF / HEIC image decoding                                             | LGPL-3.0      | [github](https://github.com/0xC0000054/libheif-sharp)             |
-| OpenEXR              | High-dynamic-range OpenEXR (.exr) decoding                             | BSD-3-Clause  | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
-| rgbe                 | Radiance HDR (.hdr) image decoding                                     | Public Domain | [webpage](https://www.graphics.cornell.edu/~bjw/rgbe.html)        |
-| OpenJPEG             | JPEG 2000 still-image decoding                                         | BSD-2-Clause  | [github](https://github.com/uclouvain/openjpeg)                   |
-| Unicolour            | Color space conversions & perceptual color math (used in PSD decoding) | MIT           | [github](https://github.com/waacton/Unicolour)                    |
-| MetadataExtractor    | EXIF metadata extraction                                               | Apache 2.0    | [github](https://github.com/drewnoakes/metadata-extractor-dotnet) |
+| Library           | Purpose                                                                | License       | Repository                                                        |
+|-------------------|------------------------------------------------------------------------|---------------|-------------------------------------------------------------------|
+| SDL3-CS           | Core graphics, input, and windowing                                    | zlib          | [github](https://github.com/edwardgushchin/SDL3-CS)               |
+| SkiaSharp         | Hardware-accelerated 2D rendering                                      | BSD-3-Clause  | [github](https://github.com/mono/SkiaSharp)                       |
+| Svg.Skia          | SVG parsing and rendering                                              | MIT           | [github](https://github.com/wieslawsoltes/Svg.Skia)               |
+| LibHeifSharp      | HEIF / HEIC image decoding                                             | LGPL-3.0      | [github](https://github.com/0xC0000054/libheif-sharp)             |
+| OpenEXR           | High-dynamic-range OpenEXR (.exr) decoding                             | BSD-3-Clause  | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
+| rgbe              | Radiance HDR (.hdr) image decoding                                     | Public Domain | [webpage](https://www.graphics.cornell.edu/~bjw/rgbe.html)        |
+| OpenJPEG          | JPEG 2000 still-image decoding                                         | BSD-2-Clause  | [github](https://github.com/uclouvain/openjpeg)                   |
+| libtiff           | TIFF decoding                                                          | BSD-like      | [gitlab](https://gitlab.com/libtiff/libtiff)                      |
+| Unicolour         | Color space conversions & perceptual color math (used in PSD decoding) | MIT           | [github](https://github.com/waacton/Unicolour)                    |
+| MetadataExtractor | EXIF metadata extraction                                               | Apache 2.0    | [github](https://github.com/drewnoakes/metadata-extractor-dotnet) |
 
 ---
 

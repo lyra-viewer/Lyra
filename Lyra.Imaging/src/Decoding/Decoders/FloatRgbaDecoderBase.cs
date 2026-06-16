@@ -90,16 +90,45 @@ internal abstract class FloatRgbaDecoderBase : IImageDecoder
             byteSpan[idx + 0] = ToneMap(r);
             byteSpan[idx + 1] = ToneMap(g);
             byteSpan[idx + 2] = ToneMap(b);
-            byteSpan[idx + 3] = ToneMap(a);
+            byteSpan[idx + 3] = AlphaToByte(a);
         }
     }
 
+    /// <summary>
+    /// Maps a linear, scene-referred color channel to an 8-bit display value using the ACES
+    /// filmic tone curve (Narkowicz 2015 approximation) followed by a gamma 2.2 display encode.
+    /// The filmic curve rolls off highlights gracefully instead of clipping hard to white, which
+    /// is what makes true HDR (EXR) content readable. NaN maps to 0 (black).
+    /// </summary>
     private static byte ToneMap(float value)
     {
         if (float.IsNaN(value))
             return 0;
 
-        value = MathF.Pow(MathF.Max(value, 0), 1f / 2.2f) * 255f;
-        return (byte)Math.Clamp(value, 0, 255);
+        var x = MathF.Max(value, 0f);
+
+        // ACES filmic curve: (x * (a*x + b)) / (x * (c*x + d) + e).
+        const float a = 2.51f;
+        const float b = 0.03f;
+        const float c = 2.43f;
+        const float d = 0.59f;
+        const float e = 0.14f;
+        var toneMapped = Math.Clamp((x * ((a * x) + b)) / ((x * ((c * x) + d)) + e), 0f, 1f);
+
+        var encoded = MathF.Pow(toneMapped, 1f / 2.2f) * 255f;
+        return (byte)Math.Clamp(encoded, 0f, 255f);
+    }
+
+    /// <summary>
+    /// Converts a linear alpha (coverage) value to 8 bits. Unlike the color channels, alpha must
+    /// NOT be gamma-encoded. NaN is treated as fully opaque so a bad alpha value never silently
+    /// erases an otherwise valid pixel.
+    /// </summary>
+    private static byte AlphaToByte(float value)
+    {
+        if (float.IsNaN(value))
+            return 255;
+
+        return (byte)Math.Clamp(value * 255f, 0f, 255f);
     }
 }

@@ -10,6 +10,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.Core.Tests", "Lyra.Cor
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.UI", "Lyra.UI\Lyra.UI.csproj", "{CE023DB0-AA1A-4195-AFE8-AF16215ACAAB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.ManagedCodecs", "Lyra.ManagedCodecs\Lyra.ManagedCodecs.csproj", "{D0279866-A276-434D-9F71-65D5FD97DA42}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.ManagedCodecs.Tests", "Lyra.ManagedCodecs.Tests\Lyra.ManagedCodecs.Tests.csproj", "{AE0331A2-41E1-42FA-B121-0588FA662DC1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -80,6 +84,30 @@ Global
 		{CE023DB0-AA1A-4195-AFE8-AF16215ACAAB}.Release|x64.Build.0 = Release|Any CPU
 		{CE023DB0-AA1A-4195-AFE8-AF16215ACAAB}.Release|x86.ActiveCfg = Release|Any CPU
 		{CE023DB0-AA1A-4195-AFE8-AF16215ACAAB}.Release|x86.Build.0 = Release|Any CPU
+		{D0279866-A276-434D-9F71-65D5FD97DA42}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D0279866-A276-434D-9F71-65D5FD97DA42}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D0279866-A276-434D-9F71-65D5FD97DA42}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D0279866-A276-434D-9F71-65D5FD97DA42}.Debug|x64.Build.0 = Debug|Any CPU
+		{D0279866-A276-434D-9F71-65D5FD97DA42}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D0279866-A276-434D-9F71-65D5FD97DA42}.Debug|x86.Build.0 = Debug|Any CPU
+		{D0279866-A276-434D-9F71-65D5FD97DA42}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D0279866-A276-434D-9F71-65D5FD97DA42}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D0279866-A276-434D-9F71-65D5FD97DA42}.Release|x64.ActiveCfg = Release|Any CPU
+		{D0279866-A276-434D-9F71-65D5FD97DA42}.Release|x64.Build.0 = Release|Any CPU
+		{D0279866-A276-434D-9F71-65D5FD97DA42}.Release|x86.ActiveCfg = Release|Any CPU
+		{D0279866-A276-434D-9F71-65D5FD97DA42}.Release|x86.Build.0 = Release|Any CPU
+		{AE0331A2-41E1-42FA-B121-0588FA662DC1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AE0331A2-41E1-42FA-B121-0588FA662DC1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AE0331A2-41E1-42FA-B121-0588FA662DC1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AE0331A2-41E1-42FA-B121-0588FA662DC1}.Debug|x64.Build.0 = Debug|Any CPU
+		{AE0331A2-41E1-42FA-B121-0588FA662DC1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AE0331A2-41E1-42FA-B121-0588FA662DC1}.Debug|x86.Build.0 = Debug|Any CPU
+		{AE0331A2-41E1-42FA-B121-0588FA662DC1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AE0331A2-41E1-42FA-B121-0588FA662DC1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AE0331A2-41E1-42FA-B121-0588FA662DC1}.Release|x64.ActiveCfg = Release|Any CPU
+		{AE0331A2-41E1-42FA-B121-0588FA662DC1}.Release|x64.Build.0 = Release|Any CPU
+		{AE0331A2-41E1-42FA-B121-0588FA662DC1}.Release|x86.ActiveCfg = Release|Any CPU
+		{AE0331A2-41E1-42FA-B121-0588FA662DC1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
