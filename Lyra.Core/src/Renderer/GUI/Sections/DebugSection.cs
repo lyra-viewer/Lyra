@@ -1,4 +1,5 @@
 using Lyra.Common.SystemExtensions;
+using Lyra.FileLoader.Store;
 using Lyra.Renderer.GUI.Support;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
@@ -58,6 +59,20 @@ public sealed class DebugSection : IUISection
     private readonly Label _dropFilesValue;
     private readonly Label _dropSupportedValue;
 
+    // Current FileRecord rows (size / content hash / pHash populate during a duplicate scan).
+    private readonly HStack _recordNameRow;
+    private readonly Label _recordNameValue;
+    private readonly HStack _recordDirRow;
+    private readonly Label _recordDirValue;
+    private readonly HStack _recordSizeRow;
+    private readonly Label _recordSizeValue;
+    private readonly HStack _recordContentHashRow;
+    private readonly Label _recordContentHashValue;
+    private readonly HStack _recordPHashRow;
+    private readonly Label _recordPHashValue;
+    private readonly HStack _recordGroupRow;
+    private readonly Label _recordGroupValue;
+
     public Collapsible Collapsible => _collapsible;
 
     public IComponent Root => _collapsible;
@@ -86,6 +101,14 @@ public sealed class DebugSection : IUISection
         var dropFilesRow = BuildRow(keyLabels, "Drop Files", "0", out _dropFilesValue);
         var dropSupportedRow = BuildRow(keyLabels, "Drop Supported", "0", out _dropSupportedValue);
 
+        // Current FileRecord rows
+        _recordNameRow = BuildRow(keyLabels, "Rec Name", "-", out _recordNameValue);
+        _recordDirRow = BuildRow(keyLabels, "Rec Dir", "-", out _recordDirValue);
+        _recordSizeRow = BuildRow(keyLabels, "Rec Size", "-", out _recordSizeValue);
+        _recordContentHashRow = BuildRow(keyLabels, "Rec Hash", "-", out _recordContentHashValue);
+        _recordPHashRow = BuildRow(keyLabels, "Rec pHash", "-", out _recordPHashValue);
+        _recordGroupRow = BuildRow(keyLabels, "Rec Group", "-", out _recordGroupValue);
+
         // Compute the shared key-column width once and apply to every key label.
         var maxKeyWidth = 0f;
         foreach (var label in keyLabels)
@@ -112,7 +135,14 @@ public sealed class DebugSection : IUISection
             _dropStatusRow,
             dropEnqueuedRow,
             dropFilesRow,
-            dropSupportedRow);
+            dropSupportedRow,
+            Spacer(),
+            _recordNameRow,
+            _recordDirRow,
+            _recordSizeRow,
+            _recordContentHashRow,
+            _recordPHashRow,
+            _recordGroupRow);
     }
 
     public void Refresh(UIState state)
@@ -160,6 +190,29 @@ public sealed class DebugSection : IUISection
         _dropEnqueuedValue.Text = app.DropPathsEnqueued.ToString();
         _dropFilesValue.Text = app.DropFilesEnumerated.ToString();
         _dropSupportedValue.Text = app.DropFilesSupported.ToString();
+
+        RefreshRecord(state.CurrentRecord);
+    }
+
+    private void RefreshRecord(FileRecord? current)
+    {
+        var present = current is not null;
+        _recordNameRow.Present = present;
+        _recordDirRow.Present = present;
+        _recordSizeRow.Present = present;
+        _recordContentHashRow.Present = present;
+        _recordPHashRow.Present = present;
+        _recordGroupRow.Present = present;
+
+        if (current is not { } record)
+            return;
+
+        _recordNameValue.Text = record.Name;
+        _recordDirValue.Text = record.Directory;
+        _recordSizeValue.Text = record.HasSize ? $"{record.Size:N0} B" : "-";
+        _recordContentHashValue.Text = record.HasContentHash ? record.ContentHash.ToString("X") : "-";
+        _recordPHashValue.Text = record.HasPHash ? record.PHash.ToString("X16") : "-";
+        _recordGroupValue.Text = record.HasGroup ? record.GroupId!.Value.ToString() : "-";
     }
 
     public void SetPointer(float x, float y) => _pointerValue.Text = $"{x:F1}, {y:F1}";

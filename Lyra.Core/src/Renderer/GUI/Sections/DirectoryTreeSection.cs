@@ -1,4 +1,4 @@
-using Lyra.FileLoader;
+using Lyra.FileLoader.Navigation;
 using Lyra.Renderer.GUI.Presenters;
 using Lyra.UI;
 using Lyra.UI.Components;

@@ -1,10 +1,5 @@
-using System.Reflection;
-using System.Text;
 using Lyra.Common.Settings.Enums;
 using Lyra.Common.SystemExtensions;
-using Tomlyn;
-using Tomlyn.Model;
-using Tomlyn.Parsing;
 using static Lyra.Common.Settings.AppSettings;
 using static Lyra.Common.Settings.UISettings;
 
@@ -28,6 +23,94 @@ public static class SettingsManager
             LoadUiSettings();
     }
 
+    public static void SaveUiSettings(UISettings uiSettings)
+    {
+        if (!AppSettings.PreserveUiSettings)
+            return;
+
+        TomlSettingsFile.Save(BuildUserSettingsToml(uiSettings), UiSettingsFilepath);
+    }
+
+    private static void LoadAppSettings()
+    {
+        var defaultToml = BuildAppSettingsToml(DefaultAppSettings);
+        var table = TomlSettingsFile.ReadOrCreate(AppSettingsFilepath, defaultToml);
+
+        var version = table.GetInt("version", CurrentVersion);
+        if (version != CurrentVersion)
+        {
+            Logger.Warning($"[SettingsManager] AppSettings version mismatch ({version} != {CurrentVersion}). Resetting.");
+            TomlSettingsFile.Save(defaultToml, AppSettingsFilepath);
+            return;
+        }
+
+        var rendererAlias = table.GetString("renderer", DefaultAppSettings.Renderer.Alias());
+        var windowAlias = table.GetString("window_state_on_start", DefaultAppSettings.WindowStateOnStart.Alias());
+        var midAlias = table.GetString("mid_mouse_button_function", DefaultAppSettings.MidMouseButtonFunction.Alias());
+        var infoTextSize = Math.Clamp(table.GetInt("info_text_size", DefaultAppSettings.InfoTextSize), 4, 72);
+        var helpTextSize = Math.Clamp(table.GetInt("help_text_size", DefaultAppSettings.HelpTextSize), 4, 72);
+
+        var preserveUi = table.GetBool("preserve_ui_settings", DefaultAppSettings.PreserveUiSettings);
+        var debug = table.GetBool("debug", DefaultAppSettings.Debug);
+        var theme = table.GetString("theme", DefaultAppSettings.Theme);
+
+        var renderer = DefaultAppSettings.Renderer;
+        if (EnumExtensions.TryParseByAlias(rendererAlias, out Backend parsedBackend))
+            renderer = parsedBackend;
+        else
+            Logger.Warning($"[SettingsManager] Unknown renderer '{rendererAlias}', using default '{renderer.Alias()}'");
+
+        var windowState = DefaultAppSettings.WindowStateOnStart;
+        if (EnumExtensions.TryParseByAlias(windowAlias, out WindowState parsedWindowState))
+            windowState = parsedWindowState;
+        else
+            Logger.Warning($"[SettingsManager] Unknown window_state_on_start '{windowAlias}', using default '{windowState.Alias()}'");
+
+        var midMouseButton = DefaultAppSettings.MidMouseButtonFunction;
+        if (EnumExtensions.TryParseByAlias(midAlias, out MidMouseButtonFunction parsedMidMouseButton))
+            midMouseButton = parsedMidMouseButton;
+        else
+            Logger.Warning($"[SettingsManager] Unknown mid_mouse_button_function '{midAlias}', using default '{midMouseButton.Alias()}'");
+
+        AppSettings = new AppSettings(renderer, windowState, midMouseButton, infoTextSize, helpTextSize, preserveUi, debug, theme);
+    }
+
+    private static void LoadUiSettings()
+    {
+        var defaultToml = BuildUserSettingsToml(DefaultUiSettings);
+        var table = TomlSettingsFile.ReadOrCreate(UiSettingsFilepath, defaultToml);
+
+        var version = table.GetInt("version", CurrentVersion);
+        if (version != CurrentVersion)
+        {
+            Logger.Warning($"[SettingsManager] UiSettings version mismatch ({version} != {CurrentVersion}). Resetting.");
+            TomlSettingsFile.Save(defaultToml, UiSettingsFilepath);
+            return;
+        }
+
+        var samplingRaw = table.GetInt("sampling_mode", (int)DefaultUiSettings.SamplingMode);
+        var backgroundRaw = table.GetInt("background_mode", (int)DefaultUiSettings.BackgroundMode);
+        var info = table.GetBool("info_visible", DefaultUiSettings.InfoVisible);
+        var help = table.GetBool("help_visible", DefaultUiSettings.HelpVisible);
+        var sidebar = table.GetBool("sidebar_visible", DefaultUiSettings.SidebarVisible);
+
+        var sampling = Enum.IsDefined(typeof(SamplingMode), samplingRaw)
+            ? (SamplingMode)samplingRaw
+            : DefaultUiSettings.SamplingMode;
+
+        if (!Enum.IsDefined(typeof(SamplingMode), samplingRaw))
+            Logger.Warning($"[SettingsManager] Invalid sampling_mode={samplingRaw}, using default {(int)DefaultUiSettings.SamplingMode}");
+
+        var background = Enum.IsDefined(typeof(BackgroundMode), backgroundRaw)
+            ? (BackgroundMode)backgroundRaw
+            : DefaultUiSettings.BackgroundMode;
+
+        if (!Enum.IsDefined(typeof(BackgroundMode), backgroundRaw))
+            Logger.Warning($"[SettingsManager] Invalid background_mode={backgroundRaw}, using default {(int)DefaultUiSettings.BackgroundMode}");
+
+        UiSettings = new UISettings(sampling, background, info, help, sidebar);
+    }
+
     private static string BuildUserSettingsToml(UISettings s)
     {
         return $"""
@@ -39,7 +122,7 @@ public static class SettingsManager
                 info_visible = {s.InfoVisible.ToString().ToLowerInvariant()}
                 help_visible = {s.HelpVisible.ToString().ToLowerInvariant()}
                 sidebar_visible = {s.SidebarVisible.ToString().ToLowerInvariant()}
-                
+
                 """;
     }
 
@@ -68,271 +151,14 @@ public static class SettingsManager
                 # UI text size:
                 info_text_size = {s.InfoTextSize}
                 help_text_size = {s.HelpTextSize}
-                
+
                 # Active theme (file name in the themes/ directory, without extension).
                 # Leave blank to use the built-in default palette.
                 theme = "{s.Theme}"
-                
+
                 # Debug mode:
                 debug = {s.Debug.ToString().ToLowerInvariant()}
 
                 """;
-    }
-
-    private static void LoadAppSettings()
-    {
-        var defaultToml = BuildAppSettingsToml(DefaultAppSettings);
-        var table = ParseTableOrReset(AppSettingsFilepath, defaultToml);
-
-        var version = GetInt(table, "version", CurrentVersion);
-        if (version != CurrentVersion)
-        {
-            Logger.Warning($"[SettingsManager] AppSettings version mismatch ({version} != {CurrentVersion}). Resetting.");
-            SaveAtomic(defaultToml, AppSettingsFilepath);
-            return;
-        }
-
-        var rendererAlias = GetString(table, "renderer", DefaultAppSettings.Renderer.Alias());
-        var windowAlias = GetString(table, "window_state_on_start", DefaultAppSettings.WindowStateOnStart.Alias());
-        var midAlias = GetString(table, "mid_mouse_button_function", DefaultAppSettings.MidMouseButtonFunction.Alias());
-        var infoTextSize = Math.Clamp(GetInt(table, "info_text_size", DefaultAppSettings.InfoTextSize), 4, 72);
-        var helpTextSize = Math.Clamp(GetInt(table, "help_text_size", DefaultAppSettings.HelpTextSize), 4, 72);
-        
-        var preserveUi = GetBool(table, "preserve_ui_settings", DefaultAppSettings.PreserveUiSettings);
-        var debug = GetBool(table, "debug", DefaultAppSettings.Debug);
-        var theme = GetString(table, "theme", DefaultAppSettings.Theme);
-
-        var renderer = DefaultAppSettings.Renderer;
-        if (TryParseByAlias(rendererAlias, out Backend parsedBackend))
-            renderer = parsedBackend;
-        else
-            Logger.Warning($"[SettingsManager] Unknown renderer '{rendererAlias}', using default '{renderer.Alias()}'");
-
-        var windowState = DefaultAppSettings.WindowStateOnStart;
-        if (TryParseByAlias(windowAlias, out WindowState parsedWindowState))
-            windowState = parsedWindowState;
-        else
-            Logger.Warning($"[SettingsManager] Unknown window_state_on_start '{windowAlias}', using default '{windowState.Alias()}'");
-
-        var midMouseButton = DefaultAppSettings.MidMouseButtonFunction;
-        if (TryParseByAlias(midAlias, out MidMouseButtonFunction parsedMidMouseButton))
-            midMouseButton = parsedMidMouseButton;
-        else
-            Logger.Warning($"[SettingsManager] Unknown mid_mouse_button_function '{midAlias}', using default '{midMouseButton.Alias()}'");
-
-        AppSettings = new AppSettings(renderer, windowState, midMouseButton, infoTextSize, helpTextSize, preserveUi, debug, theme);
-    }
-
-    private static void LoadUiSettings()
-    {
-        var defaultToml = BuildUserSettingsToml(DefaultUiSettings);
-        var table = ParseTableOrReset(UiSettingsFilepath, defaultToml);
-
-        var version = GetInt(table, "version", CurrentVersion);
-        if (version != CurrentVersion)
-        {
-            Logger.Warning($"[SettingsManager] UiSettings version mismatch ({version} != {CurrentVersion}). Resetting.");
-            SaveAtomic(defaultToml, UiSettingsFilepath);
-            return;
-        }
-
-        var samplingRaw = GetInt(table, "sampling_mode", (int)DefaultUiSettings.SamplingMode);
-        var backgroundRaw = GetInt(table, "background_mode", (int)DefaultUiSettings.BackgroundMode);
-        var info = GetBool(table, "info_visible", DefaultUiSettings.InfoVisible);
-        var help = GetBool(table, "help_visible", DefaultUiSettings.HelpVisible);
-        var sidebar = GetBool(table, "sidebar_visible", DefaultUiSettings.SidebarVisible);
-
-        var sampling = Enum.IsDefined(typeof(SamplingMode), samplingRaw)
-            ? (SamplingMode)samplingRaw
-            : DefaultUiSettings.SamplingMode;
-
-        if (!Enum.IsDefined(typeof(SamplingMode), samplingRaw))
-            Logger.Warning($"[SettingsManager] Invalid sampling_mode={samplingRaw}, using default {(int)DefaultUiSettings.SamplingMode}");
-
-        var background = Enum.IsDefined(typeof(BackgroundMode), backgroundRaw)
-            ? (BackgroundMode)backgroundRaw
-            : DefaultUiSettings.BackgroundMode;
-
-        if (!Enum.IsDefined(typeof(BackgroundMode), backgroundRaw))
-            Logger.Warning($"[SettingsManager] Invalid background_mode={backgroundRaw}, using default {(int)DefaultUiSettings.BackgroundMode}");
-
-        UiSettings = new UISettings(sampling, background, info, help, sidebar);
-    }
-
-    public static void SaveUiSettings(UISettings uiSettings)
-    {
-        if (!AppSettings.PreserveUiSettings)
-            return;
-
-        var uiToml = BuildUserSettingsToml(uiSettings);
-        SaveAtomic(uiToml, UiSettingsFilepath);
-    }
-
-    private static TomlTable ParseTableOrReset(string path, string defaultToml)
-    {
-        try
-        {
-            if (!File.Exists(path))
-            {
-                Logger.Warning($"[SettingsManager] Missing settings file: {path}. Writing default.");
-                SaveAtomic(defaultToml, path);
-                return TomlSerializer.Deserialize(defaultToml, LyraTomlContext.Default.TomlTable)!;
-            }
-
-            var text = File.ReadAllText(path);
-            var doc = SyntaxParser.Parse(text);
-
-            if (doc.HasErrors)
-            {
-                Logger.Error($"[SettingsManager] TOML parse errors in: {path}. Resetting to default.");
-                foreach (var d in doc.Diagnostics)
-                    Logger.Error($"[SettingsManager] TOML: {d}");
-
-                BackupCorruptedFile(path, "TomlSerializer.Deserialize diagnostics present");
-                SaveAtomic(defaultToml, path);
-                return TomlSerializer.Deserialize(defaultToml, LyraTomlContext.Default.TomlTable)!;
-            }
-
-            var model = TomlSerializer.Deserialize(text, LyraTomlContext.Default.TomlTable)!;
-            Logger.Debug($"[SettingsManager] Parsed TOML table: {path}");
-            return model;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"[SettingsManager] Failed to parse settings file: {path}. Resetting to default.");
-            Logger.Error(ex.Message);
-
-            BackupCorruptedFile(path, "ParseTableOrReset hard failure", ex);
-
-            SaveAtomic(defaultToml, path);
-            return TomlSerializer.Deserialize(defaultToml, LyraTomlContext.Default.TomlTable)!;
-        }
-    }
-
-    private static string GetString(TomlTable t, string key, string fallback)
-    {
-        if (!t.TryGetValue(key, out var v) || v is null)
-            return fallback;
-
-        if (v is string s)
-            return s;
-
-        Logger.Warning($"[SettingsManager] Key '{key}' expected string but was '{v.GetType().Name}'. Using fallback.");
-        return fallback;
-    }
-
-    private static bool GetBool(TomlTable t, string key, bool fallback)
-    {
-        if (!t.TryGetValue(key, out var v) || v is null)
-            return fallback;
-
-        if (v is bool b)
-            return b;
-
-        Logger.Warning($"[SettingsManager] Key '{key}' expected bool but was '{v.GetType().Name}'. Using fallback.");
-        return fallback;
-    }
-
-    private static int GetInt(TomlTable t, string key, int fallback)
-    {
-        if (!t.TryGetValue(key, out var v) || v is null)
-            return fallback;
-
-        try
-        {
-            return v switch
-            {
-                int i => i,
-                long l => checked((int)l), // Tomlyn often uses long for integers
-                _ => fallback
-            };
-        }
-        catch (Exception)
-        {
-            Logger.Warning($"[SettingsManager] Key '{key}' integer out of range. Using fallback.");
-            return fallback;
-        }
-    }
-
-    private static void SaveAtomic(string toml, string filepath)
-    {
-        Logger.Info($"[SettingsManager] Saving: {filepath}");
-
-        var dir = Path.GetDirectoryName(filepath);
-        if (!string.IsNullOrWhiteSpace(dir))
-            Directory.CreateDirectory(dir);
-
-        var normalized = toml.Replace("\r\n", "\n");
-        var tmpPath = filepath + ".tmp";
-
-        try
-        {
-            File.WriteAllText(tmpPath, normalized, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-            File.Move(tmpPath, filepath, overwrite: true);
-
-            Logger.Debug($"[SettingsManager] Saved OK: {filepath}");
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"[SettingsManager] Save FAILED: {filepath}");
-            Logger.Error(ex.Message);
-
-            try
-            {
-                if (File.Exists(tmpPath)) File.Delete(tmpPath);
-            }
-            catch
-            {
-                /* ignore */
-            }
-
-            throw;
-        }
-    }
-
-    private static void BackupCorruptedFile(string path, string reason, Exception? ex = null)
-    {
-        try
-        {
-            if (!File.Exists(path))
-                return;
-
-            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
-            var backup = $"{path}.corrupted.{timestamp}.toml";
-
-            File.Move(path, backup, overwrite: true);
-
-            Logger.Warning($"[SettingsManager] Backed up corrupted settings file: {path} -> {backup}. Reason: {reason}");
-
-            if (ex != null)
-                Logger.Warning(ex.Message);
-        }
-        catch (Exception backupEx)
-        {
-            Logger.Error($"[SettingsManager] Failed to back up corrupted file: {path}");
-            Logger.Error(backupEx.Message);
-        }
-    }
-
-    private static bool TryParseByAlias<TEnum>(string alias, out TEnum value)
-        where TEnum : struct, Enum
-    {
-        value = default;
-
-        if (string.IsNullOrWhiteSpace(alias))
-            return false;
-
-        var type = typeof(TEnum);
-        foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Static))
-        {
-            var aliasAttr = field.GetCustomAttribute<AliasAttribute>();
-            if (aliasAttr != null && string.Equals(aliasAttr.Alias, alias, StringComparison.OrdinalIgnoreCase))
-            {
-                value = (TEnum)field.GetValue(null)!;
-                return true;
-            }
-        }
-
-        return false;
     }
 }

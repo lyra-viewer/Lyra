@@ -1,3 +1,4 @@
+using Lyra.Common.Events;
 using static Lyra.Common.Events.EventManager;
 
 namespace Lyra.Imaging.ConstraintsProvider;

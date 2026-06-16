@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Lyra.Common.Settings;
 using Lyra.DropStatusProvider;
+using Lyra.DuplicateStatusProvider;
 using Lyra.SdlCore;
 using SkiaSharp;
 using static SDL3.SDL;
@@ -29,8 +30,8 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     // MTLPixelFormatBGRA8Unorm (stable value)
     private const ulong MTLPixelFormatBGRA8Unorm = 80;
 
-    public SkiaMetalRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState)
-        : base(drawableSize, dropProgressProvider, viewState, "Metal")
+    public SkiaMetalRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, IScanProgressProvider scanProgressProvider)
+        : base(drawableSize, dropProgressProvider, viewState, "Metal", scanProgressProvider)
     {
         _metalView = MetalCreateView(window);
         if (_metalView == IntPtr.Zero)

@@ -1,7 +1,8 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using Lyra.Common;
-using Lyra.FileLoader;
+using Lyra.FileLoader.Enumeration;
+using Lyra.FileLoader.Navigation;
 using static SDL3.SDL;
 
 namespace Lyra.SdlCore;
@@ -167,7 +168,7 @@ public partial class SdlCore
 
                 if (batch.Count == 0)
                 {
-                    // If cancelled and nothing to process, we're done.
+                    // If canceled and nothing to process, we're done.
                     if (session.Cts.IsCancellationRequested)
                         break;
 
@@ -180,13 +181,9 @@ public partial class SdlCore
 
                 // Heavy work OFF SDL thread, cancellable
                 long batchSupportedAdded = 0;
-                var files = FilePathProcessor.ProcessImagePaths(
+                var result = FilePathProcessor.ProcessImagePaths(
                     batch,
                     recurseSubdirs: null,
-                    out var singleDirectory,
-                    out var topDirectory,
-                    out var allDirectories,
-                    out var dropContext,
                     cancellationToken: session.Cts.Token,
                     onFileEnumerated: () =>
                     {
@@ -202,7 +199,7 @@ public partial class SdlCore
 
                 // Safety: if any supported files were added without triggering the callback,
                 // reconcile here (should normally be zero).
-                var missingSupported = files.Count - batchSupportedAdded;
+                var missingSupported = result.Files.Count - batchSupportedAdded;
                 if (missingSupported > 0)
                     Interlocked.Add(ref pendingSupported, missingSupported);
 
@@ -211,7 +208,8 @@ public partial class SdlCore
                 // Apply results back on the main thread
                 DispatchToMain(() =>
                 {
-                    DirectoryNavigator.ApplyCollection(files, allDirectories, dropContext, singleDirectory, topDirectory);
+                    DirectoryNavigator.ApplyCollection(result);
+                    _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false);
                     LoadImage();
                     RaiseWindow(_window);
                 }, requireWarm: true);

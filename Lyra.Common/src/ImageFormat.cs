@@ -43,6 +43,17 @@ public static class ImageFormat
         var format = GetImageFormatInternal(normalized);
         return HasAttribute<DisabledPreloadAttribute>(format);
     }
+    
+    public static bool IsPerceptualHashSupported(string extension)
+    {
+        var normalized = NormalizeExtension(extension);
+
+        var format = GetImageFormatInternal(normalized);
+        if (format == ImageFormatType.Unknown || HasAttribute<DisabledTypeAttribute>(format))
+            return false;
+
+        return !HasAttribute<NoPerceptualHashAttribute>(format);
+    }
 
     private static ImageFormatType GetImageFormatInternal(string normalizedExtension)
     {
