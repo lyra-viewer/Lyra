@@ -1,4 +1,4 @@
-using Lyra.FileLoader;
+using Lyra.FileLoader.Enumeration;
 using Lyra.SdlCore;
 
 namespace Lyra.Renderer;

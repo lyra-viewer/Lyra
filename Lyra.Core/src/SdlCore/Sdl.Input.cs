@@ -1,4 +1,4 @@
-using Lyra.FileLoader;
+using Lyra.FileLoader.Navigation;
 using Lyra.SystemUtils;
 using SkiaSharp;
 using static SDL3.SDL;

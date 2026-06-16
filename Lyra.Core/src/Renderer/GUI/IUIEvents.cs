@@ -8,6 +8,8 @@ public interface IUIEvents
     event Action? OpenDirectoryRequested;
     event Action? FullscreenRequested;
     event Action? QuitRequested;
+    event Action? FindDuplicatesRequested;
+    event Action? DuplicatesGoBackRequested;
     event Action<string>? DirectoryPicked;
     event Action<BackgroundMode>? BackgroundModeChanged;
     event Action<SamplingMode>? SamplingModeChanged;

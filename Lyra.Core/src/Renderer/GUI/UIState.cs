@@ -1,4 +1,5 @@
-using Lyra.FileLoader;
+using Lyra.FileLoader.Navigation;
+using Lyra.FileLoader.Store;
 using Lyra.Imaging.Content;
 
 namespace Lyra.Renderer.GUI;
@@ -8,17 +9,20 @@ public sealed record UIState(
     CompositeState CompositeState,
     ApplicationStates AppStates,
     DirectorySnapshot Directories,
-    DirectoryNavigator.Navigation Navigation)
+    DirectoryNavigator.Navigation Navigation,
+    FileRecord? CurrentRecord)
 {
     public static UIState Create(
         Composite? composite,
         ApplicationStates appStates,
         DirectorySnapshot directories,
-        DirectoryNavigator.Navigation navigation) =>
+        DirectoryNavigator.Navigation navigation,
+        FileRecord? currentRecord) =>
         new(composite,
             composite?.State ?? CompositeState.Disposed,
             appStates,
             directories,
-            navigation
+            navigation,
+            currentRecord
         );
 }

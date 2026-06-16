@@ -1,5 +1,6 @@
 using Lyra.Common;
-using Lyra.Imaging.Codecs;
+using Lyra.Imaging.Decoding;
+using Lyra.Imaging.Decoding.Decoders;
 
 namespace Lyra.Imaging.Pipeline;
 

@@ -2,42 +2,46 @@ namespace Lyra.Common.Events;
 
 public static class EventManager
 {
+    private static readonly object Gate = new();
     private static readonly Dictionary<Type, List<Delegate>> Listeners = new();
 
     public static void Subscribe<T>(Action<T> handler)
     {
-        var type = typeof(T);
-        if (!Listeners.ContainsKey(type))
-            Listeners[type] = [];
+        lock (Gate)
+        {
+            if (!Listeners.TryGetValue(typeof(T), out var handlers))
+                Listeners[typeof(T)] = handlers = [];
 
-        Listeners[type].Add(handler);
+            handlers.Add(handler);
+        }
     }
 
     public static void Unsubscribe<T>(Action<T> handler)
     {
-        var type = typeof(T);
-        if (Listeners.TryGetValue(type, out var handlers))
+        lock (Gate)
         {
+            if (!Listeners.TryGetValue(typeof(T), out var handlers))
+                return;
+
             handlers.Remove(handler);
             if (handlers.Count == 0)
-                Listeners.Remove(type);
+                Listeners.Remove(typeof(T));
         }
     }
 
     public static void Publish<T>(T evt)
     {
-        var type = typeof(T);
-        if (Listeners.TryGetValue(type, out var handlers))
+        Delegate[] snapshot;
+        lock (Gate)
         {
-            foreach (var handler in handlers)
-            {
-                if (handler is Action<T> typedHandler)
-                    typedHandler.Invoke(evt);
-            }
+            if (!Listeners.TryGetValue(typeof(T), out var handlers) || handlers.Count == 0)
+                return;
+
+            snapshot = handlers.ToArray();
         }
+
+        foreach (var handler in snapshot)
+            if (handler is Action<T> typed)
+                typed.Invoke(evt);
     }
-    
-    public readonly record struct DrawableSizeChangedEvent(int PixelWidth, int PixelHeight, float Scale);
-    
-    public readonly record struct DisplayBoundsChangedEvent(int PixelWidth, int PixelHeight, uint? DisplayId = null);
 }

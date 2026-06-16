@@ -1,4 +1,4 @@
-using Lyra.FileLoader;
+using Lyra.FileLoader.Navigation;
 using Lyra.UI.Components.Controls.TreeView;
 
 namespace Lyra.Renderer.GUI.Presenters;

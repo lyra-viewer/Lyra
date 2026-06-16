@@ -4,6 +4,7 @@ project.lock.json
 .DS_Store
 *.pyc
 nupkg/
+Lyra.sln.DotSettings
 
 dist/
 lib/
@@ -46,6 +47,7 @@ x86/
 build/
 build-brew/
 build-macos/
+build-linux/
 bld/
 [Bb]in/
 [Oo]bj/

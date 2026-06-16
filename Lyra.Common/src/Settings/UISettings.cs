@@ -11,7 +11,7 @@ public readonly record struct UISettings(
 )
 {
     public static readonly UISettings DefaultUiSettings = new(
-        SamplingMode: SamplingMode.Cubic,
+        SamplingMode: SamplingMode.Pixel,
         BackgroundMode: BackgroundMode.Black,
         InfoVisible: true,
         HelpVisible: true,
