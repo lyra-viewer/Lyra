@@ -49,9 +49,9 @@ public sealed class DirectoryTreeSection : IUISection, IDisposable
 
     public DirectoryTreeSection()
     {
-        _folderIcon     = new SvgImage(ResourceLoader.GetSvg("folder"),      DirIconSize, DirIconSize);
+        _folderIcon = new SvgImage(ResourceLoader.GetSvg("folder"), DirIconSize, DirIconSize);
         _folderOpenIcon = new SvgImage(ResourceLoader.GetSvg("folder_open"), DirIconSize, DirIconSize);
-        _folderOffIcon  = new SvgImage(ResourceLoader.GetSvg("folder_off"),  DirIconSize, DirIconSize);
+        _folderOffIcon = new SvgImage(ResourceLoader.GetSvg("folder_off"), DirIconSize, DirIconSize);
 
         _treeView = new TreeView<DirEntry>([], RenderNode)
         {
@@ -74,7 +74,7 @@ public sealed class DirectoryTreeSection : IUISection, IDisposable
         _collapsible = new Collapsible("DIRECTORIES")
         {
             HorizontalSize = SizeMode.Expand,
-            Present = false, 
+            Present = false,
             IsExpanded = true
         };
         _collapsible.AddComponent(_treeView);
@@ -92,12 +92,25 @@ public sealed class DirectoryTreeSection : IUISection, IDisposable
         _folderOffIcon.Dispose();
     }
 
-    private static Label RenderNode(TreeNode<DirEntry> node, bool isPicked) =>
-        new(node.Data.CollapsedDisplayName ?? PathTreeBuilder.DisplayName(node.Data.Path))
+    private static Label RenderNode(TreeNode<DirEntry> node, bool isPicked)
+    {
+        var leadsToImages = node.Data.HasImages || (!node.IsExpanded && AnyDescendantHasImages(node));
+
+        return new Label(node.Data.CollapsedDisplayName ?? PathTreeBuilder.DisplayName(node.Data.Path))
         {
             Padding = new Padding(0, 1, 0, 1),
             Color = isPicked ? Palette.SelectedForeground
-                : node.Data.HasImages ? Palette.Foreground
+                : leadsToImages ? Palette.Foreground
                 : Palette.Dim
         };
+    }
+
+    private static bool AnyDescendantHasImages(TreeNode<DirEntry> node)
+    {
+        foreach (var child in node.Children)
+            if (child.Data.HasImages || AnyDescendantHasImages(child))
+                return true;
+
+        return false;
+    }
 }
