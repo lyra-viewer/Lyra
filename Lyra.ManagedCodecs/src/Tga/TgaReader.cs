@@ -5,7 +5,7 @@ namespace Lyra.ManagedCodecs.Tga;
 /// encoded variants of grayscale (8/16-bit), true-color (15/16/24/32-bit) and color-mapped
 /// images, with all four image origins. Output is always 8-bit RGBA, top-left origin.
 /// </summary>
-public sealed class TgaDecoder : IManagedImageDecoder
+public sealed class TgaReader : IManagedImageReader
 {
     public bool CanDecode(ReadOnlySpan<byte> header) => IsLikelyTga(header);
 

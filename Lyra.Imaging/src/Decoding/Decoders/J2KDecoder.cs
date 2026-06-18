@@ -75,8 +75,7 @@ internal class J2KDecoder : IImageDecoder
                         CopyRows(src, nativeStrideBytes, dst, dstStride, height, Math.Min(nativeStrideBytes, dstStride));
 
                         UpdateGrayscaleFlag(src, nativeStrideBytes, width, height, ref isGrayscale);
-
-                        composite.FormatSpecific["Grayscale"] = isGrayscale.ToString();
+                        // composite.FormatSpecific["Grayscale"] = isGrayscale.ToString();
 
                         bitmap.SetImmutable();
                         var image = SKImage.FromBitmap(bitmap);
@@ -128,7 +127,7 @@ internal class J2KDecoder : IImageDecoder
                         }
                     }
 
-                    composite.FormatSpecific["Grayscale"] = isGrayscale.ToString();
+                    // composite.FormatSpecific["Grayscale"] = isGrayscale.ToString();
 
                     bitmap.SetImmutable();
                     var skImage = SKImage.FromBitmap(bitmap);

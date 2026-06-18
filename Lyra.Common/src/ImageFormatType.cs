@@ -50,6 +50,11 @@ public enum ImageFormatType
     [FileExtension([".jpg", ".jpeg"])]
     [Description("JPEG Image")]
     Jpeg,
+    
+    [DisabledType]
+    [FileExtension([".jxl"])]
+    [Description("JPEG XL")]
+    Jxl,
 
     [DisabledType]
     [FileExtension([".ktx", ".ktx2"])]

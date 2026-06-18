@@ -51,11 +51,6 @@ internal static class NativeLibraryLoader
                 "libexr_native.dylib"
             },
             {
-                "HDR", RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "libhdr_native.dll" :
-                RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "libhdr_native.so" :
-                "libhdr_native.dylib"
-            },
-            {
                 "J2K", RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "libj2k_native.dll" :
                 RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "libj2k_native.so" :
                 "libj2k_native.dylib"
@@ -241,7 +236,6 @@ internal static class NativeLibraryLoader
         return libraryName switch
         {
             "libexr" or "libexr.dll" or "libexr.so" or "libexr.dylib" => TryLoad("EXR"),
-            "libhdr" or "libhdr.dll" or "libhdr.so" or "libhdr.dylib" => TryLoad("HDR"),
             "libj2k" or "libj2k.dll" or "libj2k.so" or "libj2k.dylib" => TryLoad("J2K"),
             "libtiff" or "libtiff.dll" or "libtiff.so" or "libtiff.dylib" => TryLoad("TIFF"),
             _ => IntPtr.Zero

@@ -1,24 +1,16 @@
 using Lyra.Common;
-using Lyra.Imaging.Interop;
+using Lyra.Imaging.Decoding.Support;
+using Lyra.ManagedCodecs.Hdr;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-internal class HdrDecoder : FloatRgbaDecoderBase
+internal sealed class HdrDecoder : FloatRgbaDecoderBase
 {
     public override bool CanDecode(ImageFormatType format) => format == ImageFormatType.Hdr;
 
-    protected override bool LoadPixels(string path, out IntPtr ptr, out int width, out int height)
+    protected override FloatImageBuffer LoadPixels(string path)
     {
-        var result = HdrNative.load_hdr_rgba(path, out ptr, out width, out height);
-        if (!result)
-        {
-            var errorPtr = HdrNative.get_last_hdr_error();
-            var error = NativeErrors.GetUtf8ZOrAnsiZ(errorPtr);
-            Logger.Error($"[HdrDecoder] Native error: {error}");
-        }
-
-        return result;
+        var image = RadianceHdrReader.Decode(File.ReadAllBytes(path));
+        return FloatImageBuffer.FromManaged(image.Pixels, image.Width, image.Height);
     }
-
-    protected override void FreePixels(IntPtr ptr) => HdrNative.free_hdr_pixels(ptr);
 }

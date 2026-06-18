@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Lyra.ManagedCodecs.Tests.Tga;
 
-public class TgaDecoderTests
+public class TgaReaderTests
 {
     // The canonical 2x2 image used across tests, in RGBA top-left order:
     //   (0,0) red   (1,0) green
@@ -21,7 +21,7 @@ public class TgaDecoderTests
         tga.AddRange([0, 0, 255, /**/ 0, 255, 0]); // row 0: red, green (BGR)
         tga.AddRange([255, 0, 0, /**/ 255, 255, 255]); // row 1: blue, white (BGR)
 
-        DecodedImage img = TgaDecoder.Decode(tga.ToArray());
+        DecodedImage img = TgaReader.Decode(tga.ToArray());
 
         Assert.Equal(2, img.Width);
         Assert.Equal(2, img.Height);
@@ -36,7 +36,7 @@ public class TgaDecoderTests
         tga.AddRange([255, 0, 0, /**/ 255, 255, 255]); // stored row 0 = visual bottom: blue, white
         tga.AddRange([0, 0, 255, /**/ 0, 255, 0]); // stored row 1 = visual top: red, green
 
-        DecodedImage img = TgaDecoder.Decode(tga.ToArray());
+        DecodedImage img = TgaReader.Decode(tga.ToArray());
 
         Assert.Equal(Expected2X2, img.Pixels);
     }
@@ -48,7 +48,7 @@ public class TgaDecoderTests
         List<byte> tga = TgaTestImage.Header(0, 2, 0, 0, 2, 1, 24, TgaTestImage.TopRight);
         tga.AddRange([0, 255, 0, /**/ 0, 0, 255]); // green, red (BGR)
 
-        DecodedImage img = TgaDecoder.Decode(tga.ToArray());
+        DecodedImage img = TgaReader.Decode(tga.ToArray());
 
         Assert.Equal(new byte[] { 255, 0, 0, 255, 0, 255, 0, 255 }, img.Pixels);
     }
@@ -60,7 +60,7 @@ public class TgaDecoderTests
         tga.AddRange([0, 0, 255, 255, /**/ 0, 255, 0, 128]); // red a=255, green a=128 (BGRA)
         tga.AddRange([255, 0, 0, 64, /**/ 255, 255, 255, 0]); // blue a=64, white a=0 (BGRA)
 
-        DecodedImage img = TgaDecoder.Decode(tga.ToArray());
+        DecodedImage img = TgaReader.Decode(tga.ToArray());
 
         Assert.Equal(
             new byte[]
@@ -77,7 +77,7 @@ public class TgaDecoderTests
         List<byte> tga = TgaTestImage.Header(0, 3, 0, 0, 2, 2, 8, TgaTestImage.TopLeft);
         tga.AddRange([0, 85, 170, 255]);
 
-        DecodedImage img = TgaDecoder.Decode(tga.ToArray());
+        DecodedImage img = TgaReader.Decode(tga.ToArray());
 
         Assert.Equal(
             new byte[]
@@ -96,7 +96,7 @@ public class TgaDecoderTests
         tga.Add(0x03);
         tga.AddRange([0, 0, 255, /**/ 0, 255, 0, /**/ 255, 0, 0, /**/ 255, 255, 255]);
 
-        DecodedImage img = TgaDecoder.Decode(tga.ToArray());
+        DecodedImage img = TgaReader.Decode(tga.ToArray());
 
         Assert.Equal(Expected2X2, img.Pixels);
     }
@@ -109,7 +109,7 @@ public class TgaDecoderTests
         tga.Add(0x81);
         tga.AddRange([0, 0, 255]);
 
-        DecodedImage img = TgaDecoder.Decode(tga.ToArray());
+        DecodedImage img = TgaReader.Decode(tga.ToArray());
 
         Assert.Equal(new byte[] { 255, 0, 0, 255, 255, 0, 0, 255 }, img.Pixels);
     }
@@ -122,7 +122,7 @@ public class TgaDecoderTests
         tga.AddRange([0, 0, 255, /**/ 0, 255, 0]); // palette
         tga.AddRange([0, 1]); // indices
 
-        DecodedImage img = TgaDecoder.Decode(tga.ToArray());
+        DecodedImage img = TgaReader.Decode(tga.ToArray());
 
         Assert.Equal(new byte[] { 255, 0, 0, 255, 0, 255, 0, 255 }, img.Pixels);
     }
@@ -134,7 +134,7 @@ public class TgaDecoderTests
         List<byte> tga = TgaTestImage.Header(0, 2, 0, 0, 1, 1, 16, TgaTestImage.TopLeft);
         tga.AddRange([0x00, 0x7C]);
 
-        DecodedImage img = TgaDecoder.Decode(tga.ToArray());
+        DecodedImage img = TgaReader.Decode(tga.ToArray());
 
         Assert.Equal(new byte[] { 255, 0, 0, 255 }, img.Pixels);
     }
@@ -143,7 +143,7 @@ public class TgaDecoderTests
     public void CanDecodeAcceptsValidHeader()
     {
         List<byte> tga = TgaTestImage.Header(0, 2, 0, 0, 2, 2, 24, TgaTestImage.TopLeft);
-        Assert.True(new TgaDecoder().CanDecode(tga.ToArray()));
+        Assert.True(new TgaReader().CanDecode(tga.ToArray()));
     }
 
     [Fact]
@@ -151,6 +151,6 @@ public class TgaDecoderTests
     {
         // Invalid color map type (5) — not a plausible TGA header.
         byte[] notTga = [0, 5, 99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 24, 0x20];
-        Assert.False(new TgaDecoder().CanDecode(notTga));
+        Assert.False(new TgaReader().CanDecode(notTga));
     }
 }

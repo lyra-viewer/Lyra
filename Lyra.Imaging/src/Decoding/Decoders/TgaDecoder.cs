@@ -6,17 +6,13 @@ using Lyra.Imaging.Pipeline;
 using Lyra.ManagedCodecs;
 using SkiaSharp;
 using static System.Threading.Thread;
-using ManagedTgaDecoder = Lyra.ManagedCodecs.Tga.TgaDecoder;
+using Lyra.ManagedCodecs.Tga;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-/// <summary>
-/// Pipeline adapter that bridges the pure-managed TGA decoder in
-/// <see cref="ManagedTgaDecoder"/> to the Composite/SkiaSharp pipeline.
-/// </summary>
 internal sealed class TgaDecoder : IImageDecoder, IThumbnailDecoder
 {
-    private static readonly ManagedTgaDecoder Core = new();
+    private static readonly TgaReader Core = new();
 
     // The pipeline routes by file extension, so a file named *.tga may actually be another
     // format. TGA has no magic number; when the bytes do not structurally look like a TGA
@@ -113,7 +109,7 @@ internal sealed class TgaDecoder : IImageDecoder, IThumbnailDecoder
 
         try
         {
-            decoded = ManagedTgaDecoder.Decode(bytes);
+            decoded = TgaReader.Decode(bytes);
             return true;
         }
         catch (Exception e)

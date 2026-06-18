@@ -1,9 +1,10 @@
 namespace Lyra.ManagedCodecs;
 
 /// <summary>
-/// A pure-managed single-image decoder. Implementations are stateless and thread-safe.
+/// A pure-managed single-image reader: parses encoded bytes into raw pixels with no dependency on
+/// the imaging pipeline or SkiaSharp. Implementations are stateless and thread-safe.
 /// </summary>
-public interface IManagedImageDecoder
+public interface IManagedImageReader
 {
     /// <summary>
     /// Sniffs whether <paramref name="header"/> (the first bytes of a file) looks like this

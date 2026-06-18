@@ -22,4 +22,8 @@
         <ProjectReference Include="..\Lyra.ManagedCodecs\Lyra.ManagedCodecs.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="src\" />
+    </ItemGroup>
+
 </Project>

@@ -91,6 +91,7 @@ The architecture is designed around fast, non-blocking image loading:
 - Large PSD/PSB files use streaming and tiled decoding to avoid loading entire documents into memory - tested with files exceeding 3 GB.
 
 Lyra integrates lightweight native interop wrappers for HDR, EXR, JPEG 2000, and TIFF decoding, and delegates format-specific work to focused libraries 
+Lyra integrates lightweight native interop wrappers for EXR, JPEG 2000, and TIFF decoding, and delegates format-specific work to focused libraries 
 rather than bundling large native dependencies. Simpler formats such as TGA are handled by a small in-house managed decoder with no external dependency. 
 System libraries like libheif, OpenJPEG, OpenEXR and libtiff are expected from the package manager (e.g. Homebrew).
 Originally built for workflows involving texture maps, HDRIs, and assets exported from tools like Blender and Quixel Bridge - but the design 
@@ -118,9 +119,10 @@ generalizes well to any image-heavy workflow.
 
 | Format      | Description                                         | Extensions      |
 |-------------|-----------------------------------------------------|-----------------|
-| WebP        | Compressed raster image format with optional alpha  | `.webp`         |
-| HEIF / HEIC | High-efficiency image container format (HEVC-based) | `.heif` `.heic` |
 | AVIF        | High-efficiency image format based on AV1           | `.avif`         |
+| HEIF / HEIC | High-efficiency image container format (HEVC-based) | `.heif` `.heic` |
+| ~JPEG XL~   | ~JPEG XL Image Coding System~                       | ~`.jxl`~        |
+| WebP        | Compressed raster image format with optional alpha  | `.webp`         |
 
 ### High Dynamic Range Formats
 
@@ -295,7 +297,6 @@ The PSD decoder is intentionally structured to allow future expansion.
 | Svg.Skia          | SVG parsing and rendering                                              | MIT           | [github](https://github.com/wieslawsoltes/Svg.Skia)               |
 | LibHeifSharp      | HEIF / HEIC image decoding                                             | LGPL-3.0      | [github](https://github.com/0xC0000054/libheif-sharp)             |
 | OpenEXR           | High-dynamic-range OpenEXR (.exr) decoding                             | BSD-3-Clause  | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
-| rgbe              | Radiance HDR (.hdr) image decoding                                     | Public Domain | [webpage](https://www.graphics.cornell.edu/~bjw/rgbe.html)        |
 | OpenJPEG          | JPEG 2000 still-image decoding                                         | BSD-2-Clause  | [github](https://github.com/uclouvain/openjpeg)                   |
 | libtiff           | TIFF decoding                                                          | BSD-like      | [gitlab](https://gitlab.com/libtiff/libtiff)                      |
 | Unicolour         | Color space conversions & perceptual color math (used in PSD decoding) | MIT           | [github](https://github.com/waacton/Unicolour)                    |
