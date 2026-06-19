@@ -1,4 +1,4 @@
-namespace Lyra.ManagedCodecs;
+namespace Lyra.ManagedCodecs.Raster;
 
 /// <summary>
 /// A decoded high-dynamic-range image: linear, scene-referred RGBA float pixels with

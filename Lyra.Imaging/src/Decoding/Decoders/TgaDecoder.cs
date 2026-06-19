@@ -3,10 +3,10 @@ using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Pipeline;
-using Lyra.ManagedCodecs;
+using Lyra.ManagedCodecs.Raster;
 using SkiaSharp;
 using static System.Threading.Thread;
-using Lyra.ManagedCodecs.Tga;
+using Lyra.ManagedCodecs.Raster.Tga;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 

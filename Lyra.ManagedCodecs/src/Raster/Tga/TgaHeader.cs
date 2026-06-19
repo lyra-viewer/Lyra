@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Lyra.ManagedCodecs.Tga;
+namespace Lyra.ManagedCodecs.Raster.Tga;
 
 /// <summary>
 /// The fixed 18-byte TGA file header. All multibyte fields are little-endian.

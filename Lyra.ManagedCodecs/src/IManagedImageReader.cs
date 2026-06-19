@@ -1,3 +1,5 @@
+using Lyra.ManagedCodecs.Raster;
+
 namespace Lyra.ManagedCodecs;
 
 /// <summary>

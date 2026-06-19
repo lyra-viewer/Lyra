@@ -1,6 +1,6 @@
 using Lyra.Common;
 using Lyra.Imaging.Decoding.Support;
-using Lyra.ManagedCodecs.Hdr;
+using Lyra.ManagedCodecs.Raster.Hdr;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 

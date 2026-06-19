@@ -1,4 +1,5 @@
-using Lyra.ManagedCodecs.Tga;
+using Lyra.ManagedCodecs.Raster;
+using Lyra.ManagedCodecs.Raster.Tga;
 using Xunit;
 
 namespace Lyra.ManagedCodecs.Tests.Tga;

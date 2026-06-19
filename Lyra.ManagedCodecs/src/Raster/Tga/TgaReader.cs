@@ -1,4 +1,4 @@
-namespace Lyra.ManagedCodecs.Tga;
+namespace Lyra.ManagedCodecs.Raster.Tga;
 
 /// <summary>
 /// A pure-managed TGA (Truevision Targa) decoder. Supports uncompressed and run-length
@@ -29,7 +29,7 @@ public sealed class TgaReader : IManagedImageReader
         {
             throw new NotSupportedException($"TGA: unsupported color map type {header.ColorMapType}.");
         }
-        
+
         if (header.Width == 0 || header.Height == 0)
         {
             throw new InvalidDataException("TGA: width and height must be non-zero.");

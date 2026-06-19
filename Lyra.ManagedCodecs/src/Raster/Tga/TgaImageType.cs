@@ -1,4 +1,4 @@
-namespace Lyra.ManagedCodecs.Tga;
+namespace Lyra.ManagedCodecs.Raster.Tga;
 
 /// <summary>
 /// The TGA image type (header byte 2).

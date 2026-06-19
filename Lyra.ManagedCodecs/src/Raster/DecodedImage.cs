@@ -1,4 +1,4 @@
-namespace Lyra.ManagedCodecs;
+namespace Lyra.ManagedCodecs.Raster;
 
 public readonly struct DecodedImage
 {

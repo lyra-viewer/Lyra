@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Lyra.ManagedCodecs.Hdr;
+namespace Lyra.ManagedCodecs.Raster.Hdr;
 
 /// <summary>
 /// A pure-managed reader for Radiance RGBE images (the <c>.hdr</c> / <c>.pic</c> format
