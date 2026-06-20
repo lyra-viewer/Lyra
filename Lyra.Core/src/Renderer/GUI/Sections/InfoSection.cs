@@ -1,6 +1,6 @@
+using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
-using Lyra.Renderer.GUI.Support;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Layout;
 using Lyra.UI.Components.Primitives;

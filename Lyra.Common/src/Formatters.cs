@@ -1,4 +1,4 @@
-namespace Lyra.Renderer.GUI.Support;
+namespace Lyra.Common;
 
 public static class Formatters
 {

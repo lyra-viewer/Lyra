@@ -39,6 +39,7 @@ public class MainLayer : IUIEvents, IDisposable
     private readonly DirectoryTreeSection _directoryTreeSection;
     private readonly ExifSection _exifSection;
     private readonly FormatSection _formatSection;
+    private readonly StructureSection _structureSection;
     private readonly LayersSection _layersSection;
     private readonly HelpSection _helpSection;
     private readonly DebugSection _debugSection;
@@ -70,6 +71,7 @@ public class MainLayer : IUIEvents, IDisposable
         _directoryTreeSection = new DirectoryTreeSection();
         _exifSection = new ExifSection(_keyColumnRegistry);
         _formatSection = new FormatSection(_keyColumnRegistry);
+        _structureSection = new StructureSection();
         _layersSection = new LayersSection();
         _helpSection = new HelpSection();
         _debugSection = new DebugSection();
@@ -98,6 +100,7 @@ public class MainLayer : IUIEvents, IDisposable
             new SectionEntry(_directoryTreeSection, SectionPlacement.Sidebar, _directoryTreeSection.Collapsible),
             new SectionEntry(_exifSection, SectionPlacement.Sidebar, _exifSection.Collapsible),
             new SectionEntry(_formatSection, SectionPlacement.Sidebar, _formatSection.Collapsible),
+            new SectionEntry(_structureSection, SectionPlacement.Sidebar, _structureSection.Collapsible),
             new SectionEntry(_layersSection, SectionPlacement.Sidebar, _layersSection.Collapsible),
             new SectionEntry(_debugSection, SectionPlacement.Sidebar),
             new SectionEntry(_helpSection, SectionPlacement.LeftPane),

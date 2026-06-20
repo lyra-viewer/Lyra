@@ -24,6 +24,12 @@
     - [ICC Color Profiles](#icc-color-profiles)
     - [Displayed PSD Information](#displayed-psd-information)
     - [Future Direction](#future-direction)
+- [DDS Texture Decoding Model](#dds-texture-decoding-model)
+    - [Supported DDS Formats](#supported-dds-formats)
+    - [Color & Signedness](#color--signedness)
+    - [File Inspector](#file-inspector)
+    - [Safety](#safety)
+    - [Not Yet Supported](#not-yet-supported)
 - [Keyboard Shortcuts & Controls](#keyboard-shortcuts--controls)
     - [macOS Specific](#macos-specific)
     - [Open With / Drag & Drop](#open-with--drag--drop)
@@ -55,10 +61,10 @@ Built for anyone who relies on images as a core resource in their workflow:
 - Lyra is not an Electron application. It is a native application built on SDL3 and Skia, with no embedded web
   browser and no JavaScript runtime. It runs on .NET 9 and renders directly through your GPU, keeping performance at the
   forefront of every decision.
-- Lyra does not connect to the internet. It has no telemetry, no update pings, no cloud sync, and no AI features.
-  Everything runs locally, offline, on your machine. Updates are manual - check for new releases and install them
-  through your package manager when you're ready. If there's a format, workflow, or feature you'd like to see, the right
-  place to say so is the [GitHub issue tracker](https://github.com/lyra-viewer/Lyra/issues).
+- Lyra does not connect to the internet. It has no telemetry, no update pings, no cloud sync, no nag screens, and no AI
+  features. Everything runs locally, offline, on your machine. Updates are manual - check for new releases and install
+  them through your package manager when you're ready. If there's a format, workflow, or feature you'd like to see, the 
+  right place to say so is the [GitHub issue tracker](https://github.com/lyra-viewer/Lyra/issues).
 
 ### Recommended hardware & known limitations
 
@@ -90,7 +96,8 @@ The architecture is designed around fast, non-blocking image loading:
 - Decoded images are cached and adjacent files are preloaded in the background, so navigation feels instant even in large directories.
 - Large PSD/PSB files use streaming and tiled decoding to avoid loading entire documents into memory - tested with files exceeding 3 GB.
 
-Lyra integrates lightweight native interop wrappers for HDR, EXR, JPEG 2000, and TIFF decoding, and delegates format-specific work to focused libraries 
+[//]: # (TODO: Add ManagedReaders)
+
 Lyra integrates lightweight native interop wrappers for EXR, JPEG 2000, and TIFF decoding, and delegates format-specific work to focused libraries 
 rather than bundling large native dependencies. Simpler formats such as TGA are handled by a small in-house managed decoder with no external dependency. 
 System libraries like libheif, OpenJPEG, OpenEXR and libtiff are expected from the package manager (e.g. Homebrew).
@@ -136,10 +143,10 @@ generalizes well to any image-heavy workflow.
 
 ### GPU Formats
 
-| Format | Description                    | Extensions       |
-|--------|--------------------------------|------------------|
-| ~DDS~  | ~DirectDraw Surface~           | ~`.dds`~         |
-| ~KTX~  | ~GPU texture container format~ | ~`.ktx` `.ktx2`~ |
+| Format | Description                    | Extensions       | Notes                                          |
+|--------|--------------------------------|------------------|------------------------------------------------|
+| DDS    | DirectDraw Surface             | `.dds`           | See *DDS Texture Decoding Model* section below |
+| ~KTX~  | ~GPU texture container format~ | ~`.ktx` `.ktx2`~ |                                                |
 
 ### Document / Vector Formats
 
@@ -242,6 +249,66 @@ layer contents, but provides the structural overview that is otherwise only visi
 ### Future Direction
 
 The PSD decoder is intentionally structured to allow future expansion.
+
+---
+
+## DDS Texture Decoding Model
+
+DDS is a GPU texture container - one file can hold a full mip chain, cube-map faces, array layers, or
+volume slices, usually in a block-compressed GPU format. Lyra reads it with a **pure-managed** codec (no
+native dependencies): for display it decodes the base surface (mip 0, first face / layer); for thumbnails and
+perceptual hashing it decodes the *smallest stored mip that still covers the target size*.
+
+Both the legacy `DDS_PIXELFORMAT` header and the `DX10` extended header are handled, including four-character
+codes (`DXT1`, `ATI2`, `BC5S`, …), the numeric `D3DFORMAT` codes some older D3D9 exporters store in the FourCC
+field, and `DXGI_FORMAT` identifiers.
+
+### Supported DDS Formats
+
+| Family                 | Formats                                            | Notes                              |
+|------------------------|----------------------------------------------------|------------------------------------|
+| Block-compressed (BCn) | BC1–BC3 (DXT1/3/5), BC4 / BC5 (unorm + snorm), BC7 | The mainstream desktop formats     |
+| HDR block              | BC6H (signed + unsigned)                           | Decoded to float, then tone-mapped |
+| Uncompressed 8-bit     | RGBA8, BGRA8 (+ sRGB), RGBA8 `snorm`               | `snorm` is remapped for display    |
+| Uncompressed float     | RGBA16F, RGBA32F                                   | Decoded to float, then tone-mapped |
+
+The decoders are validated **bit-for-bit** against independent reference decoders - BC1 / BC3 / BC7 against
+Pillow and BC6H against `imagecodecs` - across fuzzed inputs covering every block mode and partition.
+
+### Color & Signedness
+
+Decoding is **faithful** - no color transform is applied, so an sRGB source decodes to sRGB-tagged bytes and the
+display path linearizes.
+
+- **HDR formats** (BC6H, RGBA16F / RGBA32F) are scene-referred float and are tone-mapped with the same
+  **ACES filmic** curve used for EXR and Radiance HDR, so highlights roll off smoothly instead of clipping.
+- **Signed (`snorm`) formats** - common in bump / normal maps - are remapped from `[-1, 1]` to `[0, 1]`, which
+  avoids the "shifted color" look some viewers produce by rendering the raw signed bytes as unsigned.
+
+### File Inspector
+
+When a DDS is open, two sidebar sections surface its internals:
+
+- **Format Specific** lists the headline facts: the source-native format name (e.g. `BC7_UNORM`, `DXT4`, or
+  `R16G16B16A16_FLOAT (FourCC 'q')` when a numeric `D3DFORMAT` is decoded), *Has Alpha*, *Is Cubemap*,
+  *Is Volume*, *Depth* (volumes only), *Mipmap Count*, and *Bits/Pixel*.
+- **Structure** is a scrollable, collapsible view of the file's binary layout - the DDS header, pixel-format
+  and capabilities sub-structures, and every mip level. Each part shows its name, a short description and its
+  byte size, and expands to the raw key-value fields it holds.
+
+### Safety
+
+Lyra treats DDS input as hostile. It parses the full subresource layout (mips, faces, array layers, volume
+depth slices) and **validates every subresource's byte range against the file length** before exposing it;
+dimensions, mip counts and surface sizes are bounds-checked against overflow. A malformed or truncated header
+is rejected cleanly rather than read out of bounds, and an unrecognized format fails with a descriptive message
+naming the exact `DXGI_FORMAT` or FourCC rather than failing silently.
+
+### Not Yet Supported
+
+- **ASTC** (e.g. `DXGI_FORMAT_ASTC_6X6_UNORM`) - reported with a clear, named error rather than decoded.
+- **ETC2 / EAC** - rarely seen inside DDS.
+- **KTX / KTX2** containers (`.ktx`, `.ktx2`) reuse the same block decoders and are planned.
 
 ---
 

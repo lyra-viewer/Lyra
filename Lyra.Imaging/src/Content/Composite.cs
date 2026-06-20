@@ -43,6 +43,7 @@ public sealed class Composite : IDisposable
     // Metadata
     public ExifInfo? ExifInfo;
     public readonly Dictionary<string, string> FormatSpecific = new();
+    public IReadOnlyList<StructureGroup>? Structure;
     public LayerRecord[]? PsdLayers;
     public bool IsGrayscale;
 

@@ -15,6 +15,10 @@ public class Collapsible : ComponentBase, IContainer
     private readonly SvgImage _collapsedIcon;
     private readonly SvgImage _expandedIcon;
 
+    // True when the header is a caller-supplied component (chevron lives in the header row) rather
+    // than a text title (chevron is the button's left icon).
+    private readonly bool _customHeader;
+
     private bool _isExpanded;
 
     public bool IsExpanded
@@ -24,7 +28,17 @@ public class Collapsible : ComponentBase, IContainer
         {
             _isExpanded = value;
             _content.Present = value;
-            _headerButton.IconImage = value ? _expandedIcon : _collapsedIcon;
+
+            if (_customHeader)
+            {
+                // Both chevrons sit in the header row; toggle which one shows.
+                _collapsedIcon.Present = !value;
+                _expandedIcon.Present = value;
+            }
+            else
+            {
+                _headerButton.IconImage = value ? _expandedIcon : _collapsedIcon;
+            }
         }
     }
 
@@ -38,10 +52,9 @@ public class Collapsible : ComponentBase, IContainer
     public event Action? Toggled;
 
     // Exposes internal structure for hit-testing.
-    // AddComponent routes to _content, so external additions
-    // end up in the right place.
     public IReadOnlyList<IComponent> Children => _mainContainer.Children;
 
+    /// <summary>A section-style collapsible with a left arrow and a text title.</summary>
     public Collapsible(string title, float iconSize = 20f)
     {
         _collapsedIcon = new SvgImage(ResourceLoader.GetSvg("arrow_drop_right"), iconSize, iconSize);
@@ -56,17 +69,55 @@ public class Collapsible : ComponentBase, IContainer
             CornerRadius = 0f
         };
 
-        _headerButton.Click += Toggle;
+        _content = new VStack();
+        _mainContainer = BuildContainer();
+    }
+
+    /// <summary>
+    /// A collapsible with a caller-supplied header component. The header keeps the button's full
+    /// behaviour (background, hover, press, click); a chevron is appended on the right and kept in
+    /// sync with the expanded state.
+    /// </summary>
+    public Collapsible(IComponent header, float chevronSize = 18f)
+    {
+        _customHeader = true;
+
+        _collapsedIcon = new SvgImage(ResourceLoader.GetSvg("arrow_drop_right"), chevronSize, chevronSize);
+        _expandedIcon  = new SvgImage(ResourceLoader.GetSvg("arrow_drop_down"),  chevronSize, chevronSize) { Present = false };
+
+        header.HorizontalSize = SizeMode.Expand; // push the chevron to the right edge
+
+        var row = new HStack
+        {
+            Spacing = 4,
+            HorizontalSize = SizeMode.Expand,
+            VerticalAlign = VAlign.Center
+        };
+        row.AddComponents(header, _collapsedIcon, _expandedIcon);
+
+        _headerButton = new Button.Button
+        {
+            Content = row,
+            HorizontalSize = SizeMode.Expand,
+            ContentAlign = HAlign.Left,
+            CornerRadius = 0f
+        };
 
         _content = new VStack();
-        _mainContainer = new VStack();
+        _mainContainer = BuildContainer();
+    }
 
-        _mainContainer.Parent = this;
-        _mainContainer.AddComponent(_headerButton);
-        _mainContainer.AddComponent(_content);
+    private VStack BuildContainer()
+    {
+        _headerButton.Click += Toggle;
+
+        var main = new VStack { Parent = this };
+        main.AddComponent(_headerButton);
+        main.AddComponent(_content);
 
         _isExpanded = false;
         _content.Present = false;
+        return main;
     }
 
     public void Toggle()
@@ -117,9 +168,16 @@ public class Collapsible : ComponentBase, IContainer
         if (disposing)
         {
             _headerButton.Click -= Toggle;
+
+            // Text mode: the button references but does not own its icons, so dispose them here.
+            // Custom mode: the chevrons live in the header row and are disposed via the button.
+            if (!_customHeader)
+            {
+                _collapsedIcon.Dispose();
+                _expandedIcon.Dispose();
+            }
+
             _mainContainer.Dispose();
-            _collapsedIcon.Dispose();
-            _expandedIcon.Dispose();
         }
 
         base.Dispose(disposing);

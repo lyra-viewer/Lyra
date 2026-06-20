@@ -1,0 +1,75 @@
+using Lyra.ManagedCodecs.Texture;
+using Xunit;
+
+namespace Lyra.ManagedCodecs.Tests.Texture;
+
+public class TextureFormatsTests
+{
+    [Theory]
+    [InlineData(TextureFormat.Bc1RgbaUnorm, 4, 4, 8)]    // one 4x4 block
+    [InlineData(TextureFormat.Bc1RgbaUnorm, 1, 1, 8)]    // rounds up to a full block
+    [InlineData(TextureFormat.Bc1RgbaUnorm, 5, 5, 32)]   // 2x2 blocks * 8
+    [InlineData(TextureFormat.Bc1RgbaUnorm, 8, 8, 32)]   // 2x2 blocks * 8
+    [InlineData(TextureFormat.Bc3Unorm, 4, 4, 16)]       // 16-byte block
+    [InlineData(TextureFormat.Bc5Unorm, 16, 16, 256)]    // 4x4 blocks * 16
+    [InlineData(TextureFormat.Rgba8Unorm, 2, 3, 24)]     // 6 px * 4
+    [InlineData(TextureFormat.Bgra8Unorm, 7, 1, 28)]
+    public void SurfaceByteSizeRoundsToBlocks(TextureFormat format, int w, int h, long expected)
+    {
+        Assert.Equal(expected, TextureFormats.SurfaceByteSize(format, w, h));
+    }
+
+    [Fact]
+    public void SurfaceByteSizeStaysInLongRange()
+    {
+        // 65536^2 * 4 overflows int but is well within long.
+        Assert.Equal(17_179_869_184L, TextureFormats.SurfaceByteSize(TextureFormat.Rgba8Unorm, 65536, 65536));
+    }
+
+    [Theory]
+    [InlineData(0, 4)]
+    [InlineData(4, 0)]
+    [InlineData(-1, 4)]
+    public void SurfaceByteSizeRejectsNonPositive(int w, int h)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => TextureFormats.SurfaceByteSize(TextureFormat.Bc1RgbaUnorm, w, h));
+    }
+
+    [Theory]
+    [InlineData(TextureFormat.Bc1RgbaUnorm, TextureFormat.Rgba8Unorm)]
+    [InlineData(TextureFormat.Bc1RgbaUnormSrgb, TextureFormat.Rgba8UnormSrgb)]
+    [InlineData(TextureFormat.Bc3UnormSrgb, TextureFormat.Rgba8UnormSrgb)]
+    [InlineData(TextureFormat.Bc5Snorm, TextureFormat.Rgba8Unorm)]
+    [InlineData(TextureFormat.Bgra8UnormSrgb, TextureFormat.Rgba8UnormSrgb)]
+    public void DecodedFormatPreservesSrgb(TextureFormat format, TextureFormat expected)
+    {
+        Assert.Equal(expected, TextureFormats.DecodedFormat(format));
+    }
+
+    [Theory]
+    [InlineData(TextureFormat.Bc1RgbaUnorm, true, 4, 4, 8)]
+    [InlineData(TextureFormat.Bc3Unorm, true, 4, 4, 16)]
+    [InlineData(TextureFormat.Rgba8Unorm, false, 1, 1, 4)]
+    public void InfoReportsBlockGeometry(TextureFormat format, bool compressed, int bw, int bh, int bytes)
+    {
+        var info = TextureFormats.Info(format);
+        Assert.Equal(compressed, info.IsCompressed);
+        Assert.Equal(bw, info.BlockWidth);
+        Assert.Equal(bh, info.BlockHeight);
+        Assert.Equal(bytes, info.BytesPerBlock);
+    }
+
+    [Theory]
+    [InlineData(TextureFormat.Bc1RgbaUnorm, true, 4)]   // 8 bytes / 16 px
+    [InlineData(TextureFormat.Bc4Unorm, false, 4)]      // single-channel, no alpha
+    [InlineData(TextureFormat.Bc7Unorm, true, 8)]       // 16 bytes / 16 px
+    [InlineData(TextureFormat.Bc6HUFloat, false, 8)]    // HDR RGB, no alpha
+    [InlineData(TextureFormat.Rgba8Unorm, true, 32)]
+    [InlineData(TextureFormat.Rgba16Float, true, 64)]
+    public void InfoReportsAlphaAndBitsPerPixel(TextureFormat format, bool hasAlpha, int bpp)
+    {
+        var info = TextureFormats.Info(format);
+        Assert.Equal(hasAlpha, info.HasAlpha);
+        Assert.Equal(bpp, info.BitsPerPixel);
+    }
+}

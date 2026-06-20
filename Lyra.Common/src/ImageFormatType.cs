@@ -9,10 +9,9 @@ public enum ImageFormatType
     [Description("Windows Bitmap")]
     Bmp,
 
-    [DisabledType]
     [FileExtension([".dds"])]
     [Description("DirectDraw Surface Texture")]
-    Dds, // TODO
+    Dds,
 
     [FileExtension([".exr"])]
     [Description("OpenEXR Image")]

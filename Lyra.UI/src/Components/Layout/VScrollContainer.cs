@@ -1,0 +1,157 @@
+using Lyra.UI.SupportingTypes;
+using SkiaSharp;
+
+namespace Lyra.UI.Components.Layout;
+
+public class VScrollContainer : ComponentBase, IContainer, IScrollable
+{
+    private readonly List<IComponent> _children = [];
+    public IReadOnlyList<IComponent> Children => _children;
+
+    public float Spacing { get; set; }
+    public float ScrollSpeed { get; set; } = 40f;
+    public ScrollbarStyle ScrollbarStyle { get; set; } = ScrollbarStyle.Default;
+
+    public float ScrollOffset { get; private set; }
+    public float ContentSize { get; private set; }
+    public float ViewportSize { get; private set; }
+
+    public bool OnScroll(float deltaX, float deltaY)
+    {
+        if (!((IScrollable)this).NeedsScrollbar)
+            return false;
+
+        var previous = ScrollOffset;
+        ScrollOffset = Math.Clamp(
+            ScrollOffset - deltaY * ScrollSpeed,
+            0, 
+            ((IScrollable)this).MaxScroll
+        );
+
+        // ReSharper disable once CompareOfFloatsByEqualityOperator
+        return ScrollOffset != previous;
+    }
+
+    public void ScrollTo(float offset)
+    {
+        ScrollOffset = Math.Clamp(offset, 0, ((IScrollable)this).MaxScroll);
+    }
+
+    public void AddComponent(IComponent child)
+    {
+        child.Parent = this;
+        _children.Add(child);
+    }
+
+    public void AddComponents(params IComponent[] children)
+    {
+        foreach (var child in children)
+            AddComponent(child);
+    }
+
+    /// <summary>Disposes and removes all children, resetting the scroll position.</summary>
+    public void Clear()
+    {
+        foreach (var child in _children)
+            child.Dispose();
+
+        _children.Clear();
+        ScrollOffset = 0;
+    }
+
+    protected override SKSize MeasureContent(SKSize availableSize)
+    {
+        var totalHeight = 0f;
+        var maxWidth = 0f;
+        var first = true;
+
+        foreach (var child in _children)
+        {
+            if (!child.Present)
+                continue;
+
+            if (!first)
+                totalHeight += Spacing;
+            
+            first = false;
+
+            child.Measure(new SKSize(availableSize.Width, float.MaxValue));
+            totalHeight += child.DesiredSize.Height;
+            maxWidth = Math.Max(maxWidth, child.DesiredSize.Width);
+        }
+
+        ContentSize = totalHeight;
+        return new SKSize(maxWidth, totalHeight);
+    }
+
+    protected override void ArrangeContent(SKRect contentBounds)
+    {
+        ViewportSize = contentBounds.Height;
+        ScrollOffset = Math.Clamp(ScrollOffset, 0, ((IScrollable)this).MaxScroll);
+
+        var yOffset = 0f;
+        var first = true;
+
+        foreach (var child in _children)
+        {
+            if (!child.Present)
+                continue;
+
+            if (!first)
+                yOffset += Spacing;
+            
+            first = false;
+
+            var childWidth = child.HorizontalSize == SizeMode.Expand
+                ? contentBounds.Width
+                : child.DesiredSize.Width;
+
+            var crossOffset = child.HorizontalSize == SizeMode.Expand
+                ? 0f
+                : child.HorizontalAlign switch
+                {
+                    HAlign.Center => (contentBounds.Width - childWidth) / 2f,
+                    HAlign.Right => contentBounds.Width - childWidth,
+                    _ => 0f
+                };
+
+            child.Arrange(new SKRect(
+                contentBounds.Left + crossOffset,
+                contentBounds.Top + yOffset - ScrollOffset,
+                contentBounds.Left + crossOffset + childWidth,
+                contentBounds.Top + yOffset - ScrollOffset + child.DesiredSize.Height));
+
+            yOffset += child.DesiredSize.Height;
+        }
+    }
+
+    protected override void RenderContent(SKCanvas canvas, SKRect contentBounds)
+    {
+        canvas.Save();
+        canvas.ClipRect(contentBounds);
+
+        foreach (var child in _children)
+        {
+            if (!child.Present)
+                continue;
+
+            if (child.ArrangedBounds.Bottom < contentBounds.Top || child.ArrangedBounds.Top > contentBounds.Bottom)
+                continue;
+
+            child.Render(canvas);
+        }
+
+        canvas.Restore();
+
+        ScrollbarDrawer.Draw(canvas, contentBounds, this, ScrollbarStyle);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            foreach (var child in _children)
+                child.Dispose();
+
+        base.Dispose(disposing);
+    }
+}

@@ -26,6 +26,14 @@ public class Button : ComponentBase
     // Icon - externally provided, caller owns lifetime
     public ImageBase? IconImage { get; set; }
 
+    /// <summary>
+    /// Optional custom content. When set, it replaces the text+icon and fills the button, while the
+    /// button keeps its background, hover/press states and click behaviour. The button owns and
+    /// disposes it. Hit-testing still resolves to the button (it is not an IContainer), so the whole
+    /// area is one click target.
+    /// </summary>
+    public IComponent? Content { get; set; }
+
     public string Text
     {
         get => _label.Text;
@@ -62,6 +70,13 @@ public class Button : ComponentBase
 
     protected override SKSize MeasureContent(SKSize availableSize)
     {
+        if (Content != null)
+        {
+            var inner = new SKSize(Math.Max(0, availableSize.Width - ButtonDrawer.ContentPadH * 2), Math.Max(0, availableSize.Height - ButtonDrawer.ContentPadV * 2));
+            var size = Content.Measure(inner);
+            return new SKSize(size.Width + ButtonDrawer.ContentPadH * 2, size.Height + ButtonDrawer.ContentPadV * 2);
+        }
+
         var labelSize = IsIconOnly ? SKSize.Empty : _label.Measure(availableSize);
         var iconSize = HasIcon ? IconImage!.Measure(availableSize) : SKSize.Empty;
 
@@ -71,6 +86,8 @@ public class Button : ComponentBase
         return new SKSize(width + ButtonDrawer.ContentPadH * 2, height + ButtonDrawer.ContentPadV * 2);
     }
 
+    protected override void ResolveContent() => Content?.Resolve();
+
     protected override void ArrangeContent(SKRect contentBounds)
     {
         // Inset by content padding
@@ -79,6 +96,12 @@ public class Button : ComponentBase
             contentBounds.Top + ButtonDrawer.ContentPadV,
             contentBounds.Right - ButtonDrawer.ContentPadH,
             contentBounds.Bottom - ButtonDrawer.ContentPadV);
+
+        if (Content != null)
+        {
+            Content.Arrange(inner);
+            return;
+        }
 
         var labelW = IsIconOnly ? 0f : _label.DesiredSize.Width;
         var iconW = HasIcon ? IconImage!.DesiredSize.Width : 0f;
@@ -133,6 +156,12 @@ public class Button : ComponentBase
     protected override void RenderContent(SKCanvas canvas, SKRect contentBounds)
     {
         ButtonDrawer.DrawBackground(canvas, contentBounds, Variant, CornerRadius, _isHovered, _isPressed);
+
+        if (Content != null)
+        {
+            Content.Render(canvas);
+            return;
+        }
 
         _label.Color = ButtonDrawer.GetTextColor(Variant);
         _label.Underline = Variant == ButtonVariant.Link && (_isHovered || _isPressed);
@@ -195,6 +224,7 @@ public class Button : ComponentBase
         if (disposing)
         {
             _label.Dispose();
+            Content?.Dispose();
             // IconImage is externally provided - caller owns its lifetime.
         }
 
