@@ -50,18 +50,18 @@ internal sealed class DdsDecoder : IImageDecoder, IThumbnailDecoder
     {
         var info = TextureFormats.Info(texture.Format);
 
-        composite.FormatSpecific.Add("Format", texture.FormatName);
-        composite.FormatSpecific.Add("Has Alpha", info.HasAlpha ? "Yes" : "No");
-        composite.FormatSpecific.Add("Is Cubemap", texture.Kind == TextureKind.Cube ? "Yes" : "No");
-        composite.FormatSpecific.Add("Is Volume", texture.Kind == TextureKind.Volume ? "Yes" : "No");
+        composite.AddFormatSpecific("Format", texture.FormatName);
+        composite.AddFormatSpecific("Has Alpha", info.HasAlpha ? "Yes" : "No");
+        composite.AddFormatSpecific("Is Cubemap", texture.Kind == TextureKind.Cube ? "Yes" : "No");
+        composite.AddFormatSpecific("Is Volume", texture.Kind == TextureKind.Volume ? "Yes" : "No");
 
         if (texture.Kind == TextureKind.Volume)
         {
-            composite.FormatSpecific.Add("Depth", $"{texture.Depth}");
+            composite.AddFormatSpecific("Depth", $"{texture.Depth}");
         }
 
-        composite.FormatSpecific.Add("Mipmap Count", $"{texture.MipLevels}");
-        composite.FormatSpecific.Add("Bits/Pixel", $"{info.BitsPerPixel} bpp");
+        composite.AddFormatSpecific("Mipmap Count", $"{texture.MipLevels}");
+        composite.AddFormatSpecific("Bits/Pixel", $"{info.BitsPerPixel} bpp");
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)

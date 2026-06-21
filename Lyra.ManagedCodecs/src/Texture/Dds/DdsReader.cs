@@ -30,8 +30,6 @@ public static class DdsReader
 
     private const uint MiscTextureCube = 0x4; // DDS_RESOURCE_MISC_TEXTURECUBE
 
-    private const int MaxDimension = 65536;
-
     public static TextureData Read(ReadOnlyMemory<byte> file)
     {
         var span = file.Span;
@@ -103,13 +101,13 @@ public static class DdsReader
             throw new NotSupportedException($"DDS: {DescribeUnsupported(hasDx10, dxgiFormat, fourCc)}.");
         }
 
-        if (width is <= 0 or > MaxDimension || height is <= 0 or > MaxDimension)
+        if (width is <= 0 or > TextureLayout.MaxDimension || height is <= 0 or > TextureLayout.MaxDimension)
         {
             throw new InvalidDataException($"DDS: implausible dimensions {width}x{height}.");
         }
 
         var depth = isVolume ? Math.Max(1, depthField) : 1;
-        if (depth > MaxDimension)
+        if (depth > TextureLayout.MaxDimension)
         {
             throw new InvalidDataException($"DDS: implausible depth {depth}.");
         }
@@ -120,7 +118,7 @@ public static class DdsReader
             mipLevels = 1;
         }
 
-        var maxMips = MaxMipLevels(width, height, depth);
+        var maxMips = TextureLayout.MaxMipLevels(width, height, depth);
         if (mipLevels > maxMips)
         {
             throw new InvalidDataException($"DDS: mip count {mipLevels} exceeds the maximum {maxMips} for {width}x{height}x{depth}.");
@@ -128,10 +126,7 @@ public static class DdsReader
 
         var faces = isCubemap ? 6 : 1;
         var arrayCount = isVolume ? 1 : arraySize; // volumes cannot also be arrays/cubes
-        var kind = isVolume ? TextureKind.Volume
-            : isCubemap ? TextureKind.Cube
-            : arrayCount > 1 ? TextureKind.Array2D
-            : TextureKind.Texture2D;
+        var kind = TextureLayout.ResolveKind(isVolume, isCubemap, arrayCount);
 
         var subresources = EnumerateSubresources(file, format, width, height, depth, mipLevels, arrayCount, faces, isVolume, dataOffset);
 
@@ -216,8 +211,28 @@ public static class DdsReader
         10 => TextureFormat.Rgba16Float,      // R16G16B16A16_FLOAT
         2 => TextureFormat.Rgba32Float,       // R32G32B32A32_FLOAT
         31 => TextureFormat.Rgba8Snorm,       // R8G8B8A8_SNORM
+        61 => TextureFormat.R8Unorm,          // R8_UNORM
+        49 => TextureFormat.Rg8Unorm,         // R8G8_UNORM
+        >= 133 and <= 188 => MapDxgiAstc(dxgiFormat),
         _ => TextureFormat.Unknown,
     };
+
+    /// <summary>
+    /// Maps the DXGI ASTC formats (133..188): four slots per footprint - TYPELESS, UNORM, UNORM_SRGB,
+    /// reserved - in the canonical footprint order. TYPELESS is treated as UNORM (as with BC6H here).
+    /// </summary>
+    private static TextureFormat MapDxgiAstc(uint dxgiFormat)
+    {
+        var offset = (int)dxgiFormat - 133;
+        var footprint = offset / 4;
+        var slot = offset % 4;
+        if (footprint >= AstcFormats.Count || slot == 3)
+        {
+            return TextureFormat.Unknown; // reserved slot / out of range
+        }
+
+        return AstcFormats.LdrFormat(footprint, srgb: slot == 2); // 0 TYPELESS, 1 UNORM -> unorm; 2 -> srgb
+    }
 
     private static TextureFormat MapLegacy(uint pfFlags, uint fourCc, ReadOnlySpan<byte> span)
     {
@@ -278,25 +293,13 @@ public static class DdsReader
     //  Helpers
     // ------------------------------------------------------------------
 
-    private static int MaxMipLevels(int width, int height, int depth)
-    {
-        var largest = Math.Max(width, Math.Max(height, depth));
-        var levels = 1;
-        while (largest > 1)
-        {
-            largest >>= 1;
-            levels++;
-        }
-
-        return levels;
-    }
-
     private static string DescribeUnsupported(bool hasDx10, uint dxgiFormat, uint fourCc)
     {
         if (hasDx10)
         {
-            // The DXGI ASTC formats occupy 133..191; we don't decode ASTC yet.
-            var astc = dxgiFormat is >= 133 and <= 191 ? " (ASTC — not yet supported)" : "";
+            // DXGI ASTC occupies 133..191; LDR UNORM/SRGB are decoded, so reaching here for that range
+            // means a TYPELESS-only or reserved slot we don't surface.
+            var astc = dxgiFormat is >= 133 and <= 191 ? " (unsupported ASTC slot)" : "";
             return $"unsupported DXGI_FORMAT {dxgiFormat}{astc}";
         }
 

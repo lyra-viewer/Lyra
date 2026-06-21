@@ -5,15 +5,10 @@ namespace Lyra.ManagedCodecs.Raster.Tga;
 /// encoded variants of grayscale (8/16-bit), true-color (15/16/24/32-bit) and color-mapped
 /// images, with all four image origins. Output is always 8-bit RGBA, top-left origin.
 /// </summary>
-public sealed class TgaReader : IManagedImageReader
+public static class TgaReader
 {
-    public bool CanDecode(ReadOnlySpan<byte> header) => IsLikelyTga(header);
-
-    public DecodedImage Decode(Stream stream)
-    {
-        ArgumentNullException.ThrowIfNull(stream);
-        return Decode(ReadAllBytes(stream));
-    }
+    /// <summary>Cheap header sniff: whether <paramref name="header"/> plausibly begins a TGA file.</summary>
+    public static bool CanDecode(ReadOnlySpan<byte> header) => IsLikelyTga(header);
 
     /// <summary>Decodes a TGA already resident in memory.</summary>
     public static DecodedImage Decode(ReadOnlySpan<byte> data)
@@ -335,15 +330,4 @@ public sealed class TgaReader : IManagedImageReader
         return true;
     }
 
-    private static byte[] ReadAllBytes(Stream stream)
-    {
-        if (stream is MemoryStream ms)
-        {
-            return ms.ToArray();
-        }
-
-        using MemoryStream buffer = new();
-        stream.CopyTo(buffer);
-        return buffer.ToArray();
-    }
 }

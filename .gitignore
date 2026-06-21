@@ -55,3 +55,6 @@ bld/
 msbuild.log
 msbuild.err
 msbuild.wrn
+
+# Vendor
+native/BasisWrapper/basis_universal/

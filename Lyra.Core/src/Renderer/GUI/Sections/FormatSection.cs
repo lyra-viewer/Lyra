@@ -53,8 +53,9 @@ public sealed class FormatSection : IUISection
     public void Refresh(UIState state)
     {
         var composite = state.Composite;
+        var metadata = composite?.FormatSpecificSnapshot() ?? [];
 
-        ReportWidths(composite);
+        ReportWidths(metadata);
 
         if (composite == _lastComposite && state.CompositeState == _lastState)
             return;
@@ -62,25 +63,22 @@ public sealed class FormatSection : IUISection
         _lastComposite = composite;
         _lastState = state.CompositeState;
 
-        ApplyData(composite);
+        ApplyData(composite, metadata);
     }
 
-    private void ReportWidths(Composite? composite)
+    private void ReportWidths(List<KeyValuePair<string, string>> metadata)
     {
-        if (composite == null)
-            return;
-
-        foreach (var pair in composite.FormatSpecific)
+        foreach (var pair in metadata)
             _registry.Report(ExifSection.KeyColumn, Label.MeasureTextWidth(pair.Key));
     }
 
-    private void ApplyData(Composite? composite)
+    private void ApplyData(Composite? composite, List<KeyValuePair<string, string>> metadata)
     {
-        if (composite != null && composite.FormatSpecific.Count > 0)
+        if (composite != null && metadata.Count > 0)
         {
             _collapsible.Present = true;
             _collapsible.Title = $"FORMAT SPECIFIC [{composite.ImageFormatType}]";
-            _list.UpdateData(composite.FormatSpecific.ToList());
+            _list.UpdateData(metadata);
         }
         else
         {

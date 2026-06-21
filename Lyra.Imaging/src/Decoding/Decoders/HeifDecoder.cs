@@ -162,7 +162,7 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
 
     private static void PopulateFormatSpecific(Composite composite, HeifContext context, HeifImageHandle handle, string path)
     {
-        composite.FormatSpecific["Codec"] = DetectHeifBrand(path);
+        composite.AddFormatSpecific("Codec", DetectHeifBrand(path));
 
         // TryAdd(composite, "Bit Depth", () => $"{handle.LumaBitsPerPixel}-bit");
         TryAdd(composite, "Has Alpha", () => handle.HasAlphaChannel.ToString());
@@ -172,7 +172,7 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
         {
             var thumbs = handle.GetThumbnailImageIds();
             if (thumbs is { Count: > 0 })
-                composite.FormatSpecific["Thumbnails"] = thumbs.Count.ToString();
+                composite.AddFormatSpecific("Thumbnails", thumbs.Count.ToString());
         }
         catch (Exception ex)
         {
@@ -183,7 +183,7 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
         {
             var topIds = context.GetTopLevelImageIds();
             if (topIds is { Count: > 1 })
-                composite.FormatSpecific["Top-level Images"] = topIds.Count.ToString();
+                composite.AddFormatSpecific("Top-level Images", topIds.Count.ToString());
         }
         catch (Exception ex)
         {
@@ -195,7 +195,7 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
     {
         try
         {
-            composite.FormatSpecific[key] = producer();
+            composite.AddFormatSpecific(key, producer());
         }
         catch (Exception ex)
         {

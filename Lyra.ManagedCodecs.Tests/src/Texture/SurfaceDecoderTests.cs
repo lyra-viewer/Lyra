@@ -148,4 +148,177 @@ public class SurfaceDecoderTests
         var dst = new byte[4 * 4 * 4];
         Assert.Throws<ArgumentException>(() => SurfaceDecoder.DecodeSurface(TextureFormat.Bc1RgbaUnorm, tooSmall, dst, 4, 4));
     }
+
+    [Fact]
+    public void DecodesR8AsGrayscale()
+    {
+        byte[] src = [100, 200];
+        var dst = new byte[2 * 4];
+        SurfaceDecoder.DecodeSurface(TextureFormat.R8Unorm, src, dst, 2, 1);
+
+        Assert.Equal((100, 100, 100, 255), Px(dst, 0, 0, 2));
+        Assert.Equal((200, 200, 200, 255), Px(dst, 1, 0, 2));
+    }
+
+    [Fact]
+    public void DecodesR8UintAsGrayscale()
+    {
+        // R8_UINT integer values are shown directly: 100, 200 -> gray 100, 200.
+        byte[] src = [100, 200];
+        var dst = new byte[2 * 4];
+        SurfaceDecoder.DecodeSurface(TextureFormat.R8Uint, src, dst, 2, 1);
+
+        Assert.Equal((100, 100, 100, 255), Px(dst, 0, 0, 2));
+        Assert.Equal((200, 200, 200, 255), Px(dst, 1, 0, 2));
+    }
+
+    [Fact]
+    public void DecodesR8SintWithRemap()
+    {
+        // R8_SINT shares the snorm remap: 127, 0, -128 (clamps to -127), -64 -> 255, 128, 0, 63.
+        byte[] src = [127, 0, 0x80, 0xC0];
+        var dst = new byte[4 * 4];
+        SurfaceDecoder.DecodeSurface(TextureFormat.R8Sint, src, dst, 4, 1);
+
+        Assert.Equal((255, 255, 255, 255), Px(dst, 0, 0, 4));
+        Assert.Equal((128, 128, 128, 255), Px(dst, 1, 0, 4));
+        Assert.Equal((0, 0, 0, 255), Px(dst, 2, 0, 4));
+        Assert.Equal((63, 63, 63, 255), Px(dst, 3, 0, 4));
+    }
+
+    [Fact]
+    public void DecodesRg8AsRedGreen()
+    {
+        byte[] src = [50, 150];
+        var dst = new byte[4];
+        SurfaceDecoder.DecodeSurface(TextureFormat.Rg8Unorm, src, dst, 1, 1);
+        Assert.Equal((50, 150, 0, 255), Px(dst, 0, 0, 1));
+    }
+
+    [Fact]
+    public void DecodesRgb8WithOpaqueAlpha()
+    {
+        byte[] src = [10, 20, 30];
+        var dst = new byte[4];
+        SurfaceDecoder.DecodeSurface(TextureFormat.Rgb8Unorm, src, dst, 1, 1);
+        Assert.Equal((10, 20, 30, 255), Px(dst, 0, 0, 1));
+    }
+
+    [Fact]
+    public void DecodesRgb565()
+    {
+        // Pure red (0xF800) and pure green (0x07E0), little-endian.
+        byte[] src = [0x00, 0xF8, 0xE0, 0x07];
+        var dst = new byte[2 * 4];
+        SurfaceDecoder.DecodeSurface(TextureFormat.Rgb565Unorm, src, dst, 2, 1);
+        Assert.Equal((255, 0, 0, 255), Px(dst, 0, 0, 2));
+        Assert.Equal((0, 255, 0, 255), Px(dst, 1, 0, 2));
+    }
+
+    [Fact]
+    public void DecodesRgba4()
+    {
+        // R4G4B4A4 red, opaque = 0xF00F.
+        byte[] src = [0x0F, 0xF0];
+        var dst = new byte[4];
+        SurfaceDecoder.DecodeSurface(TextureFormat.Rgba4Unorm, src, dst, 1, 1);
+        Assert.Equal((255, 0, 0, 255), Px(dst, 0, 0, 1));
+    }
+
+    [Fact]
+    public void DecodesRgb5A1()
+    {
+        // R5G5B5A1 red, alpha bit set = 0xF801.
+        byte[] src = [0x01, 0xF8];
+        var dst = new byte[4];
+        SurfaceDecoder.DecodeSurface(TextureFormat.Rgb5A1Unorm, src, dst, 1, 1);
+        Assert.Equal((255, 0, 0, 255), Px(dst, 0, 0, 1));
+    }
+
+    [Fact]
+    public void DecodesRgb10A2()
+    {
+        // A2B10G10R10: red = 0x3FF, alpha = 3 -> 0xC00003FF.
+        byte[] src = [0xFF, 0x03, 0x00, 0xC0];
+        var dst = new byte[4];
+        SurfaceDecoder.DecodeSurface(TextureFormat.Rgb10A2Unorm, src, dst, 1, 1);
+        Assert.Equal((255, 0, 0, 255), Px(dst, 0, 0, 1));
+    }
+
+    [Fact]
+    public void DecodesR16AsGrayscale()
+    {
+        byte[] src = [0x00, 0xFF]; // 0xFF00 -> high byte 0xFF
+        var dst = new byte[4];
+        SurfaceDecoder.DecodeSurface(TextureFormat.R16Unorm, src, dst, 1, 1);
+        Assert.Equal((255, 255, 255, 255), Px(dst, 0, 0, 1));
+    }
+
+    [Fact]
+    public void DecodesR32FloatAsGrayscale()
+    {
+        var src = BitConverter.GetBytes(2.5f);
+        var dst = new float[4];
+        SurfaceDecoder.DecodeSurfaceHdr(TextureFormat.R32Float, src, dst, 1, 1);
+        Assert.Equal(new[] { 2.5f, 2.5f, 2.5f, 1f }, dst);
+    }
+
+    [Fact]
+    public void DecodesRgb16Float()
+    {
+        var src = new byte[6];
+        BitConverter.GetBytes((Half)1.0f).CopyTo(src, 0);
+        BitConverter.GetBytes((Half)0.5f).CopyTo(src, 2);
+        BitConverter.GetBytes((Half)2.0f).CopyTo(src, 4);
+
+        var dst = new float[4];
+        SurfaceDecoder.DecodeSurfaceHdr(TextureFormat.Rgb16Float, src, dst, 1, 1);
+        Assert.Equal(new[] { 1f, 0.5f, 2f, 1f }, dst);
+    }
+
+    [Fact]
+    public void DecodesB10G11R11UFloat()
+    {
+        // R=G=B=1.0 -> 11-bit float 0x3C0 (e=15,m=0), 10-bit float 0x1E0; packed R|G<<11|B<<22.
+        byte[] src = [0xC0, 0x03, 0x1E, 0x78];
+        var dst = new float[4];
+        SurfaceDecoder.DecodeSurfaceHdr(TextureFormat.B10G11R11UFloat, src, dst, 1, 1);
+        Assert.Equal(1f, dst[0], 3);
+        Assert.Equal(1f, dst[1], 3);
+        Assert.Equal(1f, dst[2], 3);
+        Assert.Equal(1f, dst[3]);
+    }
+
+    [Fact]
+    public void DecodesRgb9E5UFloat()
+    {
+        // R=G=B=1.0 via mantissa 256, shared exponent 16: 256 * 2^(16-24) = 1.0.
+        byte[] src = [0x00, 0x01, 0x02, 0x84];
+        var dst = new float[4];
+        SurfaceDecoder.DecodeSurfaceHdr(TextureFormat.Rgb9E5UFloat, src, dst, 1, 1);
+        Assert.Equal(1f, dst[0], 3);
+        Assert.Equal(1f, dst[1], 3);
+        Assert.Equal(1f, dst[2], 3);
+        Assert.Equal(1f, dst[3]);
+    }
+
+    [Fact]
+    public void DecodesAstcVoidExtentBlock()
+    {
+        // A void-extent ASTC block (low 9 bits = 0x1FC, LDR) with a constant 16-bit colour per channel;
+        // the 8-bit result is the high byte. R=G=B=0xABAB->0xAB, A=0xFFFF->0xFF, across all 16 texels.
+        byte[] block =
+        [
+            0xFC, 0x01, 0, 0, 0, 0, 0, 0,
+            0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xFF, 0xFF,
+        ];
+        var dst = new byte[4 * 4 * 4];
+
+        SurfaceDecoder.DecodeSurface(TextureFormat.Astc4x4Unorm, block, dst, 4, 4);
+
+        for (var i = 0; i < 16; i++)
+        {
+            Assert.Equal((0xAB, 0xAB, 0xAB, 0xFF), (dst[i * 4], dst[(i * 4) + 1], dst[(i * 4) + 2], dst[(i * 4) + 3]));
+        }
+    }
 }

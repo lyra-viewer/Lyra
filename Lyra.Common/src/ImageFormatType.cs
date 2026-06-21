@@ -55,10 +55,9 @@ public enum ImageFormatType
     [Description("JPEG XL")]
     Jxl,
 
-    [DisabledType]
     [FileExtension([".ktx", ".ktx2"])]
     [Description("Khronos Texture")]
-    Ktx, // TODO
+    Ktx,
 
     [FileExtension([".png"])]
     [Description("PNG Image")]

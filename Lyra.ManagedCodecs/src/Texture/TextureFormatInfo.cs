@@ -15,6 +15,11 @@ public readonly struct TextureFormatInfo
     public bool IsSigned { get; init; }
     public bool IsHdr { get; init; }
     public bool HasAlpha { get; init; }
+    
+    public bool IsAstc { get; init; }
+    
+    public bool IsAstc3D { get; init; }
+    public int BlockDepth { get; init; }
 
-    public int BitsPerPixel => BytesPerBlock * 8 / (BlockWidth * BlockHeight);
+    public int BitsPerPixel => BytesPerBlock * 8 / (BlockWidth * BlockHeight * (BlockDepth <= 0 ? 1 : BlockDepth));
 }

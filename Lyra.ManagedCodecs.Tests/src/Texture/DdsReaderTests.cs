@@ -127,11 +127,11 @@ public class DdsReaderTests
     }
 
     [Fact]
-    public void AstcReportsClearError()
+    public void ReadsDxgiAstc()
     {
-        // DX10 DXGI_FORMAT 150 = ASTC_6X6_UNORM.
-        var ex = Assert.Throws<NotSupportedException>(() => DdsReader.Read(DdsTestFile.Dx10(4, 4, 1, 150, new byte[64])));
-        Assert.Contains("ASTC", ex.Message);
+        // DXGI_FORMAT 150 = ASTC_6X6_UNORM; a 6x6 surface is a single 128-bit block.
+        var tex = DdsReader.Read(DdsTestFile.Dx10(6, 6, 1, dxgiFormat: 150, new byte[16]));
+        Assert.Equal(TextureFormat.Astc6x6Unorm, tex.Format);
     }
 
     [Fact]

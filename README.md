@@ -24,8 +24,9 @@
     - [ICC Color Profiles](#icc-color-profiles)
     - [Displayed PSD Information](#displayed-psd-information)
     - [Future Direction](#future-direction)
-- [DDS Texture Decoding Model](#dds-texture-decoding-model)
-    - [Supported DDS Formats](#supported-dds-formats)
+- [DDS & KTX Texture Decoding Model](#dds--ktx-texture-decoding-model)
+    - [Supported Texture Formats](#supported-texture-formats)
+    - [Containers](#containers)
     - [Color & Signedness](#color--signedness)
     - [File Inspector](#file-inspector)
     - [Safety](#safety)
@@ -77,12 +78,13 @@ cannot be parallelised, so performance over a NAS or remote share will always be
 ## Key Features
 
 - Fast navigation through large directories of images or texture assets.
+- Zoom-to-cursor and panning for intuitive inspection at any scale.
 - **Directory tree sidebar** for browsing the filesystem without leaving the viewer.
 - **SVG** support for previewing scalable vector assets.
 - **Adjustable background** modes to improve visibility of transparent images.
-- **EXIF metadata** and format-specific information panel.
+- **Duplicate finder** that locates exact and visually similar images across a directory tree using perceptual hashing.
+- **EXIF metadata** and **format-specific** information panel.
 - **PSD layer hierarchy** panel showing group structure, layer names, and visibility state.
-- Zoom-to-cursor and panning for intuitive inspection at any scale.
 - Reasonable support for modern image formats, with limited support for older formats that refuse to die.
 
 ---
@@ -96,11 +98,20 @@ The architecture is designed around fast, non-blocking image loading:
 - Decoded images are cached and adjacent files are preloaded in the background, so navigation feels instant even in large directories.
 - Large PSD/PSB files use streaming and tiled decoding to avoid loading entire documents into memory - tested with files exceeding 3 GB.
 
-[//]: # (TODO: Add ManagedReaders)
+Decoding is split into two layers. **Lyra.ManagedCodecs** is a pure-managed, dependency-free codec library that
+owns the formats Lyra decodes itself - TGA, Radiance HDR, and the GPU texture containers (DDS, KTX, KTX2) together
+with their block formats (BC1–BC7, BC6H, ETC2 / EAC, ASTC). These readers parse the container structure in C#,
+slice each subresource as a zero-copy view into the source file, treat all input as hostile (every byte range and
+surface size is bounds-checked against overflow), and decode only the surface actually needed - so a thumbnail or a
+perceptual hash never pays to decode a full-resolution mip. Because nothing here links a native library, it behaves
+identically on every platform .NET targets.
 
-Lyra integrates lightweight native interop wrappers for EXR, JPEG 2000, and TIFF decoding, and delegates format-specific work to focused libraries 
-rather than bundling large native dependencies. Simpler formats such as TGA are handled by a small in-house managed decoder with no external dependency. 
-System libraries like libheif, OpenJPEG, OpenEXR and libtiff are expected from the package manager (e.g. Homebrew).
+For the remaining formats Lyra integrates lightweight native interop wrappers for EXR, JPEG 2000, and TIFF decoding,
+and delegates format-specific work to focused libraries rather than bundling large native dependencies. The one
+native exception inside the managed codec layer is **Basis Universal** (ETC1S / UASTC) supercompression carried in
+KTX2: rather than reimplement its intricate transcoder, Lyra wraps Binomial's open-source reference transcoder
+(Apache-2.0) in a small native wrapper. System libraries like libheif, OpenJPEG, OpenEXR and libtiff are expected from
+the package manager (e.g. Homebrew).
 Originally built for workflows involving texture maps, HDRIs, and assets exported from tools like Blender and Quixel Bridge - but the design 
 generalizes well to any image-heavy workflow.
 
@@ -131,6 +142,13 @@ generalizes well to any image-heavy workflow.
 | ~JPEG XL~   | ~JPEG XL Image Coding System~                       | ~`.jxl`~        |
 | WebP        | Compressed raster image format with optional alpha  | `.webp`         |
 
+### Document / Vector Formats
+
+| Format    | Description              | Extensions    | Notes                                        |
+|-----------|--------------------------|---------------|----------------------------------------------|
+| SVG       | Scalable Vector Graphics | `.svg`        |                                              |
+| Photoshop | Adobe Photoshop document | `.psd` `.psb` | See *PSD / PSB Decoding Model* section below |
+
 ### High Dynamic Range Formats
 
 | Format       | Description                                     | Extensions |
@@ -143,17 +161,10 @@ generalizes well to any image-heavy workflow.
 
 ### GPU Formats
 
-| Format | Description                    | Extensions       | Notes                                          |
-|--------|--------------------------------|------------------|------------------------------------------------|
-| DDS    | DirectDraw Surface             | `.dds`           | See *DDS Texture Decoding Model* section below |
-| ~KTX~  | ~GPU texture container format~ | ~`.ktx` `.ktx2`~ |                                                |
-
-### Document / Vector Formats
-
-| Format    | Description              | Extensions    | Notes                                        |
-|-----------|--------------------------|---------------|----------------------------------------------|
-| SVG       | Scalable Vector Graphics | `.svg`        |                                              |
-| Photoshop | Adobe Photoshop document | `.psd` `.psb` | See *PSD / PSB Decoding Model* section below |
+| Format | Description                   | Extensions     | Notes                                                |
+|--------|-------------------------------|----------------|------------------------------------------------------|
+| DDS    | DirectDraw Surface            | `.dds`         | See *DDS & KTX Texture Decoding Model* section below |
+| KTX    | Khronos GPU texture container | `.ktx` `.ktx2` | KTX 1.x and KTX 2.0; see section below               |
 
 ### Minor Formats
 
@@ -252,63 +263,77 @@ The PSD decoder is intentionally structured to allow future expansion.
 
 ---
 
-## DDS Texture Decoding Model
+## DDS & KTX Texture Decoding Model
 
-DDS is a GPU texture container - one file can hold a full mip chain, cube-map faces, array layers, or
-volume slices, usually in a block-compressed GPU format. Lyra reads it with a **pure-managed** codec (no
-native dependencies): for display it decodes the base surface (mip 0, first face / layer); for thumbnails and
-perceptual hashing it decodes the *smallest stored mip that still covers the target size*.
+DDS and KTX are GPU texture containers - one file can hold a full mip chain, cube-map faces, array layers, or
+volume slices, usually in a block-compressed GPU format. Lyra reads all three (`.dds`, `.ktx`, `.ktx2`) with a
+single **pure-managed** codec (no native dependencies, save the Basis transcoder noted below): for display it
+decodes the base surface (mip 0, first face / layer); for thumbnails and perceptual hashing it decodes the
+*smallest stored mip that still covers the target size*. The container readers differ - each owns its own header
+and format mapping - but they all feed one shared set of block decoders.
 
-Both the legacy `DDS_PIXELFORMAT` header and the `DX10` extended header are handled, including four-character
-codes (`DXT1`, `ATI2`, `BC5S`, …), the numeric `D3DFORMAT` codes some older D3D9 exporters store in the FourCC
-field, and `DXGI_FORMAT` identifiers.
+### Supported Texture Formats
 
-### Supported DDS Formats
+| Family                 | Formats                                                                                      | Notes                               |
+|------------------------|----------------------------------------------------------------------------------------------|-------------------------------------|
+| Block-compressed (BCn) | BC1–BC3 (DXT1/3/5), BC4 / BC5 (unorm + snorm), BC7                                           | The mainstream desktop formats      |
+| HDR block              | BC6H (signed + unsigned)                                                                     | Decoded to float, then tone-mapped  |
+| Mobile block           | ETC2 / EAC - RGB, RGB+A1, RGBA8, R11 / RG11 (unorm + snorm)                                  | Typically carried in KTX / KTX2     |
+| Adaptive block (ASTC)  | All LDR footprints - 2D (4×4 … 12×12) and 3D (3×3×3 … 6×6×6)                                 | sRGB + linear; HDR ASTC not decoded |
+| Uncompressed 8-bit     | R8, RG8, RGB8, RGBA8 / BGRA8 (+ sRGB), `snorm`, packed (4/4/4/4, 5/6/5, 5/5/5/1, 10/10/10/2) | `snorm` remapped for display        |
+| Uncompressed float     | R16F / R32F, RGB16F, RGBA16F / RGBA32F, RG11B10, RGB9E5                                      | Decoded to float, then tone-mapped  |
 
-| Family                 | Formats                                            | Notes                              |
-|------------------------|----------------------------------------------------|------------------------------------|
-| Block-compressed (BCn) | BC1–BC3 (DXT1/3/5), BC4 / BC5 (unorm + snorm), BC7 | The mainstream desktop formats     |
-| HDR block              | BC6H (signed + unsigned)                           | Decoded to float, then tone-mapped |
-| Uncompressed 8-bit     | RGBA8, BGRA8 (+ sRGB), RGBA8 `snorm`               | `snorm` is remapped for display    |
-| Uncompressed float     | RGBA16F, RGBA32F                                   | Decoded to float, then tone-mapped |
+The decoders are validated against independent reference decoders - BC1 / BC3 / BC7 against Pillow, BC6H against
+`imagecodecs`, and ASTC against the official **astcenc** reference decoder - across fuzzed inputs covering every
+block mode and partition.
 
-The decoders are validated **bit-for-bit** against independent reference decoders - BC1 / BC3 / BC7 against
-Pillow and BC6H against `imagecodecs` - across fuzzed inputs covering every block mode and partition.
+### Containers
+
+- **DDS** - both the legacy `DDS_PIXELFORMAT` header and the `DX10` extended header, including four-character
+  codes (`DXT1`, `ATI2`, `BC5S`, …), the numeric `D3DFORMAT` codes some older D3D9 exporters store in the FourCC
+  field, and `DXGI_FORMAT` identifiers.
+- **KTX 1.x** - mapped from its OpenGL `glInternalFormat`. Rare big-endian files are byte-swapped on read, and the
+  OpenGL bottom-left row order is flipped to top-left for display.
+- **KTX 2.0** - mapped from its Vulkan `VkFormat`. Per-level **Zstandard** and **ZLIB** supercompression is
+  inflated on read. **Basis Universal** (ETC1S / UASTC) payloads are transcoded to RGBA by a small native wrapper -
+  the one native dependency in this path - since their block stream is proprietary.
 
 ### Color & Signedness
 
 Decoding is **faithful** - no color transform is applied, so an sRGB source decodes to sRGB-tagged bytes and the
 display path linearizes.
 
-- **HDR formats** (BC6H, RGBA16F / RGBA32F) are scene-referred float and are tone-mapped with the same
-  **ACES filmic** curve used for EXR and Radiance HDR, so highlights roll off smoothly instead of clipping.
+- **HDR formats** (BC6H, RGBA16F / RGBA32F, and the packed float formats) are scene-referred float and are
+  tone-mapped with the same **ACES filmic** curve used for EXR and Radiance HDR, so highlights roll off smoothly
+  instead of clipping.
 - **Signed (`snorm`) formats** - common in bump / normal maps - are remapped from `[-1, 1]` to `[0, 1]`, which
   avoids the "shifted color" look some viewers produce by rendering the raw signed bytes as unsigned.
 
 ### File Inspector
 
-When a DDS is open, two sidebar sections surface its internals:
+When a DDS or KTX file is open, two sidebar sections surface its internals:
 
-- **Format Specific** lists the headline facts: the source-native format name (e.g. `BC7_UNORM`, `DXT4`, or
-  `R16G16B16A16_FLOAT (FourCC 'q')` when a numeric `D3DFORMAT` is decoded), *Has Alpha*, *Is Cubemap*,
-  *Is Volume*, *Depth* (volumes only), *Mipmap Count*, and *Bits/Pixel*.
-- **Structure** is a scrollable, collapsible view of the file's binary layout - the DDS header, pixel-format
-  and capabilities sub-structures, and every mip level. Each part shows its name, a short description and its
-  byte size, and expands to the raw key-value fields it holds.
+- **Format Specific** lists the headline facts: the source-native format name (e.g. `BC7_UNORM`, `DXT4`, a Vulkan
+  `VK_FORMAT_…` for KTX2, or `R16G16B16A16_FLOAT (FourCC 'q')` when a numeric `D3DFORMAT` is decoded), *Has Alpha*,
+  *Is Cubemap*, *Is Volume*, *Depth* (volumes only), *Mipmap Count*, and *Bits/Pixel*.
+- **Structure** is a scrollable, collapsible view of the file's binary layout - the container header and its
+  sub-structures, and every mip level. Each part shows its name, a short description and its byte size, and expands
+  to the raw key-value fields it holds.
 
 ### Safety
 
-Lyra treats DDS input as hostile. It parses the full subresource layout (mips, faces, array layers, volume
-depth slices) and **validates every subresource's byte range against the file length** before exposing it;
-dimensions, mip counts and surface sizes are bounds-checked against overflow. A malformed or truncated header
-is rejected cleanly rather than read out of bounds, and an unrecognized format fails with a descriptive message
-naming the exact `DXGI_FORMAT` or FourCC rather than failing silently.
+Lyra treats texture input as hostile. It parses the full subresource layout (mips, faces, array layers, volume
+depth slices) and validates every subresource's byte range against the file length before exposing it;
+dimensions, mip counts and surface sizes are bounds-checked against overflow, and each parsed level is cross-checked
+against Lyra's own independent sizing math. A malformed or truncated header is rejected cleanly rather than read out
+of bounds, and an unrecognized format fails with a descriptive message naming the exact `DXGI_FORMAT`, `VkFormat`,
+`glInternalFormat`, or FourCC rather than failing silently.
 
 ### Not Yet Supported
 
-- **ASTC** (e.g. `DXGI_FORMAT_ASTC_6X6_UNORM`) - reported with a clear, named error rather than decoded.
-- **ETC2 / EAC** - rarely seen inside DDS.
-- **KTX / KTX2** containers (`.ktx`, `.ktx2`) reuse the same block decoders and are planned.
+- **PVRTC** - the PowerVR block formats are not decoded.
+- **HDR ASTC** - LDR ASTC is fully supported; the HDR ASTC profiles are not yet decoded.
+- KTX files that declare zero stored levels (deferred runtime mip generation) are rejected rather than guessed.
 
 ---
 
@@ -366,8 +391,12 @@ naming the exact `DXGI_FORMAT` or FourCC rather than failing silently.
 | OpenEXR           | High-dynamic-range OpenEXR (.exr) decoding                             | BSD-3-Clause  | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
 | OpenJPEG          | JPEG 2000 still-image decoding                                         | BSD-2-Clause  | [github](https://github.com/uclouvain/openjpeg)                   |
 | libtiff           | TIFF decoding                                                          | BSD-like      | [gitlab](https://gitlab.com/libtiff/libtiff)                      |
-| Unicolour         | Color space conversions & perceptual color math (used in PSD decoding) | MIT           | [github](https://github.com/waacton/Unicolour)                    |
-| MetadataExtractor | EXIF metadata extraction                                               | Apache 2.0    | [github](https://github.com/drewnoakes/metadata-extractor-dotnet) |
+| Basis Universal   | KTX2 ETC1S / UASTC transcoding (native wrapper)                        | Apache-2.0    | [github](https://github.com/BinomialLLC/basis_universal)          |
+| ZstdSharp.Port    | Zstandard decompression for KTX2 supercompression                      | MIT           | [github](https://github.com/oleg-st/ZstdSharp)                    |
+| Unicolour         | Color space conversions & perceptual color math (transitive, via the in-house PSD decoder) | MIT | [github](https://github.com/waacton/Unicolour)                    |
+| MetadataExtractor | EXIF metadata extraction                                               | Apache-2.0    | [github](https://github.com/drewnoakes/metadata-extractor-dotnet) |
+| Tomlyn            | TOML parsing for configuration files                                   | BSD-2-Clause  | [github](https://github.com/xoofx/Tomlyn)                         |
+| System.IO.Hashing | Fast non-cryptographic hashing (duplicate detection)                   | MIT           | [github](https://github.com/dotnet/runtime)                       |
 
 ---
 

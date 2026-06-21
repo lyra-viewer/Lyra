@@ -64,9 +64,9 @@ internal class PsdDecoder : IImageDecoder
 
             composite.FullWidth = header.Width;
             composite.FullHeight = header.Height;
-            composite.FormatSpecific.Add("Color Mode", $"{header.ColorMode}");
-            composite.FormatSpecific.Add("Channels", $"{header.NumberOfChannels}");
-            composite.FormatSpecific.Add("Depth per Channel", $"{header.Depth}-bit");
+            composite.AddFormatSpecific("Color Mode", $"{header.ColorMode}");
+            composite.AddFormatSpecific("Channels", $"{header.NumberOfChannels}");
+            composite.AddFormatSpecific("Depth per Channel", $"{header.Depth}-bit");
 
             return header;
         }
@@ -218,11 +218,11 @@ internal class PsdDecoder : IImageDecoder
 
     private static void ProcessMetadata(PsdMetadata metadata, Composite composite)
     {
-        composite.FormatSpecific.Add("Compression", $"{metadata.CompressionType ?? "none"}");
-        composite.FormatSpecific.Add("Embedded ICC Profile", $"{metadata.EmbeddedIccProfileName ?? "none"}");
+        composite.AddFormatSpecific("Compression", $"{metadata.CompressionType ?? "none"}");
+        composite.AddFormatSpecific("Embedded ICC Profile", $"{metadata.EmbeddedIccProfileName ?? "none"}");
 
         if (metadata.EffectiveIccProfileName is not "Embedded ICC Profile")
-            composite.FormatSpecific.Add("Effective ICC Profile", $"{metadata.EffectiveIccProfileName ?? "none"}");
+            composite.AddFormatSpecific("Effective ICC Profile", $"{metadata.EffectiveIccProfileName ?? "none"}");
     }
 
     #endregion

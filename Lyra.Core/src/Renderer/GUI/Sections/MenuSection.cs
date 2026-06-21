@@ -32,7 +32,7 @@ public sealed class MenuSection : IUISection
         var openFileButton = new Button("OPEN")
         {
             CornerRadius = 0f,
-            HorizontalSize = SizeMode.Expand
+            HorizontalSize = SizeMode.Expand,
         };
         openFileButton.Click += () => OpenFileClicked?.Invoke();
 
@@ -48,7 +48,7 @@ public sealed class MenuSection : IUISection
             HorizontalSize = SizeMode.Expand,
             Spacing = 4f,
             Transient = true,
-            Padding = new Padding(0, 4f, 0, 0f)
+            Padding = new Padding(10, 4f, 0, 0f)
         };
         openRow.AddComponents(openFileButton, openDirButton);
 
@@ -71,7 +71,7 @@ public sealed class MenuSection : IUISection
             HorizontalSize = SizeMode.Expand,
             Spacing = 4f,
             Transient = true,
-            Padding = new Padding(0, 4f, 0, 0)
+            Padding = new Padding(10, 4f, 0, 0)
         };
         quitRow.AddComponents(fullscreenButton, quitButton);
         
@@ -87,7 +87,7 @@ public sealed class MenuSection : IUISection
             HorizontalSize = SizeMode.Expand,
             Spacing = 4f,
             Transient = true,
-            Padding = new Padding(0, 4f, 0, 0)
+            Padding = new Padding(10, 4f, 0, 0)
         };
         duplicatesFinderRow.AddComponents(duplicatesFinderButton);
 
@@ -99,7 +99,7 @@ public sealed class MenuSection : IUISection
             headerDisplay: m => $"BACKGROUND: {m.Description()}")
         {
             HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(0, 4f, 0, 0)
+            Padding = new Padding(10, 4f, 0, 0)
         };
         _backgroundDropdown.SelectionChanged += mode => BackgroundModeChanged?.Invoke(mode);
 
@@ -111,7 +111,7 @@ public sealed class MenuSection : IUISection
             headerDisplay: m => $"SAMPLING: {m.Description()}")
         {
             HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(0, 4f, 0, 0f)
+            Padding = new Padding(10, 4f, 0, 0f)
         };
         _samplingDropdown.SelectionChanged += mode => SamplingModeChanged?.Invoke(mode);
 

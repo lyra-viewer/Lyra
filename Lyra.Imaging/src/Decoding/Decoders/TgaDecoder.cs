@@ -12,8 +12,6 @@ namespace Lyra.Imaging.Decoding.Decoders;
 
 internal sealed class TgaDecoder : IImageDecoder, IThumbnailDecoder
 {
-    private static readonly TgaReader Core = new();
-
     // The pipeline routes by file extension, so a file named *.tga may actually be another
     // format. TGA has no magic number; when the bytes do not structurally look like a TGA
     // (or managed decode fails on an unsupported variant), defer to the content-sniffing Skia
@@ -100,7 +98,7 @@ internal sealed class TgaDecoder : IImageDecoder, IThumbnailDecoder
     /// </summary>
     private static bool TryDecodeManaged(byte[] bytes, string path, out DecodedImage decoded)
     {
-        if (!Core.CanDecode(bytes))
+        if (!TgaReader.CanDecode(bytes))
         {
             Logger.Warning($"[TgaDecoder] {path} does not look like a TGA (extension mismatch); falling back to {nameof(SkiaDecoder)}.");
             decoded = default;

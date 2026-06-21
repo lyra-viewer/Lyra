@@ -19,7 +19,7 @@ namespace Lyra.Renderer.GUI.Sections;
 // ============================================================================
 public sealed class StructureSection : IUISection
 {
-    private const float KeyColumnWidth = 130f;
+    private const float KeyColumnWidth = 140f;
 
     private readonly Collapsible _collapsible;
     private readonly VScrollContainer _groups;

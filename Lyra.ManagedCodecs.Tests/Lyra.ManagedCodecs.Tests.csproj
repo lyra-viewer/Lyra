@@ -26,4 +26,9 @@
       <Folder Include="src\" />
     </ItemGroup>
 
+    <ItemGroup>
+      <!-- ASTC conformance fixtures: .astc payloads + astcenc's reference decode (.ref.tga). -->
+      <None Include="src\Texture\Fixtures\Astc\*" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
 </Project>

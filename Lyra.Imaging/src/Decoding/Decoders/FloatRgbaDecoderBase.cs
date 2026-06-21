@@ -42,7 +42,7 @@ internal abstract class FloatRgbaDecoderBase : IImageDecoder
             HdrToneMap.ToBitmap(pixels.AsSpan(), bitmap, ct, out isGrayscale);
         }
 
-        composite.FormatSpecific["GrayScale"] = isGrayscale.ToString();
+        composite.AddFormatSpecific("GrayScale", isGrayscale.ToString());
 
         ct.ThrowIfCancellationRequested();
 

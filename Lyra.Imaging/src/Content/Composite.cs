@@ -42,7 +42,10 @@ public sealed class Composite : IDisposable
 
     // Metadata
     public ExifInfo? ExifInfo;
-    public readonly Dictionary<string, string> FormatSpecific = new();
+    
+    private readonly Dictionary<string, string> _formatSpecific = new();
+    private readonly Lock _formatSpecificLock = new();
+
     public IReadOnlyList<StructureGroup>? Structure;
     public LayerRecord[]? PsdLayers;
     public bool IsGrayscale;
@@ -52,6 +55,24 @@ public sealed class Composite : IDisposable
     public float LogicalHeight => FullHeight ?? Content?.DecodedHeight ?? 0f;
 
     public bool IsEmpty => Content is null;
+
+    /// <summary>Records a format-specific metadata entry. Safe to call from a decoder worker thread.</summary>
+    public void AddFormatSpecific(string key, string value)
+    {
+        lock (_formatSpecificLock)
+        {
+            _formatSpecific[key] = value;
+        }
+    }
+
+    /// <summary>A consistent snapshot of the format-specific metadata for the UI to render.</summary>
+    public List<KeyValuePair<string, string>> FormatSpecificSnapshot()
+    {
+        lock (_formatSpecificLock)
+        {
+            return _formatSpecific.ToList();
+        }
+    }
 
     internal void BeginLoadTiming()
     {

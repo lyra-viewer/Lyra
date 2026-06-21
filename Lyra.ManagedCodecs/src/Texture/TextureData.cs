@@ -8,10 +8,17 @@ public enum TextureKind
     Volume,
 }
 
+public enum TextureOrigin
+{
+    TopLeft,
+    BottomLeft,
+}
+
 /// <summary>
 /// One decodable surface within a texture: a single mip level of a single face/layer (and, for
-/// volume textures, the full depth stack of that mip). <see cref="Data"/> is a zero-copy view into
-/// the source file, validated to lie fully within it at parse time.
+/// volume textures, the full depth stack of that mip). <see cref="Data"/> is usually a zero-copy view
+/// into the source file (validated to lie fully within it at parse time); for supercompressed
+/// containers it instead views the level's inflated buffer.
 /// </summary>
 public readonly struct Subresource
 {
@@ -43,6 +50,13 @@ public sealed class TextureData
     public required int Depth { get; init; }
     public required int MipLevels { get; init; }
     public required int ArrayLayers { get; init; }
+
+    /// <summary>
+    /// Corner of the first stored row. Defaults to <see cref="TextureOrigin.TopLeft"/> (DDS, KTX2);
+    /// readers that expose bottom-up data (KTX 1.x) set <see cref="TextureOrigin.BottomLeft"/> so the
+    /// display path knows to flip vertically after decoding.
+    /// </summary>
+    public TextureOrigin Origin { get; init; } = TextureOrigin.TopLeft;
 
     public required IReadOnlyList<Subresource> Subresources { get; init; }
 

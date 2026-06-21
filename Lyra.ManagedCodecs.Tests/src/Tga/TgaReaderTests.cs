@@ -144,7 +144,7 @@ public class TgaReaderTests
     public void CanDecodeAcceptsValidHeader()
     {
         List<byte> tga = TgaTestImage.Header(0, 2, 0, 0, 2, 2, 24, TgaTestImage.TopLeft);
-        Assert.True(new TgaReader().CanDecode(tga.ToArray()));
+        Assert.True(TgaReader.CanDecode(tga.ToArray()));
     }
 
     [Fact]
@@ -152,6 +152,6 @@ public class TgaReaderTests
     {
         // Invalid color map type (5) — not a plausible TGA header.
         byte[] notTga = [0, 5, 99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 24, 0x20];
-        Assert.False(new TgaReader().CanDecode(notTga));
+        Assert.False(TgaReader.CanDecode(notTga));
     }
 }

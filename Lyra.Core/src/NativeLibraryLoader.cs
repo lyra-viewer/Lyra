@@ -60,6 +60,11 @@ internal static class NativeLibraryLoader
                 RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "libtiff_native.so" :
                 "libtiff_native.dylib"
             },
+            {
+                "BASIS", RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "libbasis_native.dll" :
+                RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "libbasis_native.so" :
+                "libbasis_native.dylib"
+            },
 #if !DEBUG
             {
                 "SKIA", RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "libSkiaSharp.dll" :
@@ -235,9 +240,10 @@ internal static class NativeLibraryLoader
     {
         return libraryName switch
         {
-            "libexr" or "libexr.dll" or "libexr.so" or "libexr.dylib" => TryLoad("EXR"),
-            "libj2k" or "libj2k.dll" or "libj2k.so" or "libj2k.dylib" => TryLoad("J2K"),
-            "libtiff" or "libtiff.dll" or "libtiff.so" or "libtiff.dylib" => TryLoad("TIFF"),
+            "libexr_native" or "libexr_native.dll" or "libexr_native.so" or "libexr_native.dylib" or "libexr" => TryLoad("EXR"),
+            "libj2k_native" or "libj2k_native.dll" or "libj2k_native.so" or "libj2k_native.dylib" or "libj2k" => TryLoad("J2K"),
+            "libtiff_native" or "libtiff_native.dll" or "libtiff_native.so" or "libtiff_native.dylib" or "libtiff" => TryLoad("TIFF"),
+            "libbasis_native" or "libbasis_native.dll" or "libbasis_native.so" or "libbasis_native.dylib" or "libbasis" => TryLoad("BASIS"),
             _ => IntPtr.Zero
         };
     }
