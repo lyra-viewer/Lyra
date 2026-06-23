@@ -189,7 +189,7 @@ public partial class SdlCore : IDisposable
 
         if (!_composite.IsEmpty && _displayMode == DisplayMode.Undefined)
         {
-            _displayMode = DimensionHelper.GetInitialDisplayMode(_window, _composite, out _zoomPercentage);
+            _displayMode = DimensionHelper.GetDisplayMode(_window, _composite, _viewState.InitDisplayMode, out _zoomPercentage);
 
             _renderer.SetDisplayMode(_displayMode);
             _renderer.SetZoom(_zoomPercentage);
@@ -270,7 +270,7 @@ public partial class SdlCore : IDisposable
 
             var preloadPaths = DirectoryNavigator.GetRange(PreloadDepth);
             ImageStore.Preload(preloadPaths);
-            _displayMode = DimensionHelper.GetInitialDisplayMode(_window, _composite, out _zoomPercentage);
+            _displayMode = DimensionHelper.GetDisplayMode(_window, _composite, _viewState.InitDisplayMode, out _zoomPercentage);
             _panHelper = new PanHelper(_window, _composite, _zoomPercentage);
         }
 
@@ -336,12 +336,14 @@ public partial class SdlCore : IDisposable
         // Dropdown changes route into ViewState (single source of truth).
         events.BackgroundModeChanged     += _viewState.SetBackgroundMode;
         events.SamplingModeChanged       += _viewState.SetSamplingMode;
+        events.InitDisplayModeChanged += _viewState.SetInitDisplayMode;
 
         // ViewState changes auto-sync the dropdowns. UIManager.Set* is
         // documented as not re-firing, and ViewState's equality guard
         // is a second line of defense against feedback loops.
-        _viewState.BackgroundModeChanged += _renderer.UIManager.SetBackgroundMode;
-        _viewState.SamplingModeChanged   += _renderer.UIManager.SetSamplingMode;
+        _viewState.BackgroundModeChanged    += _renderer.UIManager.SetBackgroundMode;
+        _viewState.SamplingModeChanged      += _renderer.UIManager.SetSamplingMode;
+        _viewState.InitDisplayModeChanged += _renderer.UIManager.SetInitDisplayMode;
     }
 
     private void OnCompositeProgress(Composite c)

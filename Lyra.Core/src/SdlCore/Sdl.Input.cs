@@ -209,7 +209,7 @@ public partial class SdlCore
             return;
 
         if (_displayMode is DisplayMode.Free or DisplayMode.Undefined)
-            _displayMode = DimensionHelper.GetInitialDisplayMode(_window, _composite, out _zoomPercentage);
+            _displayMode = DimensionHelper.GetDisplayMode(_window, _composite, _viewState.InitDisplayMode, out _zoomPercentage);
         else if (_zoomPercentage == 100)
         {
             UpdateFitToScreen();

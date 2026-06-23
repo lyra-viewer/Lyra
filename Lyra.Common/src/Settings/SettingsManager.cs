@@ -90,6 +90,7 @@ public static class SettingsManager
 
         var samplingRaw = table.GetInt("sampling_mode", (int)DefaultUiSettings.SamplingMode);
         var backgroundRaw = table.GetInt("background_mode", (int)DefaultUiSettings.BackgroundMode);
+        var initDisplayRaw = table.GetInt("init_display_mode", (int)DefaultUiSettings.InitDisplayMode);
         var info = table.GetBool("info_visible", DefaultUiSettings.InfoVisible);
         var help = table.GetBool("help_visible", DefaultUiSettings.HelpVisible);
         var sidebar = table.GetBool("sidebar_visible", DefaultUiSettings.SidebarVisible);
@@ -108,7 +109,14 @@ public static class SettingsManager
         if (!Enum.IsDefined(typeof(BackgroundMode), backgroundRaw))
             Logger.Warning($"[SettingsManager] Invalid background_mode={backgroundRaw}, using default {(int)DefaultUiSettings.BackgroundMode}");
 
-        UiSettings = new UISettings(sampling, background, info, help, sidebar);
+        var initDisplay = Enum.IsDefined(typeof(InitDisplayMode), initDisplayRaw)
+            ? (InitDisplayMode)initDisplayRaw
+            : DefaultUiSettings.InitDisplayMode;
+
+        if (!Enum.IsDefined(typeof(InitDisplayMode), initDisplayRaw))
+            Logger.Warning($"[SettingsManager] Invalid init_display_mode={initDisplayRaw}, using default {(int)DefaultUiSettings.InitDisplayMode}");
+
+        UiSettings = new UISettings(sampling, background, initDisplay, info, help, sidebar);
     }
 
     private static string BuildUserSettingsToml(UISettings s)
@@ -119,6 +127,7 @@ public static class SettingsManager
 
                 sampling_mode = {(int)s.SamplingMode}
                 background_mode = {(int)s.BackgroundMode}
+                init_display_mode = {(int)s.InitDisplayMode}
                 info_visible = {s.InfoVisible.ToString().ToLowerInvariant()}
                 help_visible = {s.HelpVisible.ToString().ToLowerInvariant()}
                 sidebar_visible = {s.SidebarVisible.ToString().ToLowerInvariant()}

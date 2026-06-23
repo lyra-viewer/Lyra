@@ -126,6 +126,16 @@ public class UIManager : IDisposable
     // --------------------------------------------------------
 
     /// <summary>
+    /// Updates the init-display-mode dropdown's selected value to match the
+    /// view state. Does not fire <see cref="IUIEvents.InitDisplayModeChanged"/>.
+    /// </summary>
+    public void SetInitDisplayMode(InitDisplayMode mode)
+    {
+        _mainLayer.SetInitDisplayMode(mode);
+        Invalidate();
+    }
+
+    /// <summary>
     /// Updates the background dropdown's selected value to match the
     /// renderer state. Does not fire <see cref="IUIEvents.BackgroundModeChanged"/>.
     /// </summary>

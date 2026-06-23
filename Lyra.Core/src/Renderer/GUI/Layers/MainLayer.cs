@@ -58,6 +58,7 @@ public class MainLayer : IUIEvents, IDisposable
     public event Action? FindDuplicatesRequested;
     public event Action? DuplicatesGoBackRequested;
     public event Action<string>? DirectoryPicked;
+    public event Action<InitDisplayMode>? InitDisplayModeChanged;
     public event Action<BackgroundMode>? BackgroundModeChanged;
     public event Action<SamplingMode>? SamplingModeChanged;
 
@@ -82,6 +83,7 @@ public class MainLayer : IUIEvents, IDisposable
         _menuSection.FullscreenClicked += () => OnMenu("FULL SCREEN", FullscreenRequested);
         _menuSection.QuitClicked += () => OnMenu("QUIT", QuitRequested);
         _menuSection.ShowDuplicatesFinderClicked += () => { _debugSection.SetAction("DUPLICATES FINDER"); _duplicatesFinderSection.Show(); _context.Invalidate(); };
+        _menuSection.InitDisplayModeChanged += mode => OnMenu("INIT DISPLAY MODE", InitDisplayModeChanged, mode);
         _menuSection.BackgroundModeChanged += mode => OnMenu("BACKGROUND", BackgroundModeChanged, mode);
         _menuSection.SamplingModeChanged += mode => OnMenu("SAMPLING", SamplingModeChanged, mode);
         _directoryTreeSection.DirectoryPicked += path => DirectoryPicked?.Invoke(path);
@@ -176,6 +178,8 @@ public class MainLayer : IUIEvents, IDisposable
     // --------------------------------------------------------
     //  Programmatic dropdown sync (driven by keyboard toggles)
     // --------------------------------------------------------
+
+    public void SetInitDisplayMode(InitDisplayMode mode) => _menuSection.SetInitDisplayMode(mode);
 
     public void SetBackgroundMode(BackgroundMode mode) => _menuSection.SetBackgroundMode(mode);
 

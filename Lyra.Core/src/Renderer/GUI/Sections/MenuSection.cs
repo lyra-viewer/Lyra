@@ -12,6 +12,7 @@ namespace Lyra.Renderer.GUI.Sections;
 
 public sealed class MenuSection : IUISection
 {
+    private readonly DropDownMenu<InitDisplayMode> _initDisplayModeDropdown;
     private readonly DropDownMenu<BackgroundMode> _backgroundDropdown;
     private readonly DropDownMenu<SamplingMode> _samplingDropdown;
 
@@ -24,6 +25,7 @@ public sealed class MenuSection : IUISection
     public event Action? FullscreenClicked;
     public event Action? QuitClicked;
     public event Action? ShowDuplicatesFinderClicked;
+    public event Action<InitDisplayMode>? InitDisplayModeChanged;
     public event Action<BackgroundMode>? BackgroundModeChanged;
     public event Action<SamplingMode>? SamplingModeChanged;
 
@@ -91,6 +93,18 @@ public sealed class MenuSection : IUISection
         };
         duplicatesFinderRow.AddComponents(duplicatesFinderButton);
 
+        _initDisplayModeDropdown = new DropDownMenu<InitDisplayMode>(
+            popupHost,
+            Enum.GetValues<InitDisplayMode>(),
+            m => m.Description(),
+            SettingsManager.UiSettings.InitDisplayMode,
+            headerDisplay: m => $"INIT DISPLAY MODE: {m.Description()}")
+        {
+            HorizontalSize = SizeMode.Expand,
+            Padding = new Padding(10, 4f, 0, 0)
+        };
+        _initDisplayModeDropdown.SelectionChanged += mode => InitDisplayModeChanged?.Invoke(mode);
+
         _backgroundDropdown = new DropDownMenu<BackgroundMode>(
             popupHost,
             Enum.GetValues<BackgroundMode>(),
@@ -126,9 +140,11 @@ public sealed class MenuSection : IUISection
         {
             HorizontalSize = SizeMode.Expand
         };
-        collapsible.AddComponents(openRow, quitRow, duplicatesFinderRow, _backgroundDropdown, _samplingDropdown, bottomSeparator);
+        collapsible.AddComponents(openRow, quitRow, duplicatesFinderRow, _initDisplayModeDropdown, _backgroundDropdown, _samplingDropdown, bottomSeparator);
         Collapsible = collapsible;
     }
+
+    public void SetInitDisplayMode(InitDisplayMode mode) => _initDisplayModeDropdown.Selected = mode;
 
     public void SetBackgroundMode(BackgroundMode mode) => _backgroundDropdown.Selected = mode;
 

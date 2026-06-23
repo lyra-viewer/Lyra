@@ -11,6 +11,7 @@ public interface IUIEvents
     event Action? FindDuplicatesRequested;
     event Action? DuplicatesGoBackRequested;
     event Action<string>? DirectoryPicked;
+    event Action<InitDisplayMode>? InitDisplayModeChanged;
     event Action<BackgroundMode>? BackgroundModeChanged;
     event Action<SamplingMode>? SamplingModeChanged;
 }

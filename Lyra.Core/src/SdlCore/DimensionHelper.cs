@@ -1,3 +1,4 @@
+using Lyra.Common.Settings.Enums;
 using Lyra.Imaging.Content;
 using static SDL3.SDL;
 
@@ -5,7 +6,7 @@ namespace Lyra.SdlCore;
 
 public static class DimensionHelper
 {
-    public static DisplayMode GetInitialDisplayMode(IntPtr window, Composite? composite, out int zoomPercentage)
+    public static DisplayMode GetDisplayMode(IntPtr window, Composite? composite, InitDisplayMode initDisplayMode, out int zoomPercentage)
     {
         zoomPercentage = 100;
 
@@ -16,8 +17,19 @@ public static class DimensionHelper
 
         var compositeLogicalWidth = composite.LogicalWidth;
         var compositeLogicalHeight = composite.LogicalHeight;
-        
-        if (compositeLogicalWidth <= windowLogicalWidth && compositeLogicalHeight <= windowLogicalHeight)
+
+        var fitsInWindow = compositeLogicalWidth <= windowLogicalWidth && compositeLogicalHeight <= windowLogicalHeight;
+
+        var shouldFit = initDisplayMode switch
+        {
+            InitDisplayMode.FitAll => true,
+            InitDisplayMode.FitLarge => !fitsInWindow,
+            InitDisplayMode.FitSmall => fitsInWindow,
+            InitDisplayMode.ActualSize => false,
+            _ => !fitsInWindow
+        };
+
+        if (!shouldFit)
             return DisplayMode.OriginalImageSize;
 
         zoomPercentage = GetZoomToFitScreen(window, compositeLogicalWidth, compositeLogicalHeight);

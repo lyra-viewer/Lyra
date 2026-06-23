@@ -6,17 +6,20 @@ public sealed class ViewState
 {
     public SamplingMode SamplingMode { get; private set; }
     public BackgroundMode BackgroundMode { get; private set; }
+    public InitDisplayMode InitDisplayMode { get; private set; }
     public bool InfoVisible { get; private set; }
     public bool HelpVisible { get; private set; }
     public bool SidebarVisible { get; private set; }
 
     public event Action<SamplingMode>? SamplingModeChanged;
     public event Action<BackgroundMode>? BackgroundModeChanged;
+    public event Action<InitDisplayMode>? InitDisplayModeChanged;
 
     public ViewState(UISettings initial)
     {
         SamplingMode = initial.SamplingMode;
         BackgroundMode = initial.BackgroundMode;
+        InitDisplayMode = initial.InitDisplayMode;
         InfoVisible = initial.InfoVisible;
         HelpVisible = initial.HelpVisible;
         SidebarVisible = initial.SidebarVisible;
@@ -46,10 +49,19 @@ public sealed class ViewState
     public void ToggleBackground() =>
         SetBackgroundMode((BackgroundMode)(((int)BackgroundMode + 1) % Enum.GetValues<BackgroundMode>().Length));
 
+    public void SetInitDisplayMode(InitDisplayMode mode)
+    {
+        if (InitDisplayMode == mode)
+            return;
+
+        InitDisplayMode = mode;
+        InitDisplayModeChanged?.Invoke(mode);
+    }
+
     public void ToggleInfo() => InfoVisible = !InfoVisible;
     public void ToggleHelp() => HelpVisible = !HelpVisible;
     public void ToggleSidebar() => SidebarVisible = !SidebarVisible;
 
     public UISettings Export() =>
-        new(SamplingMode, BackgroundMode, InfoVisible, HelpVisible, SidebarVisible);
+        new(SamplingMode, BackgroundMode, InitDisplayMode, InfoVisible, HelpVisible, SidebarVisible);
 }
