@@ -48,7 +48,7 @@ internal static class DdsStructure
     private static StructureGroup HeaderGroup(byte[] f) => new()
     {
         Name = "DDS Header",
-        Description = "Main DDS file header (128 bytes)",
+        Description = "Main DDS file header",
         SizeBytes = 128,
         Fields =
         [
@@ -66,7 +66,7 @@ internal static class DdsStructure
     private static StructureGroup PixelFormatGroup(byte[] f) => new()
     {
         Name = "Pixel Format",
-        Description = "DDS pixel format structure (32 bytes)",
+        Description = "DDS pixel format structure",
         SizeBytes = 32,
         Fields =
         [
@@ -89,7 +89,7 @@ internal static class DdsStructure
         return new StructureGroup
         {
             Name = "Capabilities",
-            Description = "Surface capabilities flags (16 bytes)",
+            Description = "Surface capabilities flags",
             SizeBytes = 16,
             Fields =
             [
