@@ -65,6 +65,11 @@ internal static class NativeLibraryLoader
                 RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "libbasis_native.so" :
                 "libbasis_native.dylib"
             },
+            {
+                "JXL", RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "libjxl_native.dll" :
+                RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "libjxl_native.so" :
+                "libjxl_native.dylib"
+            },
 #if !DEBUG
             {
                 "SKIA", RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "libSkiaSharp.dll" :
@@ -244,6 +249,7 @@ internal static class NativeLibraryLoader
             "libj2k_native" or "libj2k_native.dll" or "libj2k_native.so" or "libj2k_native.dylib" or "libj2k" => TryLoad("J2K"),
             "libtiff_native" or "libtiff_native.dll" or "libtiff_native.so" or "libtiff_native.dylib" or "libtiff" => TryLoad("TIFF"),
             "libbasis_native" or "libbasis_native.dll" or "libbasis_native.so" or "libbasis_native.dylib" or "libbasis" => TryLoad("BASIS"),
+            "libjxl_native" or "libjxl_native.dll" or "libjxl_native.so" or "libjxl_native.dylib" or "libjxl" => TryLoad("JXL"),
             _ => IntPtr.Zero
         };
     }

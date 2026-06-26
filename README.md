@@ -106,12 +106,12 @@ surface size is bounds-checked against overflow), and decode only the surface ac
 perceptual hash never pays to decode a full-resolution mip. Because nothing here links a native library, it behaves
 identically on every platform .NET targets.
 
-For the remaining formats Lyra integrates lightweight native interop wrappers for EXR, JPEG 2000, and TIFF decoding,
-and delegates format-specific work to focused libraries rather than bundling large native dependencies. The one
+For the remaining formats Lyra integrates lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL, and TIFF
+decoding, and delegates format-specific work to focused libraries rather than bundling large native dependencies. The one
 native exception inside the managed codec layer is **Basis Universal** (ETC1S / UASTC) supercompression carried in
 KTX2: rather than reimplement its intricate transcoder, Lyra wraps Binomial's open-source reference transcoder
-(Apache-2.0) in a small native wrapper. System libraries like libheif, OpenJPEG, OpenEXR and libtiff are expected from
-the package manager (e.g. Homebrew).
+(Apache-2.0) in a small native wrapper. System libraries like libheif, OpenJPEG, libjxl, OpenEXR and libtiff are
+expected from the package manager (e.g. Homebrew).
 Originally built for workflows involving texture maps, HDRIs, and assets exported from tools like Blender and Quixel Bridge - but the design 
 generalizes well to any image-heavy workflow.
 
@@ -135,12 +135,12 @@ generalizes well to any image-heavy workflow.
 
 ### Modern / Web-Friendly Formats
 
-| Format      | Description                                         | Extensions      |
-|-------------|-----------------------------------------------------|-----------------|
-| AVIF        | High-efficiency image format based on AV1           | `.avif`         |
-| HEIF / HEIC | High-efficiency image container format (HEVC-based) | `.heif` `.heic` |
-| ~JPEG XL~   | ~JPEG XL Image Coding System~                       | ~`.jxl`~        |
-| WebP        | Compressed raster image format with optional alpha  | `.webp`         |
+| Format      | Description                                         | Extensions      | Notes                                                                                                                                                                 |
+|-------------|-----------------------------------------------------|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| AVIF        | High-efficiency image format based on AV1           | `.avif`         |                                                                                                                                                                       |
+| HEIF / HEIC | High-efficiency image container format (HEVC-based) | `.heif` `.heic` |                                                                                                                                                                       |
+| JPEG XL     | JPEG XL Image Coding System                         | `.jxl`          | Lyra displays static JPEG XL images. Animated JXL is decoded to its first frame only (same policy as JPEG 2000). HDR (floating-point) JXL is tone-mapped for display. |
+| WebP        | Compressed raster image format with optional alpha  | `.webp`         |                                                                                                                                                                       |
 
 ### Document / Vector Formats
 
@@ -390,6 +390,7 @@ of bounds, and an unrecognized format fails with a descriptive message naming th
 | LibHeifSharp      | HEIF / HEIC image decoding                                             | LGPL-3.0      | [github](https://github.com/0xC0000054/libheif-sharp)             |
 | OpenEXR           | High-dynamic-range OpenEXR (.exr) decoding                             | BSD-3-Clause  | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
 | OpenJPEG          | JPEG 2000 still-image decoding                                         | BSD-2-Clause  | [github](https://github.com/uclouvain/openjpeg)                   |
+| libjxl            | JPEG XL decoding (native wrapper)                                      | BSD-3-Clause  | [github](https://github.com/libjxl/libjxl)                        |
 | libtiff           | TIFF decoding                                                          | BSD-like      | [gitlab](https://gitlab.com/libtiff/libtiff)                      |
 | Basis Universal   | KTX2 ETC1S / UASTC transcoding (native wrapper)                        | Apache-2.0    | [github](https://github.com/BinomialLLC/basis_universal)          |
 | ZstdSharp.Port    | Zstandard decompression for KTX2 supercompression                      | MIT           | [github](https://github.com/oleg-st/ZstdSharp)                    |

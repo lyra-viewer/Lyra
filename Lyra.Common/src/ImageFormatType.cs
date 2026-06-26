@@ -50,7 +50,6 @@ public enum ImageFormatType
     [Description("JPEG Image")]
     Jpeg,
     
-    [DisabledType]
     [FileExtension([".jxl"])]
     [Description("JPEG XL")]
     Jxl,

@@ -18,7 +18,8 @@ internal static class DecoderManager
         new HdrDecoder(),
         new PsdDecoder(),
         new SvgDecoder(),
-        new J2KDecoder()
+        new J2KDecoder(),
+        new JxlDecoder()
     ];
 
     public static IImageDecoder GetDecoder(ImageFormatType format)
