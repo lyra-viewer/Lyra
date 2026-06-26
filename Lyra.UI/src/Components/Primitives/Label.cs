@@ -23,7 +23,7 @@ public class Label : ComponentBase
     public bool Underline { get; set; }
 
     // Font properties
-    public string FontFamily { get; set; } = "Menlo";
+    public string FontFamily { get; set; } = Fonts.MonospaceFamily;
     public float FontSize { get; set; } = 14f;
     public bool Bold { get; set; }
     public bool Italic { get; set; }
@@ -56,7 +56,7 @@ public class Label : ComponentBase
     /// </summary>
     public static float MeasureTextWidth(
         string text,
-        string fontFamily = "Menlo",
+        string? fontFamily = null,
         float fontSize = 14f,
         bool bold = false,
         bool italic = false)
@@ -69,7 +69,7 @@ public class Label : ComponentBase
             _ => SKFontStyle.Normal
         };
 
-        using var typeface = SKTypeface.FromFamilyName(fontFamily, style);
+        using var typeface = SKTypeface.FromFamilyName(fontFamily ?? Fonts.MonospaceFamily, style);
         using var font = new SKFont(typeface, fontSize);
         using var paint = new SKPaint();
         return font.MeasureText(text, paint);

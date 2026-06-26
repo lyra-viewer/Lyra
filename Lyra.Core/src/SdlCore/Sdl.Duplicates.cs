@@ -6,16 +6,21 @@ namespace Lyra.SdlCore;
 // this partial only switches duplicates mode, refreshes the view, and reflects section state.
 public partial class SdlCore
 {
+    private void OnDuplicatesExactOnlyChanged(bool exactOnly) => _duplicateScanService.ExactOnly = exactOnly;
+
+    private void OnDuplicatesHashToleranceChanged(int tolerance) => _duplicateScanService.HashTolerance = tolerance;
+
     private void OnFindDuplicatesRequested()
     {
-        // "New Search": leave duplicates mode and restore the full collection before rescanning.
-        if (DirectoryNavigator.IsDuplicatesMode)
+        // "New Search"/"Regroup": leave duplicates mode and restore the full collection before rescanning.
+        var wasInDuplicatesMode = DirectoryNavigator.IsDuplicatesMode;
+        if (wasInDuplicatesMode)
         {
             DirectoryNavigator.ExitDuplicatesMode();
             LoadImage();
         }
 
-        _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false);
+        _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: wasInDuplicatesMode, noDuplicatesFound: false);
         _duplicateScanService.Start();
     }
 

@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Renderer.GUI.Support;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Layout;
@@ -14,12 +15,14 @@ namespace Lyra.Renderer.GUI.Sections;
 // ----------------------------------------------------------------------------
 //  Renders Composite.Structure as a stack of per-part collapsibles: each part
 //  has a rich header (name + description + size badge) and expands to a list of
-//  key-value fields. Currently populated for DDS; any decoder that fills
+//  key-value fields. Populated for DDS, KTX and PSD; any decoder that fills
 //  Composite.Structure participates automatically.
 // ============================================================================
 public sealed class StructureSection : IUISection
 {
-    private const float KeyColumnWidth = 140f;
+    private const string KeyColumn = "structure";
+
+    private readonly KeyColumnRegistry _registry;
 
     private readonly Collapsible _collapsible;
     private readonly VScrollContainer _groups;
@@ -31,8 +34,10 @@ public sealed class StructureSection : IUISection
 
     public IComponent Root => _collapsible;
 
-    public StructureSection()
+    public StructureSection(KeyColumnRegistry registry)
     {
+        _registry = registry;
+
         _groups = new VScrollContainer
         {
             HorizontalSize = SizeMode.Expand,
@@ -52,7 +57,9 @@ public sealed class StructureSection : IUISection
     public void Refresh(UIState state)
     {
         var composite = state.Composite;
-
+        
+        ReportWidths(composite);
+        
         if (composite == _lastComposite && state.CompositeState == _lastState)
             return;
 
@@ -60,6 +67,17 @@ public sealed class StructureSection : IUISection
         _lastState = state.CompositeState;
 
         ApplyData(composite);
+    }
+
+    private void ReportWidths(Composite? composite)
+    {
+        var structure = composite?.Structure;
+        if (structure is null)
+            return;
+
+        foreach (var group in structure)
+        foreach (var field in group.Fields)
+            _registry.Report(KeyColumn, Label.MeasureTextWidth(field.Key));
     }
 
     private void ApplyData(Composite? composite)
@@ -79,10 +97,10 @@ public sealed class StructureSection : IUISection
             _groups.AddComponent(BuildGroupPanel(group));
     }
 
-    private static Collapsible BuildGroupPanel(StructureGroup group)
+    private Collapsible BuildGroupPanel(StructureGroup group)
     {
         var titleColumn = new VStack { HorizontalSize = SizeMode.Expand };
-        titleColumn.AddComponent(new Label(group.Name) { Color = Palette.Foreground, Bold = true });
+        titleColumn.AddComponent(new Label(group.Name) { Color = Palette.Foreground, Bold = false });
 
         if (!string.IsNullOrEmpty(group.Description))
             titleColumn.AddComponent(new Label(group.Description) { Color = Palette.Dim });
@@ -105,13 +123,20 @@ public sealed class StructureSection : IUISection
             Padding = new Padding(10, 0, 0, 0)
         };
 
-        foreach (var field in group.Fields)
-            panel.AddComponent(RenderRow(field));
+        // Shrink vertically so the outer VScrollContainer owns scrolling and the
+        // ListView never grows its own scrollbar (no nested double-scroll).
+        var list = new ListView<KeyValuePair<string, string>>([..group.Fields], RenderRow)
+        {
+            HorizontalSize = SizeMode.Expand,
+            VerticalSize = SizeMode.Shrink,
+            CanPick = _ => true
+        };
 
+        panel.AddComponent(list);
         return panel;
     }
 
-    private static HStack RenderRow(KeyValuePair<string, string> field)
+    private HStack RenderRow(KeyValuePair<string, string> field, bool isPicked)
     {
         var row = new HStack
         {
@@ -125,7 +150,7 @@ public sealed class StructureSection : IUISection
             {
                 Color = Palette.Dim,
                 HorizontalSize = SizeMode.Fixed,
-                Width = KeyColumnWidth
+                Width = _registry.Get(KeyColumn)
             },
             new Label(field.Value)
             {

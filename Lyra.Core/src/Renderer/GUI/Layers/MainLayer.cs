@@ -57,6 +57,8 @@ public class MainLayer : IUIEvents, IDisposable
     public event Action? QuitRequested;
     public event Action? FindDuplicatesRequested;
     public event Action? DuplicatesGoBackRequested;
+    public event Action<bool>? DuplicatesExactOnlyChanged;
+    public event Action<int>? DuplicatesHashToleranceChanged;
     public event Action<string>? DirectoryPicked;
     public event Action<InitDisplayMode>? InitDisplayModeChanged;
     public event Action<BackgroundMode>? BackgroundModeChanged;
@@ -72,7 +74,7 @@ public class MainLayer : IUIEvents, IDisposable
         _directoryTreeSection = new DirectoryTreeSection();
         _exifSection = new ExifSection(_keyColumnRegistry);
         _formatSection = new FormatSection(_keyColumnRegistry);
-        _structureSection = new StructureSection();
+        _structureSection = new StructureSection(_keyColumnRegistry);
         _layersSection = new LayersSection();
         _helpSection = new HelpSection();
         _debugSection = new DebugSection();
@@ -91,6 +93,8 @@ public class MainLayer : IUIEvents, IDisposable
         _duplicatesFinderSection.FindClicked += () => OnMenu("FIND DUPLICATES", FindDuplicatesRequested);
         _duplicatesFinderSection.GoBackClicked += () => OnMenu("DUPLICATES BACK", DuplicatesGoBackRequested);
         _duplicatesFinderSection.CloseClicked += () => { _debugSection.SetAction("DUPLICATES CLOSE"); _duplicatesFinderSection.Hide(); _context.Invalidate(); };
+        _duplicatesFinderSection.ExactCopiesOnlyChanged += v => DuplicatesExactOnlyChanged?.Invoke(v);
+        _duplicatesFinderSection.ToleranceChanged += v => DuplicatesHashToleranceChanged?.Invoke(v);
 
         // Single source of truth for section layout.
         // Order within Sidebar entries determines vertical display order.
@@ -258,7 +262,7 @@ public class MainLayer : IUIEvents, IDisposable
             HorizontalSize = SizeMode.Fixed,
             VerticalSize = SizeMode.Expand,
             VerticalAlign = VAlign.Top,
-            Width = 300,
+            Width = 350,
             MinWidth = 200,
             MaxWidth = 800,
             ResizeEdges = ResizeEdge.Left,

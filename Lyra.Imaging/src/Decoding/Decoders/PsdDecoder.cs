@@ -9,6 +9,7 @@ using Lyra.Psd.Core.SectionData;
 using SkiaSharp;
 using static System.Threading.Thread;
 using Lyra.Imaging.Decoding.Support;
+using Lyra.Imaging.Decoding.Structure;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
@@ -82,6 +83,7 @@ internal class PsdDecoder : IImageDecoder
         using var stream = DecoderIO.OpenRandomAccessRead(path);
         var psd = PsdDocument.ReadDocument(stream);
         composite.PsdLayers = psd.DecodeLayerRecords(stream);
+        composite.Structure = PsdStructure.Describe(psd);
 
         stream.Position = 0;
         using var surface = psd.Decode(stream, null, null, ct);
@@ -102,6 +104,7 @@ internal class PsdDecoder : IImageDecoder
         using var stream = DecoderIO.OpenRandomAccessRead(path);
         var psd = PsdDocument.ReadDocument(stream);
         composite.PsdLayers = psd.DecodeLayerRecords(stream);
+        composite.Structure = PsdStructure.Describe(psd);
 
         stream.Position = 0;
         DecodePreview(psd, stream, rasterLarge, ct);

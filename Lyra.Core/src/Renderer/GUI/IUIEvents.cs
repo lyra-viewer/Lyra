@@ -9,6 +9,8 @@ public interface IUIEvents
     event Action? FullscreenRequested;
     event Action? QuitRequested;
     event Action? FindDuplicatesRequested;
+    event Action<bool>? DuplicatesExactOnlyChanged;
+    event Action<int>? DuplicatesHashToleranceChanged;
     event Action? DuplicatesGoBackRequested;
     event Action<string>? DirectoryPicked;
     event Action<InitDisplayMode>? InitDisplayModeChanged;

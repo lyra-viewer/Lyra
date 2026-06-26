@@ -323,27 +323,29 @@ public partial class SdlCore : IDisposable
         var events = _renderer.UIManager.Events;
 
         // User-driven UI events (menu clicks, tree picks, dropdown changes)
-        events.OpenFileRequested         += OnOpenFileRequested;
-        events.OpenDirectoryRequested    += OnOpenDirectoryRequested;
-        events.QuitRequested             += ExitApplication;
-        events.FullscreenRequested       += ToggleFullscreen;
-        events.FindDuplicatesRequested   += OnFindDuplicatesRequested;
-        events.DuplicatesGoBackRequested += OnDuplicatesGoBack;
-        events.DirectoryPicked           += OnDirectoryPicked;
+        events.OpenFileRequested              += OnOpenFileRequested;
+        events.OpenDirectoryRequested         += OnOpenDirectoryRequested;
+        events.QuitRequested                  += ExitApplication;
+        events.FullscreenRequested            += ToggleFullscreen;
+        events.FindDuplicatesRequested        += OnFindDuplicatesRequested;
+        events.DuplicatesGoBackRequested      += OnDuplicatesGoBack;
+        events.DuplicatesExactOnlyChanged     += OnDuplicatesExactOnlyChanged;
+        events.DuplicatesHashToleranceChanged += OnDuplicatesHashToleranceChanged;
+        events.DirectoryPicked                += OnDirectoryPicked;
 
-        _duplicateScanService.Completed  += OnDuplicateScanCompleted;
+        _duplicateScanService.Completed       += OnDuplicateScanCompleted;
 
         // Dropdown changes route into ViewState (single source of truth).
-        events.BackgroundModeChanged     += _viewState.SetBackgroundMode;
-        events.SamplingModeChanged       += _viewState.SetSamplingMode;
-        events.InitDisplayModeChanged += _viewState.SetInitDisplayMode;
+        events.BackgroundModeChanged          += _viewState.SetBackgroundMode;
+        events.SamplingModeChanged            += _viewState.SetSamplingMode;
+        events.InitDisplayModeChanged         += _viewState.SetInitDisplayMode;
 
         // ViewState changes auto-sync the dropdowns. UIManager.Set* is
         // documented as not re-firing, and ViewState's equality guard
         // is a second line of defense against feedback loops.
-        _viewState.BackgroundModeChanged    += _renderer.UIManager.SetBackgroundMode;
-        _viewState.SamplingModeChanged      += _renderer.UIManager.SetSamplingMode;
-        _viewState.InitDisplayModeChanged += _renderer.UIManager.SetInitDisplayMode;
+        _viewState.BackgroundModeChanged      += _renderer.UIManager.SetBackgroundMode;
+        _viewState.SamplingModeChanged        += _renderer.UIManager.SetSamplingMode;
+        _viewState.InitDisplayModeChanged     += _renderer.UIManager.SetInitDisplayMode;
     }
 
     private void OnCompositeProgress(Composite c)

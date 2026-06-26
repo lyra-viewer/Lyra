@@ -15,22 +15,33 @@ public sealed class DuplicateScanService(IThumbnailSource thumbnails)
 {
     private readonly ScanProgressTracker _tracker = new();
     private Task? _task;
+    private int _hashTolerance = PerceptualDuplicateFinder.DefaultMaxDistance;
 
     public IScanProgressProvider Progress => _tracker;
 
-    /// <summary>Raised on the scan thread when a scan finishes, with the number of duplicate groups found.</summary>
+    /// <summary>
+    /// When true, only the exact phase (size + content hash) runs and perceptual (pHash)
+    /// similarity is skipped, so groups contain byte-identical files only.
+    /// </summary>
+    public bool ExactOnly { get; set; }
+
+    public int HashTolerance
+    {
+        get => _hashTolerance;
+        set => _hashTolerance = Math.Clamp(value, 1, 9);
+    }
+
     public event Action<int>? Completed;
 
-    /// <summary>Starts a scan on a background thread. No-op if one is already running.</summary>
     public void Start()
     {
         if (_task is { IsCompleted: false })
             return;
 
-        _task = Task.Run(Run);
+        _task = Task.Run(RunScan);
     }
 
-    private void Run()
+    private void RunScan()
     {
         _tracker.Start();
         var groupCount = 0;
@@ -39,7 +50,9 @@ public sealed class DuplicateScanService(IThumbnailSource thumbnails)
             FileRecordDatabase.ClearGroups();
 
             var exact = DuplicateFinder.Scan(progress: _tracker);
-            var perceptual = new PerceptualDuplicateFinder(thumbnails).Scan(progress: _tracker);
+            var perceptual = ExactOnly
+                ? (IReadOnlyList<PerceptualGroup>)[]
+                : new PerceptualDuplicateFinder(thumbnails).Scan(maxDistance: _hashTolerance, progress: _tracker);
 
             groupCount = AssignGroups(exact, perceptual);
             Logger.Info($"[Duplicates] {groupCount} group(s) from {exact.Count} exact + {perceptual.Count} perceptual cluster(s).");
