@@ -155,7 +155,7 @@ public class Label : ComponentBase
         using var paint = new SKPaint();
         paint.Color = Color;
         paint.IsAntialias = Antialias;
-        canvas.DrawText(Text, textX, textY, font, paint);
+        canvas.DrawText(Text, textX, textY, SKTextAlign.Left, font, paint);
 
         if (Underline)
         {

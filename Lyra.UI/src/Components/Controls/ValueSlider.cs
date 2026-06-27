@@ -144,7 +144,7 @@ public sealed class ValueSlider : ComponentBase
         var x = align == HAlign.Right ? anchorX - 6f - textW : anchorX + 6f;
         var baseline = trackY + Math.Abs(_endMetrics.CapHeight) / 2f;
         paint.Color = Palette.Dim;
-        canvas.DrawText(text, x, baseline, _endFont, paint);
+        canvas.DrawText(text, x, baseline, SKTextAlign.Left, _endFont, paint);
     }
 
     private void DrawValueLabel(SKCanvas canvas, string text, float thumbX, float trackY, SKPaint paint)
@@ -153,7 +153,7 @@ public sealed class ValueSlider : ComponentBase
         var x = thumbX - textW / 2f;
         var baseline = trackY - ThumbRadius - LabelGap - _valueMetrics.Descent;
         paint.Color = Palette.Foreground;
-        canvas.DrawText(text, x, baseline, _valueFont, paint);
+        canvas.DrawText(text, x, baseline, SKTextAlign.Left, _valueFont, paint);
     }
 
     // --------------------------------------------------------

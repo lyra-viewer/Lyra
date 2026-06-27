@@ -443,24 +443,25 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
             Style = SKPaintStyle.Fill
         };
 
-        using var path = new SKPath();
+        using var builder = new SKPathBuilder();
 
         if (expanded)
         {
             // Down-pointing triangle ▼
-            path.MoveTo(cx - half, cy - half * 0.5f);
-            path.LineTo(cx + half, cy - half * 0.5f);
-            path.LineTo(cx, cy + half * 0.5f);
+            builder.MoveTo(cx - half, cy - half * 0.5f);
+            builder.LineTo(cx + half, cy - half * 0.5f);
+            builder.LineTo(cx, cy + half * 0.5f);
         }
         else
         {
             // Right-pointing triangle ▶
-            path.MoveTo(cx - half * 0.4f, cy - half);
-            path.LineTo(cx + half * 0.6f, cy);
-            path.LineTo(cx - half * 0.4f, cy + half);
+            builder.MoveTo(cx - half * 0.4f, cy - half);
+            builder.LineTo(cx + half * 0.6f, cy);
+            builder.LineTo(cx - half * 0.4f, cy + half);
         }
 
-        path.Close();
+        builder.Close();
+        using var path = builder.Detach();
         canvas.DrawPath(path, paint);
     }
 
