@@ -243,23 +243,7 @@ public partial class SdlCore
             return;
 
         var scale = GetWindowDisplayScale(_window);
-        var mouse = new SKPoint(mouseX * scale, mouseY * scale);
-
-        _panHelper.UpdateZoom(_zoomPercentage);
-        var newOffset = _panHelper.GetOffsetForZoomAtCursor(mouse, newZoom);
-
-        _zoomPercentage = newZoom;
-        _displayMode = _zoomPercentage == 100
-            ? DisplayMode.OriginalImageSize
-            : DisplayMode.Free;
-
-        _renderer.SetDisplayMode(_displayMode);
-        _renderer.SetZoom(_zoomPercentage);
-
-        _panHelper.UpdateZoom(_zoomPercentage);
-        _panHelper.CurrentOffset = newOffset;
-        _panHelper.Clamp();
-        _renderer.SetOffset(_panHelper.CurrentOffset);
+        ZoomAnchored(newZoom, new SKPoint(mouseX * scale, mouseY * scale));
     }
 
     private static int GetNextZoom(int currentZoom, float direction)
@@ -288,14 +272,29 @@ public partial class SdlCore
         if (_composite == null || _composite.IsEmpty || _panHelper == null)
             return;
 
-        _zoomPercentage = Math.Clamp(newZoom, MinZoom, MaxZoom);
+        newZoom = Math.Clamp(newZoom, MinZoom, MaxZoom);
+        if (newZoom == _zoomPercentage)
+            return;
+        
+        var drawable = DimensionHelper.GetDrawableSize(_window);
+        ZoomAnchored(newZoom, new SKPoint(drawable.PixelWidth / 2f, drawable.PixelHeight / 2f));
+    }
+    
+    private void ZoomAnchored(int newZoom, SKPoint anchorPixels)
+    {
+        _panHelper!.UpdateZoom(_zoomPercentage);
+        var newOffset = _panHelper.GetOffsetForZoomAtCursor(anchorPixels, newZoom);
+
+        _zoomPercentage = newZoom;
         _displayMode = _zoomPercentage == 100 ? DisplayMode.OriginalImageSize : DisplayMode.Free;
 
         _renderer.SetDisplayMode(_displayMode);
         _renderer.SetZoom(_zoomPercentage);
 
         _panHelper.UpdateZoom(_zoomPercentage);
-        ClampOrCenterOffset();
+        _panHelper.CurrentOffset = newOffset;
+        _panHelper.Clamp();
+        _renderer.SetOffset(_panHelper.CurrentOffset);
     }
 
     private void UpdateFitToScreen()
@@ -332,15 +331,6 @@ public partial class SdlCore
             return;
 
         _panHelper.Move(x, y);
-        _renderer.SetOffset(_panHelper.CurrentOffset);
-    }
-
-    private void ClampOrCenterOffset()
-    {
-        if (_panHelper == null)
-            return;
-
-        _panHelper.Clamp();
         _renderer.SetOffset(_panHelper.CurrentOffset);
     }
 }
