@@ -78,12 +78,12 @@ public partial class SdlCore
     private void OnWindowResized()
     {
         var bounds = DimensionHelper.GetDrawableSize(_window);
-        Logger.Info($"[EventHandler] Drawable size changed: {bounds.PixelWidth}x{bounds.PixelHeight}; Scale: x{bounds.Scale}");
+        Logger.Info($"[EventHandler] Drawable size changed: {bounds.PixelWidth}x{bounds.PixelHeight}; Density: x{bounds.Scale}; ContentScale: x{bounds.ContentScale}");
 
         if (_displayMode == DisplayMode.FitToScreen && _composite != null)
             UpdateFitToScreen();
 
-        Publish(new DrawableSizeChangedEvent(bounds.PixelWidth, bounds.PixelHeight, bounds.Scale));
+        Publish(new DrawableSizeChangedEvent(bounds.PixelWidth, bounds.PixelHeight, bounds.Scale, bounds.ContentScale));
     }
 
     private void RefreshDisplayInfo()

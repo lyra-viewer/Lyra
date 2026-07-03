@@ -39,13 +39,14 @@ public sealed class HelpSection : IUISection
             Spacing = 2
         };
 
-        // Always-visible rows.
-        AddRow("← / →",   "Previous / Next image");
-        AddRow("⌘← / ⌘→", "First / Last image");
+        var isMac = OperatingSystem.IsMacOS();
+        
+        AddRow("← / →", "Previous / Next image");
+        AddRow(isMac ? "⌘← / ⌘→" : "Home / End", "First / Last image");
 
-        (_dirEdgeKey, _dirEdgeDesc) = AddRow("⌥← / ⌥→", "Prev / Next directory edge");
+        (_dirEdgeKey, _dirEdgeDesc) = AddRow(isMac ? "⌥← / ⌥→" : "Ctrl← / Ctrl→", "Prev / Next directory edge");
 
-        AddRow("↲",             "Reveal in Finder");
+        AddRow("↲",             isMac ? "Reveal in Finder" : "Reveal in file explorer");
         AddRow("+ / −",         "Zoom in / out");
         AddRow("Mouse Wheel",   "Zoom at cursor");
         AddRow("0",             "Fit screen / Original size");

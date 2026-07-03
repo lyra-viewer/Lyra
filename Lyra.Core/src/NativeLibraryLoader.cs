@@ -165,6 +165,24 @@ internal static class NativeLibraryLoader
             SearchDirs.Add("/usr/local/opt/openexr/lib");
         }
 
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            // Dev runs and self-contained publishes drop NuGet-provided natives
+            // (libSDL3.so, libSkiaSharp.so, libHarfBuzzSharp.so) at the output root.
+            SearchDirs.Add(basePath);
+
+            // System libraries installed via APT (libheif, etc.). Honor a custom
+            // library path first, then the multiarch and standard system dirs.
+            var ldPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
+            if (!string.IsNullOrWhiteSpace(ldPath))
+                SearchDirs.AddRange(ldPath.Split(':', StringSplitOptions.RemoveEmptyEntries));
+
+            SearchDirs.Add("/usr/lib/x86_64-linux-gnu");
+            SearchDirs.Add("/lib/x86_64-linux-gnu");
+            SearchDirs.Add("/usr/local/lib");
+            SearchDirs.Add("/usr/lib");
+        }
+
         // Keep only existing directories, de-dup while preserving order
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         SearchDirs.RemoveAll(d => string.IsNullOrWhiteSpace(d) || !Directory.Exists(d) || !seen.Add(d));
@@ -180,6 +198,23 @@ internal static class NativeLibraryLoader
                 PathDictionary[identifier] = candidate;
                 Logger.Info($"[NativeLibraryLoader] Located {identifier} at {candidate}");
                 return;
+            }
+
+            // On Linux, system libraries are SONAME-versioned (e.g. libheif.so.1),
+            // so an exact "libheif.so" never exists without the -dev symlink. Fall
+            // back to the highest-versioned match.
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && libraryName.EndsWith(".so"))
+            {
+                var versioned = Directory
+                    .EnumerateFiles(dir, libraryName + ".*")
+                    .OrderByDescending(p => p, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (versioned is not null)
+                {
+                    PathDictionary[identifier] = versioned;
+                    Logger.Info($"[NativeLibraryLoader] Located {identifier} at {versioned}");
+                    return;
+                }
             }
         }
 

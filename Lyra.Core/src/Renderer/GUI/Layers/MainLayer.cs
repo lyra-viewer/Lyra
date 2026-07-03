@@ -1,3 +1,4 @@
+using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
 using Lyra.FileLoader.Enumeration;
 using Lyra.Renderer.GUI.Sections;

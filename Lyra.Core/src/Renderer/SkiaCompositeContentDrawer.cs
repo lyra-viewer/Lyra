@@ -48,13 +48,13 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
         // Decide if preview is sharp enough at current zoom.
         // Yes -> draw preview only (skip tiles).
         // No  -> draw preview (as background) + tiles over it.
-        var hasPreview = rasterLarge.PreviewImage != null;
-        var hasTiles = rasterLarge.TileSource != null;
+        var preview = rasterLarge.PreviewImage;
+        var tileSource = rasterLarge.TileSource;
 
-        if (hasPreview)
-            canvas.DrawImage(rasterLarge.PreviewImage, destFullRect, sampling);
+        if (preview != null)
+            canvas.DrawImage(preview, destFullRect, sampling);
 
-        if (!hasTiles)
+        if (tileSource == null)
             return;
 
         // Safety: avoid NaN/Inf if something isn't ready yet
@@ -62,16 +62,17 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
             return;
 
         // Safety: if there's no preview, rely on tiles.
-        if (!hasPreview)
+        if (preview == null)
         {
-            foreach (var tile in rasterLarge.TileSource.GetTiles(visibleFullRect, new SKSize(composite.LogicalWidth, composite.LogicalHeight)))
+            foreach (var tile in tileSource.GetTiles(visibleFullRect, new SKSize(composite.LogicalWidth, composite.LogicalHeight)))
                 canvas.DrawImage(tile.Image, tile.DestRect, sampling);
+            
             return;
         }
 
         // Pixels-per-full-unit provided by preview
-        var previewPpfuX = rasterLarge.PreviewImage.Width / composite.LogicalWidth;
-        var previewPpfuY = rasterLarge.PreviewImage.Height / composite.LogicalHeight;
+        var previewPpfuX = preview.Width / composite.LogicalWidth;
+        var previewPpfuY = preview.Height / composite.LogicalHeight;
         var previewPpfu = MathF.Min(previewPpfuX, previewPpfuY);
 
         // Pixels-per-full-unit required by current view
@@ -85,7 +86,7 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
         if (!useTiles)
             return;
 
-        foreach (var tile in rasterLarge.TileSource.GetTiles(visibleFullRect, new SKSize(composite.LogicalWidth, composite.LogicalHeight))) 
+        foreach (var tile in tileSource.GetTiles(visibleFullRect, new SKSize(composite.LogicalWidth, composite.LogicalHeight)))
             canvas.DrawImage(tile.Image, tile.DestRect, sampling);
     }
 }

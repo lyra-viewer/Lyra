@@ -362,6 +362,12 @@ of bounds, and an unrecognized format fails with a descriptive message naming th
 | `⌘ ←` `⌘ →` | First / Last image                      |
 | `⌥ ←` `⌥ →` | First / Last image within the directory |
 
+### Windows / Linux Specific
+
+| Key               | Action                                  |
+|-------------------|-----------------------------------------|
+| `Ctrl ←` `Ctrl →` | First / Last image within the directory |
+
 ### Open With / Drag & Drop
 
 | Context                                | How Lyra interprets it                   | Make a collection from files around | Recursion |
