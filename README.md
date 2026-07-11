@@ -37,7 +37,8 @@
 - [Dependencies](#dependencies)
 - [Installation](#installation)
     - [macOS (Homebrew)](#macos-homebrew)
-    - [Linux](#linux)
+    - [Linux (APT)](#linux-apt)
+    - [Linux (direct .deb)](#linux-direct-deb)
 - [Configuration & Data Files (UNIX specific)](#configuration--data-files-unix-specific)
     - [Configuration](#configuration)
     - [Data](#data)
@@ -409,18 +410,56 @@ of bounds, and an unrecognized format fails with a descriptive message naming th
 
 ## Installation
 
-Lyra Viewer is distributed via **Homebrew** on macOS.
+Lyra Viewer is distributed via **Homebrew** on macOS and an **APT repository** (or a
+direct `.deb`) on Debian/Ubuntu.
 
 ### macOS (Homebrew)
 
 ```sh
 brew tap lyra-viewer/lyra
+brew trust --cask lyra-viewer/lyra/lyra-viewer
 brew install --cask lyra-viewer
 ```
 
-### Linux
+### Linux (APT)
 
-Not available yet.
+Add the signed repository once, then install and receive updates through `apt`:
+
+```sh
+# 1. Trust the repository signing key
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://lyra-viewer.github.io/apt-lyra/lyra-archive-keyring.asc \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/lyra.gpg
+
+# 2. Add the repository
+echo "deb [signed-by=/etc/apt/keyrings/lyra.gpg] https://lyra-viewer.github.io/apt-lyra stable main" \
+  | sudo tee /etc/apt/sources.list.d/lyra.list
+
+# 3. Install
+sudo apt update
+sudo apt install lyra-viewer
+```
+
+Updates then arrive through the usual `sudo apt update && sudo apt upgrade`.
+
+To remove the repository:
+
+```sh
+sudo rm /etc/apt/sources.list.d/lyra.list /etc/apt/keyrings/lyra.gpg
+sudo apt update
+```
+
+### Linux (direct .deb)
+
+Prefer not to add a repository? Download `lyra-viewer_<version>_amd64.deb` from the
+[latest release](https://github.com/lyra-viewer/Lyra/releases/latest) and install it
+directly (`apt` resolves the system dependencies):
+
+```sh
+sudo apt install ./lyra-viewer_0.5.0_amd64.deb
+```
+
+> _Note:_ Linux builds are **amd64 (x86-64)** only for now.
 
 ---
 
