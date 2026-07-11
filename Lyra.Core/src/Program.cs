@@ -6,7 +6,7 @@ namespace Lyra;
 
 static class Program
 {
-    private static void Main()
+    private static void Main(string[] args)
     {
         LogSetup();
         Logger.Info($"[Application] Application started on {RuntimeInformation.RuntimeIdentifier}");
@@ -20,7 +20,7 @@ static class Program
 
         try
         {
-            using var viewer = new SdlCore.SdlCore();
+            using var viewer = new SdlCore.SdlCore(args);
             viewer.Run();
         }
         catch (Exception ex)

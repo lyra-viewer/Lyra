@@ -81,7 +81,7 @@ public partial class SdlCore : IDisposable
     //  Constructor
     // =========================================================================
 
-    public SdlCore()
+    public SdlCore(string[]? startupArgs = null)
     {
         var appVersion = typeof(SdlCore).Assembly.GetName().Version?.ToString() ?? "0.0.0";
         SetAppMetadata("Lyra Viewer", appVersion, AppId);
@@ -97,8 +97,23 @@ public partial class SdlCore : IDisposable
         InitializeInput();
         ImageStore.Initialize();
 
-        // TODO Load from arguments
-        // LoadImage();
+        LoadStartupArgs(startupArgs);
+    }
+    
+    private void LoadStartupArgs(string[]? startupArgs)
+    {
+        if (startupArgs is null || startupArgs.Length == 0)
+            return;
+        
+        var paths = startupArgs
+            .Where(a => !string.IsNullOrWhiteSpace(a) && (File.Exists(a) || Directory.Exists(a)))
+            .ToList();
+
+        if (paths.Count == 0)
+            return;
+
+        Logger.Info($"[Core] Loading {paths.Count} startup path(s) from arguments.");
+        IngestPaths(paths);
     }
 
     // =========================================================================

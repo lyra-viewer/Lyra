@@ -12,8 +12,10 @@ public static class DimensionHelper
 
         if (composite == null || composite.IsEmpty)
             return DisplayMode.Undefined;
-
-        GetWindowSize(window, out var windowLogicalWidth, out var windowLogicalHeight);
+        
+        var drawable = GetDrawableSize(window);
+        var windowLogicalWidth = drawable.PixelWidth / drawable.ContentScale;
+        var windowLogicalHeight = drawable.PixelHeight / drawable.ContentScale;
 
         var compositeLogicalWidth = composite.LogicalWidth;
         var compositeLogicalHeight = composite.LogicalHeight;
@@ -68,9 +70,7 @@ public static class DimensionHelper
     public static int GetZoomToFitScreen(IntPtr window, float imageWidth, float imageHeight)
     {
         var drawableBounds = GetDrawableSize(window);
-
         var physicalZoomFactor = MathF.Min(drawableBounds.PixelWidth / imageWidth, drawableBounds.PixelHeight / imageHeight);
-
-        return (int)MathF.Round((physicalZoomFactor * 100f) / drawableBounds.Scale);
+        return (int)MathF.Round((physicalZoomFactor * 100f) / drawableBounds.ContentScale);
     }
 }

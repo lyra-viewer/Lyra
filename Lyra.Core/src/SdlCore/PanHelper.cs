@@ -25,7 +25,7 @@ public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
     public bool CanPan()
     {
         var (contentW, contentH, bounds) = GetZoomedContentAndBounds();
-        return contentW * bounds.Scale > bounds.PixelWidth || contentH * bounds.Scale > bounds.PixelHeight;
+        return contentW * bounds.ContentScale > bounds.PixelWidth || contentH * bounds.ContentScale > bounds.PixelHeight;
     }
 
     public void Move(float rawX, float rawY)
@@ -44,14 +44,14 @@ public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
     {
         var (contentW, contentH, bounds) = GetZoomedContentAndBounds();
 
-        if (contentW * bounds.Scale <= bounds.PixelWidth && contentH * bounds.Scale <= bounds.PixelHeight)
+        if (contentW * bounds.ContentScale <= bounds.PixelWidth && contentH * bounds.ContentScale <= bounds.PixelHeight)
         {
             CurrentOffset = SKPoint.Empty;
             return;
         }
 
-        var maxOffsetX = Math.Max(0, (contentW * bounds.Scale - bounds.PixelWidth) / 2);
-        var maxOffsetY = Math.Max(0, (contentH * bounds.Scale - bounds.PixelHeight) / 2);
+        var maxOffsetX = Math.Max(0, (contentW * bounds.ContentScale - bounds.PixelWidth) / 2);
+        var maxOffsetY = Math.Max(0, (contentH * bounds.ContentScale - bounds.PixelHeight) / 2);
 
         CurrentOffset = new SKPoint(
             Math.Clamp(CurrentOffset.X, -maxOffsetX, maxOffsetX),
@@ -67,10 +67,11 @@ public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
         var oldScale = _zoomPercentage / 100f;
         var newScale = newZoom / 100f;
 
-        var imageDrawSizeOld = new SKSize(composite.LogicalWidth * oldScale, composite.LogicalHeight * oldScale);
-        var imageDrawSizeNew = new SKSize(composite.LogicalWidth * newScale, composite.LogicalHeight * newScale);
-
         var (_, _, bounds) = GetZoomedContentAndBounds();
+        
+        var cs = bounds.ContentScale;
+        var imageDrawSizeOld = new SKSize(composite.LogicalWidth * oldScale * cs, composite.LogicalHeight * oldScale * cs);
+        var imageDrawSizeNew = new SKSize(composite.LogicalWidth * newScale * cs, composite.LogicalHeight * newScale * cs);
 
         var imageTopLeftOld = new SKPoint(
             (bounds.PixelWidth - imageDrawSizeOld.Width) / 2 + CurrentOffset.X,

@@ -154,12 +154,12 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
                 imageH: logicalSize.Height,
                 windowPxW: WindowWidth,
                 windowPxH: WindowHeight,
-                displayScale: DisplayScale,
+                displayScale: ContentScale,
                 zoomPercentage: _zoomPercentage,
                 offsetPx: _offset
             );
 
-            _contentDrawer.Draw(c, _composite, destFull, visibleFull, sampling, zoomScale, DisplayScale);
+            _contentDrawer.Draw(c, _composite, destFull, visibleFull, sampling, zoomScale, ContentScale);
         });
     }
 
@@ -169,15 +169,15 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
         var drawWidth = logicalSize.Width * zoomScale;
         var drawHeight = logicalSize.Height * zoomScale;
+        
+        var logicalWindowWidth = WindowWidth / ContentScale;
+        var logicalWindowHeight = WindowHeight / ContentScale;
 
-        var logicalWindowWidth = WindowWidth / DisplayScale;
-        var logicalWindowHeight = WindowHeight / DisplayScale;
-
-        var left = (logicalWindowWidth - drawWidth) / 2 + _offset.X / DisplayScale;
-        var top = (logicalWindowHeight - drawHeight) / 2 + _offset.Y / DisplayScale;
+        var left = (logicalWindowWidth - drawWidth) / 2 + _offset.X / ContentScale;
+        var top = (logicalWindowHeight - drawHeight) / 2 + _offset.Y / ContentScale;
 
         canvas.Save();
-        canvas.Scale(DisplayScale);
+        canvas.Scale(ContentScale);
         canvas.Translate(left, top);
 
         // Only zoom here. Preview->Full is already handled by DrawImage(dest=FULL)

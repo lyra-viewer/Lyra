@@ -38,8 +38,8 @@ internal class SkiaDecoder : IImageDecoder, IThumbnailDecoder
                 Logger.Warning($"[SkiaDecoder] Unable to create codec for: {path}");
                 return Task.CompletedTask;
             }
-
-            var info = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            
+            var info = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Rgba8888, SKAlphaType.Premul, SKColorSpace.CreateSrgb());
             var bitmap = new SKBitmap(info);
 
             // Ensure deterministic output if the image is truncated (IncompleteInput).
