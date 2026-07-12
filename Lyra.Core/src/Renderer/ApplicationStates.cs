@@ -9,7 +9,9 @@ public readonly record struct ApplicationStates(
     int CollectionCount,
     int? DirectoryIndex,
     int? DirectoryCount,
-    
+
+    bool InDuplicatesMode,
+
     int Zoom,
     DisplayMode DisplayMode,
     string SamplingMode,

@@ -31,16 +31,43 @@ public sealed class DirectoryTreePresenter
     public event Action<string>? DirectoryPicked;
 
     /// <summary>
-    /// Wire to TreeView.Picked. Resolves the picked DirEntry to its
-    /// absolute path and re-emits DirectoryPicked.
+    /// Wire to TreeView.Picked. Resolves the picked node to a directory
+    /// that actually holds images and re-emits DirectoryPicked.
+    ///
+    /// If the picked directory has no images of its own but a descendant
+    /// does (a collapsed folder that only "leads to" images), jump to the
+    /// closest descendant that holds images instead of doing nothing.
     /// </summary>
-    public void HandlePicked(DirEntry entry)
+    public void HandlePicked(TreeNode<DirEntry> node)
     {
-        if (!entry.HasImages)
+        var target = node.Data.HasImages ? node : FindClosestWithImages(node);
+        if (target == null)
             return;
 
-        if (_directoryMap.TryGetValue(entry.Path, out var absolutePath))
+        if (_directoryMap.TryGetValue(target.Data.Path, out var absolutePath))
             DirectoryPicked?.Invoke(absolutePath);
+    }
+
+    /// <summary>
+    /// Breadth-first search for the shallowest descendant holding images.
+    /// BFS keeps "closest" meaning nearest by depth, and among equal depths
+    /// respects the tree's existing (sorted) child order.
+    /// </summary>
+    private static TreeNode<DirEntry>? FindClosestWithImages(TreeNode<DirEntry> node)
+    {
+        var queue = new Queue<TreeNode<DirEntry>>(node.Children);
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (current.Data.HasImages)
+                return current;
+
+            foreach (var child in current.Children)
+                queue.Enqueue(child);
+        }
+
+        return null;
     }
 
     /// <summary>

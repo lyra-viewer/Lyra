@@ -54,8 +54,10 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
         }
     }
 
-    /// Fired when a row is picked by click.
-    public event Action<T>? Picked;
+    /// Fired when a row is picked by click. Delivers the node itself
+    /// so subscribers can inspect its subtree (e.g. to jump to the
+    /// closest descendant that holds content).
+    public event Action<TreeNode<T>>? Picked;
 
     // --------------------------------------------------------
     //  Visual settings
@@ -511,7 +513,7 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
             else
             {
                 PickedNode = node;
-                Picked?.Invoke(node.Data);
+                Picked?.Invoke(node);
             }
 
             break;

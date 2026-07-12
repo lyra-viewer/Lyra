@@ -131,7 +131,12 @@ public sealed class InfoSection : IUISection
         // File row
         _collectionLabel.Text = $"{app.CollectionIndex}/{app.CollectionCount}";
 
-        if (app is { DirectoryCount: not null, DirectoryIndex: not null })
+        if (app.InDuplicatesMode)
+        {
+            _dirNavLabel.Present = true;
+            _dirNavLabel.Text = $"GROUP-ID: {state.CurrentRecord?.GroupId}";
+        }
+        else if (app is { DirectoryCount: not null, DirectoryIndex: not null })
         {
             _dirNavLabel.Present = true;
             _dirNavLabel.Text = $"({app.DirectoryIndex}/{app.DirectoryCount})";

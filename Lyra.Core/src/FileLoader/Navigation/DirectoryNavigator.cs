@@ -151,6 +151,71 @@ public static class DirectoryNavigator
         FileRecordDatabase.MoveToIndex(goToStart ? ne : ns);
     }
 
+    /// <summary>
+    /// In duplicates view, moves the cursor to the first image of the next
+    /// group (higher group id). Returns false if already in the last group or
+    /// not in duplicates view. Records in the view are contiguous by group and
+    /// ordered by ascending group id.
+    /// </summary>
+    public static bool MoveToNextGroup()
+    {
+        if (!IsDuplicatesMode)
+            return false;
+
+        var records = FileRecordDatabase.Records;
+        var currentIndex = FileRecordDatabase.CurrentIndex;
+        if ((uint)currentIndex >= (uint)records.Count)
+            return false;
+
+        var currentGroup = records[currentIndex].GroupId;
+
+        var next = currentIndex + 1;
+        while (next < records.Count && records[next].GroupId == currentGroup)
+            next++;
+
+        if (next >= records.Count)
+            return false;
+
+        FileRecordDatabase.MoveToIndex(next);
+        return true;
+    }
+
+    /// <summary>
+    /// In duplicates view, moves the cursor to the first image of the previous
+    /// group (lower group id). Returns false if already in the first group or
+    /// not in duplicates view.
+    /// </summary>
+    public static bool MoveToPreviousGroup()
+    {
+        if (!IsDuplicatesMode)
+            return false;
+
+        var records = FileRecordDatabase.Records;
+        var currentIndex = FileRecordDatabase.CurrentIndex;
+        if ((uint)currentIndex >= (uint)records.Count)
+            return false;
+
+        var currentGroup = records[currentIndex].GroupId;
+
+        // Walk back to the first record of the current group.
+        var start = currentIndex;
+        while (start > 0 && records[start - 1].GroupId == currentGroup)
+            start--;
+
+        if (start == 0)
+            return false; // already in the first group
+
+        // The record just before the current group belongs to the previous
+        // group; walk back to that group's first record.
+        var previousGroup = records[start - 1].GroupId;
+        var target = start - 1;
+        while (target > 0 && records[target - 1].GroupId == previousGroup)
+            target--;
+
+        FileRecordDatabase.MoveToIndex(target);
+        return true;
+    }
+
     public static void Purge(string filePath)
     {
         if (FileRecordDatabase.Remove(filePath))

@@ -81,9 +81,20 @@ public sealed class HelpSection : IUISection
 
     public void Refresh(UIState state)
     {
-        var multiDir = state.Navigation.DirectoryCount is not null && state.Navigation.DirectoryIndex is not null;
-        _dirEdgeKey.Present  = multiDir;
-        _dirEdgeDesc.Present = multiDir;
+        // The edge-modifier row doubles as group navigation in duplicates mode.
+        if (state.AppStates.InDuplicatesMode)
+        {
+            _dirEdgeKey.Present  = true;
+            _dirEdgeDesc.Present = true;
+            _dirEdgeDesc.Text    = "Prev / Next group";
+        }
+        else
+        {
+            var multiDir = state.Navigation.DirectoryCount is not null && state.Navigation.DirectoryIndex is not null;
+            _dirEdgeKey.Present  = multiDir;
+            _dirEdgeDesc.Present = multiDir;
+            _dirEdgeDesc.Text    = "Prev / Next directory edge";
+        }
 
         var vector = state.Composite?.Content?.Kind == CompositeContentKind.Vector;
         _samplingKey.Present  = !vector;

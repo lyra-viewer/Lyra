@@ -38,8 +38,10 @@ public sealed class DirectoryTreeSection : IUISection, IDisposable
     private readonly SvgImage _folderOffIcon;
 
     /// <summary>
-    /// Fired when the user picks a directory containing images.
-    /// Parameter is the absolute directory path.
+    /// Fired when the user picks a directory containing images (or a
+    /// collapsed folder that only leads to images, resolved to the
+    /// closest descendant that holds them). Parameter is the absolute
+    /// directory path.
     /// </summary>
     public event Action<string>? DirectoryPicked;
 

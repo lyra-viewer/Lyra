@@ -59,10 +59,22 @@ public partial class SdlCore
 
         if (edgeModifier)
         {
-            if (scancode == Scancode.Left)
-                MoveToLeftEdge();
-            else if (scancode == Scancode.Right)
-                MoveToRightEdge();
+            // In duplicates mode the edge modifier steps between groups
+            // (decrease / increase the group id) instead of directory edges.
+            if (DirectoryNavigator.IsDuplicatesMode)
+            {
+                if (scancode == Scancode.Left)
+                    PreviousGroup();
+                else if (scancode == Scancode.Right)
+                    NextGroup();
+            }
+            else
+            {
+                if (scancode == Scancode.Left)
+                    MoveToLeftEdge();
+                else if (scancode == Scancode.Right)
+                    MoveToRightEdge();
+            }
 
             return;
         }
@@ -136,6 +148,18 @@ public partial class SdlCore
             DirectoryNavigator.MoveToRightEdge();
             LoadImage(NavigationDirection.Forward);
         }
+    }
+
+    private void NextGroup()
+    {
+        if (DirectoryNavigator.MoveToNextGroup())
+            LoadImage(NavigationDirection.Forward);
+    }
+
+    private void PreviousGroup()
+    {
+        if (DirectoryNavigator.MoveToPreviousGroup())
+            LoadImage(NavigationDirection.Backward);
     }
 
     private int _lastWindowWidth;
