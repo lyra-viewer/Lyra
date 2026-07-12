@@ -20,6 +20,8 @@ public partial class SdlCore : IDisposable
     // -------------------------------------------------------------------------
     //  Window / renderer
     // -------------------------------------------------------------------------
+    
+    private const string AppId = "com.nineveh.LyraViewer";
 
     private IntPtr _window;
     private SkiaRendererBase _renderer = null!;
@@ -79,8 +81,11 @@ public partial class SdlCore : IDisposable
     //  Constructor
     // =========================================================================
 
-    public SdlCore()
+    public SdlCore(string[]? startupArgs = null)
     {
+        var appVersion = typeof(SdlCore).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+        SetAppMetadata("Lyra Viewer", appVersion, AppId);
+
         if (!Init(InitFlags.Video))
         {
             LogError(LogCategory.System, $"SDL could not initialize: {GetError()}");
@@ -92,8 +97,23 @@ public partial class SdlCore : IDisposable
         InitializeInput();
         ImageStore.Initialize();
 
-        // TODO Load from arguments
-        // LoadImage();
+        LoadStartupArgs(startupArgs);
+    }
+    
+    private void LoadStartupArgs(string[]? startupArgs)
+    {
+        if (startupArgs is null || startupArgs.Length == 0)
+            return;
+        
+        var paths = startupArgs
+            .Where(a => !string.IsNullOrWhiteSpace(a) && (File.Exists(a) || Directory.Exists(a)))
+            .ToList();
+
+        if (paths.Count == 0)
+            return;
+
+        Logger.Info($"[Core] Loading {paths.Count} startup path(s) from arguments.");
+        IngestPaths(paths);
     }
 
     // =========================================================================
@@ -109,7 +129,14 @@ public partial class SdlCore : IDisposable
 
         var (w, h) = GetInitialWindowSize();
 
-        switch (SettingsManager.AppSettings.Renderer)
+        var backend = SettingsManager.AppSettings.Renderer;
+        if (backend == Backend.Metal && !OperatingSystem.IsMacOS())
+        {
+            Logger.Warning("[Renderer] Metal backend is only supported on macOS; falling back to OpenGL.");
+            backend = Backend.OpenGL;
+        }
+
+        switch (backend)
         {
             case Backend.OpenGL:
                 _window = CreateWindow("Lyra Viewer (OpenGL)", w, h, flags | WindowFlags.OpenGL);
@@ -122,6 +149,8 @@ public partial class SdlCore : IDisposable
             default:
                 throw new ArgumentOutOfRangeException();
         }
+
+        ApplyWindowIcon();
 
         _nextFrameDeadlineNs = GetTicksNS() + TargetFrameNs;
         SetWindowMinimumSize(_window, 640, 480);
@@ -145,6 +174,51 @@ public partial class SdlCore : IDisposable
         }
 
         return (1280, 800);
+    }
+    
+    private void ApplyWindowIcon()
+    {
+        try
+        {
+            using var stream = typeof(SdlCore).Assembly.GetManifestResourceStream("LyraViewer.AppIcon.png");
+            if (stream is null)
+            {
+                Logger.Warning("[Core] App icon resource not found; skipping window icon.");
+                return;
+            }
+
+            using var decoded = SKBitmap.Decode(stream);
+            if (decoded is null)
+            {
+                Logger.Warning("[Core] App icon could not be decoded; skipping window icon.");
+                return;
+            }
+            
+            var info = new SKImageInfo(decoded.Width, decoded.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+            using var rgba = new SKBitmap(info);
+            using (var image = SKImage.FromBitmap(decoded))
+            {
+                if (!image.ReadPixels(rgba.PeekPixels(), 0, 0))
+                {
+                    Logger.Warning("[Core] App icon pixel conversion failed; skipping window icon.");
+                    return;
+                }
+            }
+
+            var surface = CreateSurfaceFrom(rgba.Width, rgba.Height, PixelFormat.ABGR8888, rgba.GetPixels(), rgba.RowBytes);
+            if (surface == IntPtr.Zero)
+            {
+                Logger.Warning($"[Core] SDL_CreateSurfaceFrom failed for window icon: {GetError()}");
+                return;
+            }
+            
+            SetWindowIcon(_window, surface);
+            DestroySurface(surface);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[Core] Failed to set window icon: {ex.Message}");
+        }
     }
 
     // =========================================================================

@@ -15,6 +15,7 @@ build-macos.sh
 build-linux.sh
 build-macos-homebrew.sh
 publish.sh
+wrappers.sh
 
 # Visual Studio Code
 .vscode/

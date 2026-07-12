@@ -18,7 +18,9 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 {
     protected int WindowWidth { get; private set; }
     protected int WindowHeight { get; private set; }
+
     protected float DisplayScale { get; private set; }
+    protected float ContentScale { get; private set; }
 
     private Composite? _composite;
     private SKPoint _offset = SKPoint.Empty;
@@ -45,6 +47,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         WindowWidth = drawableSize.PixelWidth;
         WindowHeight = drawableSize.PixelHeight;
         DisplayScale = drawableSize.Scale;
+        ContentScale = drawableSize.ContentScale;
 
         _dropProgressProvider = dropProgressProvider;
         _scanProgressProvider = scanProgressProvider;
@@ -53,7 +56,10 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
         _contentDrawer = new SkiaCompositeContentDrawer();
 
-        UIManager = new UIManager(DisplayScale);
+        UIManager = new UIManager(ContentScale)
+        {
+            PointerScale = DisplayScale / ContentScale
+        };
     }
 
     protected abstract SKSurface CreateSurface();
@@ -98,7 +104,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     private void RenderUI(SKCanvas canvas)
     {
         canvas.Save();
-        canvas.Scale(DisplayScale);
+        canvas.Scale(ContentScale);
         UIManager.Render(canvas);
         canvas.Restore();
     }
@@ -148,12 +154,12 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
                 imageH: logicalSize.Height,
                 windowPxW: WindowWidth,
                 windowPxH: WindowHeight,
-                displayScale: DisplayScale,
+                displayScale: ContentScale,
                 zoomPercentage: _zoomPercentage,
                 offsetPx: _offset
             );
 
-            _contentDrawer.Draw(c, _composite, destFull, visibleFull, sampling, zoomScale, DisplayScale);
+            _contentDrawer.Draw(c, _composite, destFull, visibleFull, sampling, zoomScale, ContentScale);
         });
     }
 
@@ -163,15 +169,15 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
         var drawWidth = logicalSize.Width * zoomScale;
         var drawHeight = logicalSize.Height * zoomScale;
+        
+        var logicalWindowWidth = WindowWidth / ContentScale;
+        var logicalWindowHeight = WindowHeight / ContentScale;
 
-        var logicalWindowWidth = WindowWidth / DisplayScale;
-        var logicalWindowHeight = WindowHeight / DisplayScale;
-
-        var left = (logicalWindowWidth - drawWidth) / 2 + _offset.X / DisplayScale;
-        var top = (logicalWindowHeight - drawHeight) / 2 + _offset.Y / DisplayScale;
+        var left = (logicalWindowWidth - drawWidth) / 2 + _offset.X / ContentScale;
+        var top = (logicalWindowHeight - drawHeight) / 2 + _offset.Y / ContentScale;
 
         canvas.Save();
-        canvas.Scale(DisplayScale);
+        canvas.Scale(ContentScale);
         canvas.Translate(left, top);
 
         // Only zoom here. Preview->Full is already handled by DrawImage(dest=FULL)
@@ -229,7 +235,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     private void DrawCheckerboardPattern(SKCanvas canvas)
     {
-        var squareSize = (int)(24 * DisplayScale);
+        var squareSize = (int)(24 * ContentScale);
 
         using var lightGray = new SKPaint();
         lightGray.Color = new SKColor(120, 120, 120);
@@ -286,10 +292,12 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         WindowWidth = e.PixelWidth;
         WindowHeight = e.PixelHeight;
         DisplayScale = e.Scale;
+        ContentScale = e.ContentScale;
 
         OnDrawableSizeChangedInternal(WindowWidth, WindowHeight, DisplayScale);
 
-        UIManager.DisplayScale = DisplayScale;
+        UIManager.DisplayScale = ContentScale;
+        UIManager.PointerScale = DisplayScale / ContentScale;
         UIManager.Invalidate();
     }
 

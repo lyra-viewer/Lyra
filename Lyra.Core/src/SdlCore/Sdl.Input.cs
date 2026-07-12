@@ -42,37 +42,33 @@ public partial class SdlCore
 
     private void HandleScancode(Scancode scancode, Keymod mods)
     {
-        var command = (mods & (Keymod.Ctrl | Keymod.GUI)) != 0;
-        var option = (mods & Keymod.Alt) != 0;
+        var absoluteModifier = OperatingSystem.IsMacOS() && (mods & Keymod.GUI) != 0;
+        var edgeModifier = OperatingSystem.IsMacOS()
+            ? (mods & Keymod.Alt) != 0
+            : (mods & Keymod.Ctrl) != 0;
 
-        if (command)
+        if (absoluteModifier)
         {
-            switch (scancode)
-            {
-                case Scancode.Left:
-                    FirstImage();
-                    return;
-                case Scancode.Right:
-                    LastImage();
-                    return;
-            }
+            if (scancode == Scancode.Left)
+                FirstImage();
+            else if (scancode == Scancode.Right) 
+                LastImage();
+
+            return;
         }
-        else if (option)
+
+        if (edgeModifier)
         {
-            switch (scancode)
-            {
-                case Scancode.Left:
-                    MoveToLeftEdge();
-                    return;
-                case Scancode.Right:
-                    MoveToRightEdge();
-                    return;
-            }
+            if (scancode == Scancode.Left)
+                MoveToLeftEdge();
+            else if (scancode == Scancode.Right)
+                MoveToRightEdge();
+
+            return;
         }
-        else if (_scanActions.TryGetValue(scancode, out var scanAction))
-        {
+
+        if (_scanActions.TryGetValue(scancode, out var scanAction))
             scanAction.Invoke();
-        }
     }
 
     private void HandleEscape()
@@ -242,7 +238,7 @@ public partial class SdlCore
         if (newZoom == _zoomPercentage)
             return;
 
-        var scale = GetWindowDisplayScale(_window);
+        var scale = DimensionHelper.GetPixelDensity(_window);
         ZoomAnchored(newZoom, new SKPoint(mouseX * scale, mouseY * scale));
     }
 

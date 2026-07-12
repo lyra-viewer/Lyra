@@ -37,6 +37,8 @@ public class UIManager : IDisposable
     public IUIEvents Events => _mainLayer;
 
     public float DisplayScale { get; set; }
+    
+    public float PointerScale { get; set; } = 1f;
 
     public UIManager(float displayScale)
     {
@@ -173,37 +175,40 @@ public class UIManager : IDisposable
     // --------------------------------------------------------
     //  Input
     // --------------------------------------------------------
-    //  SDL3 reports mouse coordinates in points (logical), not physical
-    //  pixels. The UI layout operates in logical space (canvas is
-    //  pre-scaled by DisplayScale), so SDL coordinates can be passed
-    //  through directly.
+    //  SDL reports mouse coordinates in density-logical units. The UI lays
+    //  out in content-scale units, so incoming coords are remapped by
+    //  PointerScale (1.0 where the two scales match, e.g. macOS).
     // --------------------------------------------------------
+
+    private SKPoint ToUiSpace(float x, float y) => new(x * PointerScale, y * PointerScale);
 
     public bool HandlePointerDown(float x, float y)
     {
-        var consumed = _context.HandlePointerDown(new SKPoint(x, y));
+        var consumed = _context.HandlePointerDown(ToUiSpace(x, y));
         _context.Invalidate();
         return consumed;
     }
 
     public bool HandlePointerUp(float x, float y)
     {
-        var consumed = _context.HandlePointerUp(new SKPoint(x, y));
+        var consumed = _context.HandlePointerUp(ToUiSpace(x, y));
         _context.Invalidate();
         return consumed;
     }
 
     public void HandlePointerMove(float x, float y)
     {
-        _mainLayer.SetDebugPointer(x, y);
-        _context.HandlePointerMove(new SKPoint(x, y));
+        var p = ToUiSpace(x, y);
+        _mainLayer.SetDebugPointer(p.X, p.Y);
+        _context.HandlePointerMove(p);
         _mainLayer.SetDebugHover(_context.HoveredComponent);
         _context.Invalidate();
     }
 
     public bool HandleScroll(float x, float y, float deltaX, float deltaY)
     {
-        var consumed = _context.HandleScroll(new SKPoint(x, y), deltaX, deltaY);
+        var p = ToUiSpace(x, y);
+        var consumed = _context.HandleScroll(p, deltaX, deltaY);
 
         if (consumed)
             _context.Invalidate();
