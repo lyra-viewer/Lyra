@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
@@ -30,7 +31,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
         {
             ct.ThrowIfCancellationRequested();
 
-            var bitmap = LoadBitmap(path, ct);
+            var bitmap = LoadBitmap(path, ct, tagColorSpace: true);
             bitmap.SetImmutable();
             var image = SKImage.FromBitmap(bitmap);
             composite.Content = new RasterContent(bitmap, image);
@@ -52,7 +53,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
     {
         ct.ThrowIfCancellationRequested();
 
-        var full = LoadBitmap(path, ct);
+        var full = LoadBitmap(path, ct, tagColorSpace: false);
 
         // libtiff has no native scaled decode, so decode full then downscale. The caller does the
         // final downscale to the hash grid, so a single linear pass here is enough.
@@ -73,9 +74,10 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
         }
     }
 
-    private static SKBitmap LoadBitmap(string path, CancellationToken ct)
+    private static SKBitmap LoadBitmap(string path, CancellationToken ct, bool tagColorSpace)
     {
-        if (!TiffNative.load_tiff_rgba(path, out var ptr, out var width, out var height) || ptr == IntPtr.Zero)
+        if (!TiffNative.load_tiff_rgba(path, out var ptr, out var width, out var height, out var iccPtr, out var iccSize)
+            || ptr == IntPtr.Zero)
         {
             var error = NativeErrors.GetUtf8ZOrAnsiZ(TiffNative.get_last_tiff_error());
             throw new InvalidOperationException($"[TiffDecoder] Failed to decode TIFF: {path}. {error}");
@@ -87,8 +89,10 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
 
             DecoderValidation.RequireSaneDimensions(nameof(TiffDecoder), width, height);
 
+            var colorSpace = tagColorSpace ? ResolveIccColorSpace(iccPtr, iccSize) : null;
+
             var byteCount = checked(width * height * 4);
-            var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul, colorSpace);
             var bitmap = new SKBitmap(info);
 
             unsafe
@@ -103,6 +107,26 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
         finally
         {
             TiffNative.free_tiff_pixels(ptr);
+            if (iccPtr != IntPtr.Zero)
+                TiffNative.free_tiff_pixels(iccPtr);
+        }
+    }
+
+    private static SKColorSpace? ResolveIccColorSpace(IntPtr iccPtr, int iccSize)
+    {
+        if (iccPtr == IntPtr.Zero || iccSize <= 0)
+            return null;
+
+        try
+        {
+            var icc = new byte[iccSize];
+            Marshal.Copy(iccPtr, icc, 0, iccSize);
+            return SKColorSpace.CreateIcc(icc);
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"[TiffDecoder] ICC profile parse failed: {ex.Message}");
+            return null;
         }
     }
 }

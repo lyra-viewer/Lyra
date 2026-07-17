@@ -39,7 +39,7 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
                 composite.ExifInfo = MetadataProcessor.ParseMetadata(stream, path);
             }
 
-            var bitmap = DecodedImageToBitmap(decodedImage, ct);
+            var bitmap = DecodedImageToBitmap(decodedImage, ct, ResolveColorSpace(imageHandle));
 
             ct.ThrowIfCancellationRequested();
 
@@ -112,7 +112,7 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
         return null;
     }
 
-    private static SKBitmap DecodedImageToBitmap(HeifImage decodedImage, CancellationToken ct)
+    private static SKBitmap DecodedImageToBitmap(HeifImage decodedImage, CancellationToken ct, SKColorSpace? colorSpace = null)
     {
         var width = decodedImage.Width;
         var height = decodedImage.Height;
@@ -126,8 +126,8 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
 
         DecoderValidation.RequireSaneDimensions("HeifDecoder", width, height);
         DecoderValidation.RequireValidStride("HeifDecoder", srcStride, width);
-
-        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+        
+        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul, colorSpace);
         var bitmap = new SKBitmap(info);
 
         unsafe
@@ -158,6 +158,69 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
         }
 
         return bitmap;
+    }
+
+    // Resolves the embedded color profile to an SKColorSpace. Prefers ICC (exact), then
+    // falls back to the NCLX/CICP tags common in camera HEIC/AVIF. Returns null when there
+    // is no profile, or it is one we don't map (e.g. PQ/HLG HDR), leaving sRGB assumed.
+    private static SKColorSpace? ResolveColorSpace(HeifImageHandle handle)
+    {
+        try
+        {
+            var icc = handle.IccColorProfile;
+            var bytes = icc?.GetIccProfileBytes();
+            if (bytes is { Length: > 0 } && SKColorSpace.CreateIcc(bytes) is { } fromIcc)
+                return fromIcc;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"[HeifDecoder] ICC profile read failed: {ex.Message}");
+        }
+
+        try
+        {
+            if (handle.NclxColorProfile is { } nclx)
+                return FromNclx(nclx);
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"[HeifDecoder] NCLX profile read failed: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    private static SKColorSpace? FromNclx(HeifNclxColorProfile nclx)
+    {
+        // Map the CICP primaries to a gamut. Only the display-relevant SDR gamuts are
+        // mapped; anything else falls back to sRGB (null).
+        SKColorSpaceXyz? gamut = nclx.ColorPrimaries switch
+        {
+            ColorPrimaries.BT709 => SKColorSpaceXyz.Srgb,
+            ColorPrimaries.Smpte432 => SKColorSpaceXyz.DisplayP3, // Display-P3 primaries
+            ColorPrimaries.BT2020 => SKColorSpaceXyz.Rec2020,
+            _ => null,
+        };
+
+        // Map the transfer function. The gamma-type SDR transfers (sRGB, BT.709/601/2020)
+        // are close enough to treat as sRGB for display; linear is preserved; PQ/HLG and
+        // other HDR transfers are out of scope (null -> sRGB fallback).
+        SKColorSpaceTransferFn? transfer = nclx.TransferCharacteristics switch
+        {
+            TransferCharacteristics.Srgb
+                or TransferCharacteristics.IEC61966
+                or TransferCharacteristics.BT709
+                or TransferCharacteristics.BT601
+                or TransferCharacteristics.BT2020TenBit
+                or TransferCharacteristics.BT2020TwelveBit => SKColorSpaceTransferFn.Srgb,
+            TransferCharacteristics.Linear => SKColorSpaceTransferFn.Linear,
+            _ => null,
+        };
+
+        if (gamut is { } g && transfer is { } t)
+            return SKColorSpace.CreateRgb(t, g);
+
+        return null;
     }
 
     private static void PopulateFormatSpecific(Composite composite, HeifContext context, HeifImageHandle handle, string path)

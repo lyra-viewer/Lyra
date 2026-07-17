@@ -17,6 +17,11 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
     private SKSurface? _surface;
     private GRBackendRenderTarget? _renderTarget;
     private bool _surfaceDirty = true;
+    
+    private static readonly SKColorSpace SurfaceColorSpace =
+        OperatingSystem.IsMacOS()
+            ? SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Srgb, SKColorSpaceXyz.DisplayP3)
+            : SKColorSpace.CreateSrgb();
 
     public SkiaOpenGlRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, IScanProgressProvider scanProgressProvider)
         : base(drawableSize, dropProgressProvider, viewState, "OpenGL", scanProgressProvider)
@@ -78,7 +83,7 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
         // If MSAA ever introduced, this will need samples/stencil updates
         _renderTarget = new GRBackendRenderTarget(WindowWidth, WindowHeight, 0, 8, fbInfo);
 
-        _surface = SKSurface.Create(_grContext, _renderTarget, GRSurfaceOrigin.BottomLeft, SKColorType.Rgba8888)
+        _surface = SKSurface.Create(_grContext, _renderTarget, GRSurfaceOrigin.BottomLeft, SKColorType.Rgba8888, SurfaceColorSpace)
                    ?? throw new InvalidOperationException("SKSurface.Create returned null for OpenGL surface.");
     }
 

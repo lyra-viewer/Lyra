@@ -44,12 +44,23 @@ TIFF_API const char *get_last_tiff_error() { return last_tiff_error; }
 
 // Decodes any libtiff-supported TIFF into a tightly packed 8-bit RGBA buffer with top-left
 // origin. libtiff handles every compression / photometric / planar / tiled variant internally.
-// On little-endian targets the uint32 ABGR raster lays out as R,G,B,A bytes. 
+// On little-endian targets the uint32 ABGR raster lays out as R,G,B,A bytes.
+//
+// out_icc/out_icc_size receive a copy of the embedded ICC profile (TIFFTAG_ICCPROFILE) when
+// present, else null/0. The caller frees it with free_tiff_pixels. TIFFReadRGBAImage does NOT
+// colour-manage, so the RGBA is in the file's native gamut and the profile describes it.
 // Returns false and sets get_last_tiff_error() on failure.
-TIFF_API bool load_tiff_rgba(const char *path, uint8_t **out_pixels, int *width, int *height) {
+TIFF_API bool load_tiff_rgba(const char *path, uint8_t **out_pixels, int *width, int *height,
+                             uint8_t **out_icc, int *out_icc_size) {
     *out_pixels = nullptr;
     *width = 0;
     *height = 0;
+    if (out_icc) 
+        *out_icc = nullptr;
+    
+    if (out_icc_size) 
+        *out_icc_size = 0;
+    
     last_tiff_error[0] = '\0';
 
     static std::once_flag handlers_flag;
@@ -96,6 +107,20 @@ TIFF_API bool load_tiff_rgba(const char *path, uint8_t **out_pixels, int *width,
         free(raster);
         TIFFClose(tif);
         return false;
+    }
+    
+    if (out_icc && out_icc_size) {
+        uint32_t icc_count = 0;
+        void *icc_data = nullptr;
+        if (TIFFGetField(tif, TIFFTAG_ICCPROFILE, &icc_count, &icc_data) == 1 &&
+            icc_count > 0 && icc_data) {
+            uint8_t *icc_copy = (uint8_t *) malloc(icc_count);
+            if (icc_copy) {
+                memcpy(icc_copy, icc_data, icc_count);
+                *out_icc = icc_copy;
+                *out_icc_size = (int) icc_count;
+            }
+        }
     }
 
     TIFFClose(tif);

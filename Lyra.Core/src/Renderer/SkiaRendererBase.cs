@@ -265,6 +265,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             CollectionCount = navigation.CollectionCount,
             DirectoryIndex = navigation.DirectoryIndex,
             DirectoryCount = navigation.DirectoryCount,
+            InDuplicatesMode = DirectoryNavigator.IsDuplicatesMode,
             Zoom = _zoomPercentage,
             DisplayMode = _displayMode,
             SamplingMode = GetSamplingModeDescription(),

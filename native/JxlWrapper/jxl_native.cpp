@@ -173,10 +173,18 @@ JXL_NATIVE_API bool decode_jxl_from_memory(
 
             if (status == JXL_DEC_COLOR_ENCODING) {
                 JxlColorEncoding target{};
-                if (is_hdr)
+                if (is_hdr) {
+                    // HDR (float) stays linear scene-referred for the tone mapper.
                     JxlColorEncodingSetToLinearSRGB(&target, JXL_FALSE);
-                else
-                    JxlColorEncodingSetToSRGB(&target, JXL_FALSE);
+                } else {
+                    // SDR: convert to Display-P3 (sRGB transfer, P3 primaries, D65)
+                    // instead of clamping to sRGB.
+                    target.color_space = JXL_COLOR_SPACE_RGB;
+                    target.white_point = JXL_WHITE_POINT_D65;
+                    target.primaries = JXL_PRIMARIES_P3;
+                    target.transfer_function = JXL_TRANSFER_FUNCTION_SRGB;
+                    target.rendering_intent = JXL_RENDERING_INTENT_RELATIVE;
+                }
 
                 if (JxlDecoderSetOutputColorProfile(dec, &target, nullptr, 0) != JXL_DEC_SUCCESS) {
                     set_error("JxlDecoderSetOutputColorProfile failed.");

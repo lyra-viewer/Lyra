@@ -10,6 +10,9 @@ namespace Lyra.Imaging.Decoding.Decoders;
 
 internal class JxlDecoder : IImageDecoder
 {
+    private static readonly SKColorSpace SdrColorSpace =
+        SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Srgb, SKColorSpaceXyz.DisplayP3);
+
     public bool CanDecode(ImageFormatType format) => format == ImageFormatType.Jxl;
 
     public Task DecodeAsync(Composite composite, CancellationToken ct)
@@ -103,7 +106,7 @@ internal class JxlDecoder : IImageDecoder
         // into the bitmap, matching the proven raster path used by J2KDecoder.
         var srcStride = width * 4;
 
-        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul, SdrColorSpace);
         var bitmap = new SKBitmap(info);
         bitmap.Erase(SKColors.Transparent);
 

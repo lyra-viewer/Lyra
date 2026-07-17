@@ -39,7 +39,8 @@ internal class SkiaDecoder : IImageDecoder, IThumbnailDecoder
                 return Task.CompletedTask;
             }
             
-            var info = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Rgba8888, SKAlphaType.Premul, SKColorSpace.CreateSrgb());
+            var srcColorSpace = codec.Info.ColorSpace ?? SKColorSpace.CreateSrgb();
+            var info = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Rgba8888, SKAlphaType.Premul, srcColorSpace);
             var bitmap = new SKBitmap(info);
 
             // Ensure deterministic output if the image is truncated (IncompleteInput).

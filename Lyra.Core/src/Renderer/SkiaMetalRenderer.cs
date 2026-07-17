@@ -30,6 +30,12 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     // MTLPixelFormatBGRA8Unorm (stable value)
     private const ulong MTLPixelFormatBGRA8Unorm = 80;
 
+    // dlopen mode flag.
+    private const int RtldLazy = 1;
+    
+    private static readonly SKColorSpace DisplayP3 =
+        SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Srgb, SKColorSpaceXyz.DisplayP3);
+
     public SkiaMetalRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, IScanProgressProvider scanProgressProvider)
         : base(drawableSize, dropProgressProvider, viewState, "Metal", scanProgressProvider)
     {
@@ -53,6 +59,13 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
         ObjC.SendVoid_Bool(_metalLayer, ObjC.Sel("setFramebufferOnly:"), false);
         // enable vsync
         ObjC.SendVoid_Bool(_metalLayer, ObjC.Sel("setDisplaySyncEnabled:"), true);
+        
+        var p3ColorSpace = CreateDisplayP3CGColorSpace();
+        if (p3ColorSpace != IntPtr.Zero)
+        {
+            ObjC.SendVoid_IntPtr(_metalLayer, ObjC.Sel("setColorspace:"), p3ColorSpace);
+            MetalNative.CGColorSpaceRelease(p3ColorSpace); // layer retains it
+        }
 
         // queue = [device newCommandQueue]
         _queue = ObjC.Send_IntPtr(_device, ObjC.Sel("newCommandQueue"));
@@ -95,8 +108,9 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
         _currentRenderTarget = new GRBackendRenderTarget(WindowWidth, WindowHeight, mtlInfo);
 
         // Metal surfaces are TopLeft in most integrations.
-        // Color type should match the CAMetalLayer pixel format (BGRA8Unorm).
-        return SKSurface.Create(_grContext, _currentRenderTarget, GRSurfaceOrigin.TopLeft, SKColorType.Bgra8888)
+        // Color type should match the CAMetalLayer pixel format (BGRA8Unorm); the
+        // surface color space (Display-P3) must match the layer's colorspace tag.
+        return SKSurface.Create(_grContext, _currentRenderTarget, GRSurfaceOrigin.TopLeft, SKColorType.Bgra8888, DisplayP3)
                ?? throw new InvalidOperationException("SKSurface.Create returned null for Metal render target.");
     }
 
@@ -146,11 +160,42 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
         if (_queue != IntPtr.Zero)
             ObjC.SendVoid(_queue, ObjC.Sel("release"));
     }
+    
+    private static IntPtr CreateDisplayP3CGColorSpace()
+    {
+        const string coreGraphics = "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics";
+
+        var handle = MetalNative.dlopen(coreGraphics, RtldLazy);
+        if (handle == IntPtr.Zero)
+            return IntPtr.Zero;
+
+        var namePtr = MetalNative.dlsym(handle, "kCGColorSpaceDisplayP3");
+        if (namePtr == IntPtr.Zero)
+            return IntPtr.Zero;
+
+        var cfName = Marshal.ReadIntPtr(namePtr);
+        if (cfName == IntPtr.Zero)
+            return IntPtr.Zero;
+
+        return MetalNative.CGColorSpaceCreateWithName(cfName);
+    }
 
     private static class MetalNative
     {
         [DllImport("/System/Library/Frameworks/Metal.framework/Metal")]
         public static extern IntPtr MTLCreateSystemDefaultDevice();
+
+        [DllImport("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")]
+        public static extern IntPtr CGColorSpaceCreateWithName(IntPtr name);
+
+        [DllImport("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")]
+        public static extern void CGColorSpaceRelease(IntPtr space);
+
+        [DllImport("/usr/lib/libSystem.B.dylib")]
+        public static extern IntPtr dlopen(string path, int mode);
+
+        [DllImport("/usr/lib/libSystem.B.dylib")]
+        public static extern IntPtr dlsym(IntPtr handle, string symbol);
     }
 
     private static class ObjC
