@@ -5,6 +5,7 @@ namespace Lyra.Imaging.Interop;
 internal static class J2KNative
 {
     [DllImport("libj2k_native", CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)] // native returns a 1-byte C++ bool
     public static extern bool decode_j2k_rgba8_from_memory(
         IntPtr data,
         nuint size,
@@ -12,7 +13,9 @@ internal static class J2KNative
         out IntPtr pixels,
         out int width,
         out int height,
-        out int strideBytes);
+        out int strideBytes,
+        out IntPtr icc,
+        out int iccSize);
 
     [DllImport("libj2k_native", CallingConvention = CallingConvention.Cdecl)]
     public static extern void free_j2k_pixels(IntPtr ptr);

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
@@ -23,6 +24,7 @@ internal class J2KDecoder : IImageDecoder
         ct.ThrowIfCancellationRequested();
 
         IntPtr nativePixels = IntPtr.Zero;
+        IntPtr nativeIcc = IntPtr.Zero;
 
         try
         {
@@ -43,7 +45,9 @@ internal class J2KDecoder : IImageDecoder
                         out nativePixels,
                         out var width,
                         out var height,
-                        out var nativeStrideBytes);
+                        out var nativeStrideBytes,
+                        out nativeIcc,
+                        out var iccSize);
 
                     if (!ok || nativePixels == IntPtr.Zero)
                     {
@@ -57,7 +61,8 @@ internal class J2KDecoder : IImageDecoder
 
                     ct.ThrowIfCancellationRequested();
 
-                    var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+                    var colorSpace = ResolveIccColorSpace(nativeIcc, iccSize);
+                    var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul, colorSpace);
                     var bitmap = new SKBitmap(info);
                     bitmap.Erase(SKColors.Transparent);
 
@@ -150,6 +155,26 @@ internal class J2KDecoder : IImageDecoder
         {
             if (nativePixels != IntPtr.Zero)
                 J2KNative.free_j2k_pixels(nativePixels);
+            if (nativeIcc != IntPtr.Zero)
+                J2KNative.free_j2k_pixels(nativeIcc);
+        }
+    }
+
+    private static SKColorSpace? ResolveIccColorSpace(IntPtr iccPtr, int iccSize)
+    {
+        if (iccPtr == IntPtr.Zero || iccSize <= 0)
+            return null;
+
+        try
+        {
+            var icc = new byte[iccSize];
+            Marshal.Copy(iccPtr, icc, 0, iccSize);
+            return SKColorSpace.CreateIcc(icc);
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"[J2KDecoder] ICC profile parse failed: {ex.Message}");
+            return null;
         }
     }
 

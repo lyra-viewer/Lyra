@@ -179,8 +179,11 @@ extern "C" {
 J2K_API const char *get_last_j2k_error() { return last_j2k_error; }
 
 // Decode to RGBA8. reduce: 0=full, 1=half, 2=quarter...
+// out_icc/out_icc_size receive a copy of the embedded ICC profile (JP2 colr box) when present,
+// else null/0. The caller frees it with free_j2k_pixels.
 J2K_API bool decode_j2k_rgba8_from_memory(const uint8_t *data, size_t size, int reduce, uint8_t **out_pixels,
-                                          int *width, int *height, int *stride_bytes) {
+                                          int *width, int *height, int *stride_bytes,
+                                          uint8_t **out_icc, int *out_icc_size) {
     if (!data || size == 0 || !out_pixels || !width || !height || !stride_bytes) {
         set_error("Invalid arguments.");
         return false;
@@ -188,6 +191,10 @@ J2K_API bool decode_j2k_rgba8_from_memory(const uint8_t *data, size_t size, int 
 
     *out_pixels = nullptr;
     *width = *height = *stride_bytes = 0;
+    if (out_icc)
+        *out_icc = nullptr;
+    if (out_icc_size)
+        *out_icc_size = 0;
     clear_error();
 
     const bool jp2 = is_jp2(data, size);
@@ -433,6 +440,19 @@ J2K_API bool decode_j2k_rgba8_from_memory(const uint8_t *data, size_t size, int 
                     out[x * 4 + 3] = a;
                 }
             }
+        }
+    }
+
+    if (out_icc && out_icc_size && image->icc_profile_buf && image->icc_profile_len > 0) {
+        uint8_t *icc_copy = (uint8_t *) std::malloc(image->icc_profile_len);
+        if (icc_copy) {
+            std::memcpy(icc_copy, image->icc_profile_buf, image->icc_profile_len);
+            {
+                std::lock_guard<std::mutex> lock(j2k_alloc_mutex);
+                j2k_allocated_ptrs.insert(icc_copy);
+            }
+            *out_icc = icc_copy;
+            *out_icc_size = (int) image->icc_profile_len;
         }
     }
 

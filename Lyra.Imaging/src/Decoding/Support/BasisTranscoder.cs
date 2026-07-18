@@ -61,9 +61,7 @@ internal static class BasisTranscoder
 
             unsafe
             {
-                var src = new Span<byte>((void*)ptr, byteCount);
-                var dst = new Span<byte>((void*)bitmap.GetPixels(), byteCount);
-                src.CopyTo(dst);
+                PixelCopy.CopyTightRgba(new ReadOnlySpan<byte>((void*)ptr, byteCount), bitmap);
             }
 
             return bitmap;

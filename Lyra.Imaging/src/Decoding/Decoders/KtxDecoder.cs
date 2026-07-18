@@ -41,7 +41,7 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
         ct.ThrowIfCancellationRequested();
         DecoderValidation.RequireSaneDimensions(nameof(KtxDecoder), surface.Width, surface.Height);
 
-        var bitmap = DecodeToBitmap(texture, surface);
+        var bitmap = DecodeToBitmap(texture, surface, ct);
         bitmap.SetImmutable();
         var image = SKImage.FromBitmap(bitmap);
 
@@ -56,7 +56,7 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
         var bytes = File.ReadAllBytes(path);
         if (BasisTranscoder.IsBasis(bytes))
         {
-            return ResizeToThumbnail(BasisTranscoder.Decode(bytes), maxDimension);
+            return ThumbnailScaler.ResizeToThumbnail(BasisTranscoder.Decode(bytes), maxDimension);
         }
 
         var texture = ReadTexture(bytes);
@@ -64,27 +64,7 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
 
         ct.ThrowIfCancellationRequested();
 
-        return ResizeToThumbnail(DecodeToBitmap(texture, surface), maxDimension);
-    }
-
-    /// <summary>Returns <paramref name="full"/> as-is if it already fits, else a linearly-downscaled copy.</summary>
-    private static SKBitmap ResizeToThumbnail(SKBitmap full, int maxDimension)
-    {
-        var longestSide = Math.Max(full.Width, full.Height);
-        if (longestSide <= maxDimension)
-        {
-            return full;
-        }
-
-        var scale = (float)maxDimension / longestSide;
-        var targetWidth = Math.Max(1, (int)MathF.Round(full.Width * scale));
-        var targetHeight = Math.Max(1, (int)MathF.Round(full.Height * scale));
-
-        using (full)
-        {
-            var info = new SKImageInfo(targetWidth, targetHeight, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-            return full.Resize(info, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
-        }
+        return ThumbnailScaler.ResizeToThumbnail(DecodeToBitmap(texture, surface, ct), maxDimension);
     }
 
     /// <summary>Decodes a Basis Universal KTX2's base image via the native transcoder and fills the composite.</summary>
@@ -94,7 +74,7 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
         DecoderValidation.RequireSaneDimensions(nameof(KtxDecoder), bitmap.Width, bitmap.Height);
 
         composite.AddFormatSpecific("Format", BasisTranscoder.CodecName(bytes));
-        composite.AddFormatSpecific("Has Alpha", "Yes");
+        composite.AddFormatSpecific("Has Alpha", HasTranslucentPixels(bitmap) ? "Yes" : "No");
 
         bitmap.SetImmutable();
         var image = SKImage.FromBitmap(bitmap);
@@ -145,25 +125,9 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
         return chosen;
     }
 
-    private static SKBitmap DecodeToBitmap(TextureData texture, in Subresource surface)
+    private static SKBitmap DecodeToBitmap(TextureData texture, in Subresource surface, CancellationToken ct)
     {
-        var info = new SKImageInfo(surface.Width, surface.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-        var bitmap = new SKBitmap(info);
-
-        if (texture.IsHdr)
-        {
-            var floats = new float[surface.Width * surface.Height * 4];
-            texture.DecodeHdr(surface, floats);
-            HdrToneMap.ToBitmap(floats, bitmap, CancellationToken.None, out _);
-        }
-        else
-        {
-            unsafe
-            {
-                var dst = new Span<byte>((void*)bitmap.GetPixels(), surface.Width * surface.Height * 4);
-                texture.Decode(surface, dst);
-            }
-        }
+        var bitmap = TextureBitmap.DecodeToBitmap(texture, surface, ct);
 
         // Decoders emit top-left RGBA; flip a bottom-up (OpenGL-convention) source into place.
         if (texture.Origin == TextureOrigin.BottomLeft)
@@ -176,9 +140,8 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
 
     private static unsafe void FlipVertical(SKBitmap bitmap)
     {
-        var width = bitmap.Width;
         var height = bitmap.Height;
-        var rowBytes = width * 4;
+        var rowBytes = bitmap.RowBytes;
         var pixels = (byte*)bitmap.GetPixels();
 
         var row = new byte[rowBytes];
@@ -194,5 +157,25 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
                 Buffer.MemoryCopy(tmp, bottom, rowBytes, rowBytes);
             }
         }
+    }
+
+    private static unsafe bool HasTranslucentPixels(SKBitmap bitmap)
+    {
+        var width = bitmap.Width;
+        var height = bitmap.Height;
+        var rowBytes = bitmap.RowBytes;
+        var pixels = (byte*)bitmap.GetPixels();
+
+        for (var y = 0; y < height; y++)
+        {
+            var row = pixels + (long)y * rowBytes;
+            for (var x = 0; x < width; x++)
+            {
+                if (row[x * 4 + 3] != 255)
+                    return true;
+            }
+        }
+
+        return false;
     }
 }

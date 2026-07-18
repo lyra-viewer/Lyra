@@ -5,6 +5,7 @@ namespace Lyra.Imaging.Interop;
 internal static class ExrNative
 {
     [DllImport("libexr_native", CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)] // native returns a 1-byte C++ bool
     public static extern bool load_exr_rgba(string path, out IntPtr pixels, out int width, out int height);
 
     [DllImport("libexr_native", CallingConvention = CallingConvention.Cdecl)]

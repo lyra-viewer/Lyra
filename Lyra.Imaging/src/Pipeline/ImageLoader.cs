@@ -227,23 +227,48 @@ internal class ImageLoader : IDisposable
 
             var removed = removedLazy.Value;
 
+            // Cancel before touching anything: stops both the decode task and any background
+            // tile streaming as early as possible, before content is disposed out from under them.
+            removed.Cts.CancelSilently();
+
             if (!removed.Task.IsCompleted)
             {
-                removed.Cts.CancelSilently();
                 AttachCleanupContinuation(removed, key, context);
             }
             else
             {
-                DisposeJobNow(removed, key, context);
+                FinishAndDispose(removed.Task, removed.Composite, removed.Cts, key, context);
             }
         }
     }
 
-    private void DisposeJobNow(ImageJob job, string key, string context)
+    /// <summary>
+    /// Disposes a removed job's composite, deferring while background decode work (PSD tile
+    /// streaming) is still draining. Cancellation has already been signaled; the background
+    /// task observes it and signals completion in its finally, at which point disposal runs.
+    /// </summary>
+    private void FinishAndDispose(Task task, Composite composite, CancellationTokenSource cts, string key, string context)
     {
-        LogTerminalState(job.Task, job.Composite, key, context);
-        DisposeIfNotCurrent(job.Composite);
-        job.Cts.CancelAndDisposeSilently();
+        var background = composite.BackgroundDecodeTask;
+        if (!background.IsCompleted)
+        {
+            Logger.Debug($"[ImageLoader] {context} waiting for background decode before dispose: {key}");
+            background.ContinueWith(
+                _ =>
+                {
+                    LogTerminalState(task, composite, key, context);
+                    DisposeIfNotCurrent(composite);
+                    cts.CancelAndDisposeSilently();
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+            return;
+        }
+
+        LogTerminalState(task, composite, key, context);
+        DisposeIfNotCurrent(composite);
+        cts.CancelAndDisposeSilently();
     }
 
     private void DisposeIfNotCurrent(Composite composite)
@@ -286,11 +311,10 @@ internal class ImageLoader : IDisposable
 
     private static void OnJobFinished(Task task, object? stateObj)
     {
+        // The decode task finished after cancellation; background tile streaming may still be
+        // draining, so route through the same defer-aware disposal as the synchronous path.
         var state = (DisposeContinuationState)stateObj!;
-        LogTerminalState(task, state.Composite, state.Key, state.Context);
-
-        state.Loader.DisposeIfNotCurrent(state.Composite);
-        state.Cts.CancelAndDisposeSilently();
+        state.Loader.FinishAndDispose(task, state.Composite, state.Cts, state.Key, state.Context);
     }
 
     private static void LogTerminalState(Task task, Composite composite, string key, string context)

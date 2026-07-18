@@ -38,7 +38,7 @@ internal sealed class DdsDecoder : IImageDecoder, IThumbnailDecoder
         ct.ThrowIfCancellationRequested();
         DecoderValidation.RequireSaneDimensions(nameof(DdsDecoder), surface.Width, surface.Height);
 
-        var bitmap = DecodeToBitmap(texture, surface);
+        var bitmap = TextureBitmap.DecodeToBitmap(texture, surface, ct);
         bitmap.SetImmutable();
         var image = SKImage.FromBitmap(bitmap);
 
@@ -73,23 +73,7 @@ internal sealed class DdsDecoder : IImageDecoder, IThumbnailDecoder
 
         ct.ThrowIfCancellationRequested();
 
-        var full = DecodeToBitmap(texture, surface);
-
-        var longestSide = Math.Max(surface.Width, surface.Height);
-        if (longestSide <= maxDimension)
-        {
-            return full;
-        }
-
-        var scale = (float)maxDimension / longestSide;
-        var targetWidth = Math.Max(1, (int)MathF.Round(surface.Width * scale));
-        var targetHeight = Math.Max(1, (int)MathF.Round(surface.Height * scale));
-
-        using (full)
-        {
-            var info = new SKImageInfo(targetWidth, targetHeight, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-            return full.Resize(info, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
-        }
+        return ThumbnailScaler.ResizeToThumbnail(TextureBitmap.DecodeToBitmap(texture, surface, ct), maxDimension);
     }
 
     /// <summary>Smallest stored mip (of face 0, layer 0) whose longest side still covers the target.</summary>
@@ -106,27 +90,5 @@ internal sealed class DdsDecoder : IImageDecoder, IThumbnailDecoder
         }
 
         return chosen;
-    }
-
-    private static SKBitmap DecodeToBitmap(TextureData texture, in Subresource surface)
-    {
-        var info = new SKImageInfo(surface.Width, surface.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-        var bitmap = new SKBitmap(info);
-
-        if (texture.IsHdr)
-        {
-            var floats = new float[surface.Width * surface.Height * 4];
-            texture.DecodeHdr(surface, floats);
-            HdrToneMap.ToBitmap(floats, bitmap, CancellationToken.None, out _);
-            return bitmap;
-        }
-
-        unsafe
-        {
-            var dst = new Span<byte>((void*)bitmap.GetPixels(), surface.Width * surface.Height * 4);
-            texture.Decode(surface, dst);
-        }
-
-        return bitmap;
     }
 }

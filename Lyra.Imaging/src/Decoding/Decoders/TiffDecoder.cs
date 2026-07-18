@@ -13,7 +13,9 @@ namespace Lyra.Imaging.Decoding.Decoders;
 /// <summary>
 /// Decodes TIFF images via the native libtiff wrapper. libtiff handles every compression,
 /// photometric, planar and tiled variant and returns an 8-bit RGBA raster with
-/// <em>premultiplied</em> (associated) alpha, top-left origin.
+/// <em>premultiplied</em> (associated) alpha, top-left origin. Unassociated-alpha TIFFs are
+/// converted by libtiff itself (the UaToAa table in tif_getimage.c), so Premul is correct
+/// for both EXTRASAMPLES variants.
 /// </summary>
 internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
 {
@@ -53,25 +55,8 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
     {
         ct.ThrowIfCancellationRequested();
 
-        var full = LoadBitmap(path, ct, tagColorSpace: false);
-
-        // libtiff has no native scaled decode, so decode full then downscale. The caller does the
-        // final downscale to the hash grid, so a single linear pass here is enough.
-        var longestSide = Math.Max(full.Width, full.Height);
-        if (longestSide <= maxDimension)
-        {
-            return full;
-        }
-
-        var scale = (float)maxDimension / longestSide;
-        var targetWidth = Math.Max(1, (int)MathF.Round(full.Width * scale));
-        var targetHeight = Math.Max(1, (int)MathF.Round(full.Height * scale));
-
-        using (full)
-        {
-            var info = new SKImageInfo(targetWidth, targetHeight, SKColorType.Rgba8888, SKAlphaType.Premul);
-            return full.Resize(info, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
-        }
+        // libtiff has no native scaled decode, so decode full then downscale.
+        return ThumbnailScaler.ResizeToThumbnail(LoadBitmap(path, ct, tagColorSpace: false), maxDimension);
     }
 
     private static SKBitmap LoadBitmap(string path, CancellationToken ct, bool tagColorSpace)
@@ -97,9 +82,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
 
             unsafe
             {
-                var src = new Span<byte>((void*)ptr, byteCount);
-                var dst = new Span<byte>((void*)bitmap.GetPixels(), byteCount);
-                src.CopyTo(dst);
+                PixelCopy.CopyTightRgba(new ReadOnlySpan<byte>((void*)ptr, byteCount), bitmap);
             }
 
             return bitmap;

@@ -36,6 +36,8 @@ public sealed class Composite : IDisposable
 
     public event Action<Composite>? Completed;
     public event Action<Composite>? ProgressChanged;
+    
+    internal Task BackgroundDecodeTask = Task.CompletedTask;
 
     // Content
     public ICompositeContent? Content;
@@ -130,8 +132,8 @@ public enum CompositeState
 {
     Pending,
     Loading,
-    Ready, // preview / full usable (tiles may still stream)
-    Complete, // everything finished (e.g., tiles fully decoded)
+    Ready,      // preview / full usable (tiles may still stream)
+    Complete,   // everything finished (e.g., tiles fully decoded)
     Failed,
     Cancelled,
     Disposed

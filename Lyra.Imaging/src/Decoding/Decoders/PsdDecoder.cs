@@ -157,7 +157,9 @@ internal class PsdDecoder : IImageDecoder
         Composite composite,
         CancellationToken ct)
     {
-        _ = Task.Run(() =>
+        // Not passing ct to Task.Run: the body must always run so the finally below signals
+        // completion (the loader defers composite disposal on BackgroundDecodeTask).
+        composite.BackgroundDecodeTask = Task.Run(() =>
         {
             try
             {
@@ -192,7 +194,7 @@ internal class PsdDecoder : IImageDecoder
             {
                 composite.SignalComplete();
             }
-        }, ct);
+        });
     }
 
     private static void OnTileReady(

@@ -71,25 +71,8 @@ internal sealed class TgaDecoder : IImageDecoder, IThumbnailDecoder
 
         ct.ThrowIfCancellationRequested();
 
-        var full = ToSkBitmap(decoded);
-
-        // TGA has no embedded/native scaled decode, so decode full then downscale. The caller
-        // does the final downscale to the hash grid, so a single linear pass here is enough.
-        var longestSide = Math.Max(decoded.Width, decoded.Height);
-        if (longestSide <= maxDimension)
-        {
-            return full;
-        }
-
-        var scale = (float)maxDimension / longestSide;
-        var targetWidth = Math.Max(1, (int)MathF.Round(decoded.Width * scale));
-        var targetHeight = Math.Max(1, (int)MathF.Round(decoded.Height * scale));
-
-        using (full)
-        {
-            var info = new SKImageInfo(targetWidth, targetHeight, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-            return full.Resize(info, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
-        }
+        // TGA has no embedded/native scaled decode, so decode full then downscale.
+        return ThumbnailScaler.ResizeToThumbnail(ToSkBitmap(decoded), maxDimension);
     }
 
     /// <summary>
@@ -123,11 +106,7 @@ internal sealed class TgaDecoder : IImageDecoder, IThumbnailDecoder
         var info = new SKImageInfo(decoded.Width, decoded.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
         var bitmap = new SKBitmap(info);
 
-        unsafe
-        {
-            var dst = new Span<byte>((void*)bitmap.GetPixels(), decoded.Width * decoded.Height * 4);
-            decoded.Pixels.AsSpan(0, dst.Length).CopyTo(dst);
-        }
+        PixelCopy.CopyTightRgba(decoded.Pixels.AsSpan(0, decoded.Width * decoded.Height * 4), bitmap);
 
         return bitmap;
     }

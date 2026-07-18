@@ -79,7 +79,7 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
             using var decodedImage = handle.Decode(HeifColorspace.Rgb, HeifChroma.InterleavedRgba32);
 
             ct.ThrowIfCancellationRequested();
-            return DecodedImageToBitmap(decodedImage, ct);
+            return ThumbnailScaler.ResizeToThumbnail(DecodedImageToBitmap(decodedImage, ct), maxDimension);
         }
         finally
         {

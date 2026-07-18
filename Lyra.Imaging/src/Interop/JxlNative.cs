@@ -5,6 +5,7 @@ namespace Lyra.Imaging.Interop;
 internal static class JxlNative
 {
     [DllImport("libjxl_native", CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)] // native returns a 1-byte C++ bool
     public static extern bool decode_jxl_from_memory(
         IntPtr data,
         nuint size,

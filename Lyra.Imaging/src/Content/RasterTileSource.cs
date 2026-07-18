@@ -9,7 +9,8 @@ public sealed class RasterTileSource : ITileSource
     private readonly float _tileW;
     private readonly float _tileH;
 
-    private SKImage?[] _tiles; // fixed slots
+    private SKImage?[] _tiles; // fixed slots; swapped for an empty array on dispose
+    private volatile bool _disposed;
 
     public RasterTileSource(int tilesX, int tilesY, float tileWidth, float tileHeight)
     {
@@ -26,18 +27,35 @@ public sealed class RasterTileSource : ITileSource
         if ((uint)x >= (uint)_tilesX || (uint)y >= (uint)_tilesY)
             throw new ArgumentOutOfRangeException($"Tile index {x},{y} out of range.");
 
+        var tiles = Volatile.Read(ref _tiles);
+        if (tiles.Length == 0)
+        {
+            image.Dispose();
+            return;
+        }
+
         var idx = y * _tilesX + x;
 
         // atomic swap; dispose old if replaced
-        var old = Interlocked.Exchange(ref _tiles[idx], image);
+        var old = Interlocked.Exchange(ref tiles[idx], image);
         old?.Dispose();
+
+        if (_disposed)
+        {
+            var mine = Interlocked.Exchange(ref tiles[idx], null);
+            mine?.Dispose();
+        }
     }
 
     public IEnumerable<RasterTile> GetTiles(SKRect visibleFullRect, SKSize imageSize)
     {
         if (visibleFullRect.IsEmpty)
             yield break;
-        
+
+        var tiles = Volatile.Read(ref _tiles);
+        if (tiles.Length == 0)
+            yield break; // disposed
+
         // Compute index range that overlaps the visible rect
         var minX = Math.Clamp((int)MathF.Floor(visibleFullRect.Left / _tileW), 0, _tilesX - 1);
         var maxX = Math.Clamp((int)MathF.Floor((visibleFullRect.Right - 1) / _tileW), 0, _tilesX - 1);
@@ -49,7 +67,7 @@ public sealed class RasterTileSource : ITileSource
         for (var x = minX; x <= maxX; x++)
         {
             var idx = y * _tilesX + x;
-            var img = Volatile.Read(ref _tiles[idx]);
+            var img = Volatile.Read(ref tiles[idx]);
             if (img == null) 
                 continue;
 
@@ -70,8 +88,13 @@ public sealed class RasterTileSource : ITileSource
 
     public void Dispose()
     {
-        var tiles = Interlocked.Exchange(ref _tiles, Array.Empty<SKImage?>());
-        foreach (var t in tiles)
+        _disposed = true;
+
+        var tiles = Interlocked.Exchange(ref _tiles, []);
+        for (var i = 0; i < tiles.Length; i++)
+        {
+            var t = Interlocked.Exchange(ref tiles[i], null);
             t?.Dispose();
+        }
     }
 }
