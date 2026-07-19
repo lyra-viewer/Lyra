@@ -26,7 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="$(MSBuildThisFileDirectory)../release/packaging/LyraViewer.iconset/icon_256x256.png">
+    <EmbeddedResource Include="Resources\AppIcon.png">
       <LogicalName>LyraViewer.AppIcon.png</LogicalName>
     </EmbeddedResource>
   </ItemGroup>

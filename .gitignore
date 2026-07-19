@@ -6,16 +6,7 @@ project.lock.json
 nupkg/
 Lyra.sln.DotSettings
 
-dist/
-lib/
-packaging/
-publish/
-build.sh
-build-macos.sh
-build-linux.sh
-build-macos-homebrew.sh
-publish.sh
-wrappers.sh
+/release/
 
 # Visual Studio Code
 .vscode/
@@ -49,6 +40,7 @@ build/
 build-brew/
 build-macos/
 build-linux/
+build-windows/
 bld/
 [Bb]in/
 [Oo]bj/
