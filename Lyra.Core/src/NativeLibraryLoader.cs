@@ -165,6 +165,12 @@ internal static class NativeLibraryLoader
             SearchDirs.Add("/usr/local/opt/openexr/lib");
         }
 
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            SearchDirs.Add(basePath);
+            SearchDirs.Add(Path.Combine(basePath, "runtimes", "win-x64", "native"));
+        }
+
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             // Dev runs and self-contained publishes drop NuGet-provided natives

@@ -23,6 +23,11 @@ endif ()
 
 if (JXL_FOUND AND JXL_THREADS_FOUND)
     message(STATUS "libjxl found via pkg-config: ${JXL_VERSION}")
+    
+    if (WIN32)
+        list(REMOVE_ITEM JXL_LIBRARIES m)
+        list(REMOVE_ITEM JXL_THREADS_LIBRARIES m)
+    endif ()
 
     target_include_directories(jxl_native PRIVATE ${JXL_INCLUDE_DIRS} ${JXL_THREADS_INCLUDE_DIRS})
     target_link_directories(jxl_native PRIVATE ${JXL_LIBRARY_DIRS} ${JXL_THREADS_LIBRARY_DIRS})
