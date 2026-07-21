@@ -101,18 +101,19 @@ public partial class SdlCore
         session.InProgress = false;
         session.AcceptFiles = false; // ignore any late DROPFILE spam after complete
     }
-
-    private void CancelDrop()
+    
+    private bool CancelDropIfActive()
     {
         if (!_dropProgressTracker.GetDropStatus().Active)
-            return;
+            return false;
 
         var session = _drop;
         if (session is null)
-            return;
+            return false;
 
         Logger.Info("[DragAndDrop] Cancelling drop.");
         CancelDropInternal(session, resetProgress: false, markAborted: true);
+        return true;
     }
 
     private void CancelDropInternal(DropSession session, bool resetProgress, bool markAborted)

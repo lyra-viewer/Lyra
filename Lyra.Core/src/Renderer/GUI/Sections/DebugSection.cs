@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
+using Lyra.DuplicateStatusProvider;
 using Lyra.FileLoader.Store;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
@@ -27,6 +28,7 @@ namespace Lyra.Renderer.GUI.Sections;
 //    2. State-driven rows (refreshed from UIState):
 //         State / Decoder / Time Est / Time Complete
 //         Drop / Drop Enqueued / Drop Files / Drop Supported
+//         Scan / Scan Phase / Scan Progress
 //
 //  Hidden by default. Rows may clip horizontally inside narrow sidebars.
 //  The sidebar is user-resizable, so this is acceptable for a debug section.
@@ -58,6 +60,12 @@ public sealed class DebugSection : IUISection
     private readonly Label _dropEnqueuedValue;
     private readonly Label _dropFilesValue;
     private readonly Label _dropSupportedValue;
+
+    private readonly HStack _scanStatusRow;
+    private readonly Label _scanStatusValue;
+
+    private readonly Label _scanPhaseValue;
+    private readonly Label _scanProgressValue;
 
     // Current FileRecord rows (size / content hash / pHash populate during a duplicate scan).
     private readonly HStack _recordNameRow;
@@ -101,6 +109,11 @@ public sealed class DebugSection : IUISection
         var dropFilesRow = BuildRow(keyLabels, "Drop Files", "0", out _dropFilesValue);
         var dropSupportedRow = BuildRow(keyLabels, "Drop Supported", "0", out _dropSupportedValue);
 
+        // Duplicate scan rows
+        _scanStatusRow = BuildRow(keyLabels, "Scan", "", out _scanStatusValue);
+        var scanPhaseRow = BuildRow(keyLabels, "Scan Phase", "-", out _scanPhaseValue);
+        var scanProgressRow = BuildRow(keyLabels, "Scan Progress", "0/0", out _scanProgressValue);
+
         // Current FileRecord rows
         _recordNameRow = BuildRow(keyLabels, "Rec Name", "-", out _recordNameValue);
         _recordDirRow = BuildRow(keyLabels, "Rec Dir", "-", out _recordDirValue);
@@ -136,6 +149,10 @@ public sealed class DebugSection : IUISection
             dropEnqueuedRow,
             dropFilesRow,
             dropSupportedRow,
+            Spacer(),
+            _scanStatusRow,
+            scanPhaseRow,
+            scanProgressRow,
             Spacer(),
             _recordNameRow,
             _recordDirRow,
@@ -190,6 +207,25 @@ public sealed class DebugSection : IUISection
         _dropEnqueuedValue.Text = app.DropPathsEnqueued.ToString();
         _dropFilesValue.Text = app.DropFilesEnumerated.ToString();
         _dropSupportedValue.Text = app.DropFilesSupported.ToString();
+
+        if (app.ScanAborted)
+        {
+            _scanStatusRow.Present = true;
+            _scanStatusValue.Text = "Aborted";
+        }
+        else if (app.ScanActive)
+        {
+            _scanStatusRow.Present = true;
+            _scanStatusValue.Text = "Active";
+        }
+        else
+        {
+            _scanStatusRow.Present = false;
+        }
+
+        // Left at the last reported position after an abort, so it shows where the scan stopped.
+        _scanPhaseValue.Text = app.ScanPhase == ScanPhase.None ? "-" : app.ScanPhase.ToString();
+        _scanProgressValue.Text = $"{app.ScanDone}/{app.ScanTotal}";
 
         RefreshRecord(state.CurrentRecord);
     }

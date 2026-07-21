@@ -408,6 +408,7 @@ public partial class SdlCore : IDisposable
         events.DirectoryPicked                += OnDirectoryPicked;
 
         _duplicateScanService.Completed       += OnDuplicateScanCompleted;
+        _duplicateScanService.Aborted         += OnDuplicateScanAborted;
 
         // Dropdown changes route into ViewState (single source of truth).
         events.BackgroundModeChanged          += _viewState.SetBackgroundMode;
@@ -445,6 +446,7 @@ public partial class SdlCore : IDisposable
     {
         Logger.Info("[Core] Exiting application...");
         _running = false;
+        _duplicateScanService.Shutdown();
         _renderer.SetComposite(null);
     }
 

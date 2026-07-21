@@ -257,6 +257,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     {
         var navigation = DirectoryNavigator.GetNavigation();
         var drop = _dropProgressProvider.GetDropStatus();
+        var scan = _scanProgressProvider?.GetScanStatus() ?? default;
 
         return new ApplicationStates
         {
@@ -277,6 +278,11 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             DropPathsEnqueued = drop.PathsEnqueued,
             DropFilesEnumerated = drop.FilesEnumerated,
             DropFilesSupported = drop.FilesSupported,
+            ScanActive = scan.Active,
+            ScanAborted = scan.Aborted,
+            ScanPhase = scan.Phase,
+            ScanDone = scan.Done,
+            ScanTotal = scan.Total,
             Backend = _backend
         };
     }

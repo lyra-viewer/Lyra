@@ -7,6 +7,7 @@ public sealed class ScanProgressTracker
     : IScanProgressProvider, IProgress<DuplicateScanProgress>, IProgress<PerceptualScanProgress>
 {
     private int _active;
+    private int _aborted;
     private int _phase;
     private int _done;
     private int _total;
@@ -16,10 +17,17 @@ public sealed class ScanProgressTracker
         Volatile.Write(ref _phase, (int)ScanPhase.None);
         Volatile.Write(ref _done, 0);
         Volatile.Write(ref _total, 0);
+        Volatile.Write(ref _aborted, 0);
         Volatile.Write(ref _active, 1);
     }
 
     public void Finish() => Volatile.Write(ref _active, 0);
+
+    public void MarkAborted()
+    {
+        Volatile.Write(ref _aborted, 1);
+        Volatile.Write(ref _active, 0);
+    }
 
     void IProgress<DuplicateScanProgress>.Report(DuplicateScanProgress value)
         => Set(ScanPhase.Exact, value.FilesHashed, value.TotalCandidates);
@@ -30,6 +38,7 @@ public sealed class ScanProgressTracker
     public ScanProgress GetScanStatus()
         => new(
             Active: Volatile.Read(ref _active) == 1,
+            Aborted: Volatile.Read(ref _aborted) == 1,
             Phase: (ScanPhase)Volatile.Read(ref _phase),
             Done: Volatile.Read(ref _done),
             Total: Volatile.Read(ref _total)

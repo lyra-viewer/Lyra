@@ -1,3 +1,4 @@
+using Lyra.DuplicateStatusProvider;
 using Lyra.FileLoader.Enumeration;
 using Lyra.SdlCore;
 
@@ -25,6 +26,12 @@ public readonly record struct ApplicationStates(
     long DropPathsEnqueued,
     long DropFilesEnumerated,
     long DropFilesSupported,
-    
+
+    bool ScanActive,
+    bool ScanAborted,
+    ScanPhase ScanPhase,
+    int ScanDone,
+    int ScanTotal,
+
     string Backend
 );

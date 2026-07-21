@@ -15,6 +15,7 @@ public sealed class DuplicateScanService(IThumbnailSource thumbnails)
 {
     private readonly ScanProgressTracker _tracker = new();
     private Task? _task;
+    private CancellationTokenSource? _cts;
     private int _hashTolerance = PerceptualDuplicateFinder.DefaultMaxDistance;
 
     public IScanProgressProvider Progress => _tracker;
@@ -33,29 +34,90 @@ public sealed class DuplicateScanService(IThumbnailSource thumbnails)
 
     public event Action<int>? Completed;
 
+    public event Action? Aborted;
+
+    public bool IsScanning => _task is { IsCompleted: false };
+
     public void Start()
     {
-        if (_task is { IsCompleted: false })
+        if (IsScanning)
             return;
 
-        _task = Task.Run(RunScan);
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+
+        var ct = _cts.Token;
+        _task = Task.Run(() => RunScan(ct), ct);
     }
 
-    private void RunScan()
+    /// <summary>
+    /// Requests cancellation of a running scan. Returns false when there is nothing to cancel or
+    /// cancellation was already requested, so a caller like Esc can fall through to its normal
+    /// action instead of being swallowed by a scan that refuses to unwind.
+    /// </summary>
+    public bool CancelIfRunning()
+    {
+        if (!IsScanning || _cts is not { IsCancellationRequested: false })
+            return false;
+
+        Logger.Info("[Duplicates] Cancelling scan.");
+        Cancel();
+        
+        _tracker.MarkAborted();
+        return true;
+    }
+
+    /// <summary>
+    /// Cancels any running scan and waits briefly for it to unwind, so application shutdown does
+    /// not race the scan still writing into the file record store.
+    /// </summary>
+    public void Shutdown()
+    {
+        Cancel();
+
+        try
+        {
+            _task?.Wait(TimeSpan.FromSeconds(2));
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[Duplicates] Scan did not stop cleanly: {ex.Message}");
+        }
+    }
+
+    private void Cancel()
+    {
+        try
+        {
+            _cts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already torn down
+        }
+    }
+
+    private void RunScan(CancellationToken ct)
     {
         _tracker.Start();
         var groupCount = 0;
+        var cancelled = false;
         try
         {
             FileRecordDatabase.ClearGroups();
 
-            var exact = DuplicateFinder.Scan(progress: _tracker);
+            var exact = DuplicateFinder.Scan(progress: _tracker, ct);
             var perceptual = ExactOnly
                 ? (IReadOnlyList<PerceptualGroup>)[]
-                : new PerceptualDuplicateFinder(thumbnails).Scan(maxDistance: _hashTolerance, progress: _tracker);
+                : new PerceptualDuplicateFinder(thumbnails).Scan(maxDistance: _hashTolerance, progress: _tracker, ct);
 
             groupCount = AssignGroups(exact, perceptual);
             Logger.Info($"[Duplicates] {groupCount} group(s) from {exact.Count} exact + {perceptual.Count} perceptual cluster(s).");
+        }
+        catch (OperationCanceledException)
+        {
+            cancelled = true;
+            Logger.Info("[Duplicates] Scan aborted.");
         }
         catch (Exception ex)
         {
@@ -63,8 +125,16 @@ public sealed class DuplicateScanService(IThumbnailSource thumbnails)
         }
         finally
         {
-            _tracker.Finish();
-            Completed?.Invoke(groupCount);
+            if (cancelled)
+            {
+                _tracker.MarkAborted();
+                Aborted?.Invoke();
+            }
+            else
+            {
+                _tracker.Finish();
+                Completed?.Invoke(groupCount);
+            }
         }
     }
 

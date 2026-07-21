@@ -82,14 +82,14 @@ public partial class SdlCore
         if (_scanActions.TryGetValue(scancode, out var scanAction))
             scanAction.Invoke();
     }
-
+    
     private void HandleEscape()
     {
-        if (_dropProgressTracker.GetDropStatus().Active)
-        {
-            CancelDrop();
+        if (CancelDropIfActive())
             return;
-        }
+
+        if (_duplicateScanService.CancelIfRunning())
+            return;
 
         ExitApplication();
     }
