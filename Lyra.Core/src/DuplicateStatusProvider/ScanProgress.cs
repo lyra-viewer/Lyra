@@ -10,6 +10,7 @@ public enum ScanPhase
 // Snapshot of a running duplicate scan, for the status overlay
 public readonly record struct ScanProgress(
     bool Active,
+    bool Aborted,
     ScanPhase Phase,
     int Done,
     int Total

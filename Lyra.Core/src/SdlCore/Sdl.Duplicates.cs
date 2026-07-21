@@ -34,6 +34,12 @@ public partial class SdlCore
         _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false);
     }
 
+    /// <summary>Scan aborted (raised on the scan thread) - drop back to the pre-scan state.</summary>
+    private void OnDuplicateScanAborted()
+    {
+        DispatchToMain(() => _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false));
+    }
+
     /// <summary>Scan finished (raised on the scan thread) - apply the result on the main thread.</summary>
     private void OnDuplicateScanCompleted(int groupCount)
     {
