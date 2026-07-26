@@ -114,7 +114,7 @@ public class UIManager : IDisposable
         _statusLayer.SetStatus(text, textColor);
         Invalidate();
     }
-
+    
     // --------------------------------------------------------
     //  State refresh
     // --------------------------------------------------------
@@ -122,7 +122,26 @@ public class UIManager : IDisposable
     public void Refresh(UIState state) => _mainLayer.Refresh(state);
 
     public void RefreshCurrent() => _mainLayer.RefreshCurrent();
+    
+    // --------------------------------------------------------
+    //  Modal
+    // --------------------------------------------------------
 
+    public void ShowAboutModal()
+    {
+        _mainLayer.ShowAboutModal();
+        Invalidate();
+    }
+
+    public bool DismissModalIfOpen()
+    {
+        var dismissed = _context.DismissModal();
+        if (dismissed)
+            Invalidate();
+
+        return dismissed;
+    }
+    
     // --------------------------------------------------------
     //  Programmatic dropdown sync (driven by keyboard toggles)
     // --------------------------------------------------------

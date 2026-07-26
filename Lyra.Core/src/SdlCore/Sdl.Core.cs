@@ -400,6 +400,7 @@ public partial class SdlCore : IDisposable
         events.OpenFileRequested              += OnOpenFileRequested;
         events.OpenDirectoryRequested         += OnOpenDirectoryRequested;
         events.QuitRequested                  += ExitApplication;
+        events.AboutRequested                 += OnAboutRequested;
         events.FullscreenRequested            += ToggleFullscreen;
         events.FindDuplicatesRequested        += OnFindDuplicatesRequested;
         events.DuplicatesGoBackRequested      += OnDuplicatesGoBack;
@@ -426,6 +427,14 @@ public partial class SdlCore : IDisposable
     private void OnCompositeProgress(Composite c)
     {
         DispatchToMain(() => _renderer.UIManager.RefreshCurrent());
+    }
+    
+    private void OnAboutRequested()
+    {
+        if (OperatingSystem.IsMacOS())
+            SystemUtils.MacAboutPanel.Show();
+        else
+            _renderer.UIManager.ShowAboutModal();
     }
 
     private void OnDirectoryPicked(string absoluteDir)

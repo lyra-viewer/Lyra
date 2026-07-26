@@ -85,6 +85,9 @@ public partial class SdlCore
     
     private void HandleEscape()
     {
+        if (_renderer.UIManager.DismissModalIfOpen())
+            return;
+
         if (CancelDropIfActive())
             return;
 

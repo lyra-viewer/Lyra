@@ -8,6 +8,7 @@ public interface IUIEvents
     event Action? OpenDirectoryRequested;
     event Action? FullscreenRequested;
     event Action? QuitRequested;
+    event Action? AboutRequested;
     event Action? FindDuplicatesRequested;
     event Action<bool>? DuplicatesExactOnlyChanged;
     event Action<int>? DuplicatesHashToleranceChanged;

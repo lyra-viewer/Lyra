@@ -45,6 +45,10 @@ public class MainLayer : IUIEvents, IDisposable
     private readonly HelpSection _helpSection;
     private readonly DebugSection _debugSection;
 
+    // The Windows/Linux About dialog, shown as a centered modal via
+    // UIContext.ShowModal
+    private AboutSection? _aboutSection;
+
     private readonly SectionEntry[] _entries;
     private readonly VStack _sidebar;
 
@@ -56,6 +60,7 @@ public class MainLayer : IUIEvents, IDisposable
     public event Action? OpenDirectoryRequested;
     public event Action? FullscreenRequested;
     public event Action? QuitRequested;
+    public event Action? AboutRequested;
     public event Action? FindDuplicatesRequested;
     public event Action? DuplicatesGoBackRequested;
     public event Action<bool>? DuplicatesExactOnlyChanged;
@@ -86,6 +91,7 @@ public class MainLayer : IUIEvents, IDisposable
         _menuSection.FullscreenClicked += () => OnMenu("FULL SCREEN", FullscreenRequested);
         _menuSection.QuitClicked += () => OnMenu("QUIT", QuitRequested);
         _menuSection.ShowDuplicatesFinderClicked += () => { _debugSection.SetAction("DUPLICATES FINDER"); _duplicatesFinderSection.Show(); _context.Invalidate(); };
+        _menuSection.AboutClicked += () => OnMenu("ABOUT", AboutRequested);
         _menuSection.InitDisplayModeChanged += mode => OnMenu("INIT DISPLAY MODE", InitDisplayModeChanged, mode);
         _menuSection.BackgroundModeChanged += mode => OnMenu("BACKGROUND", BackgroundModeChanged, mode);
         _menuSection.SamplingModeChanged += mode => OnMenu("SAMPLING", SamplingModeChanged, mode);
@@ -195,6 +201,12 @@ public class MainLayer : IUIEvents, IDisposable
         _duplicatesFinderSection.SetState(inDuplicatesMode, noDuplicatesFound);
         _context.Invalidate();
     }
+    
+    public void ShowAboutModal()
+    {
+        _aboutSection ??= new AboutSection();
+        _context.ShowModal(_aboutSection.Root);
+    }
 
     // --------------------------------------------------------
     //  Debug helpers
@@ -287,6 +299,8 @@ public class MainLayer : IUIEvents, IDisposable
             if (entry.Section is IDisposable disposable)
                 disposable.Dispose();
         }
+        
+        _aboutSection?.Dispose();
 
         // Component tree disposed by Layer via UIContext.Dispose.
     }
