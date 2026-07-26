@@ -35,11 +35,13 @@
     - [macOS Specific](#macos-specific)
     - [Open With / Drag & Drop](#open-with--drag--drop)
 - [Dependencies](#dependencies)
+- [Native Libraries & Bundling](#native-libraries--bundling)
 - [Installation](#installation)
     - [macOS (Homebrew)](#macos-homebrew)
+    - [Windows (Scoop)](#windows-scoop)
     - [Linux (APT)](#linux-apt)
     - [Linux (direct .deb)](#linux-direct-deb)
-- [Configuration & Data Files (UNIX specific)](#configuration--data-files-unix-specific)
+- [Configuration & Data Files](#configuration--data-files)
     - [Configuration](#configuration)
     - [Data](#data)
 
@@ -65,8 +67,8 @@ Built for anyone who relies on images as a core resource in their workflow:
   forefront of every decision.
 - Lyra does not connect to the internet. It has no telemetry, no update pings, no cloud sync, no nag screens, and no AI
   features. Everything runs locally, offline, on your machine. Updates are manual - check for new releases and install
-  them through your package manager when you're ready. If there's a format, workflow, or feature you'd like to see, the 
-  right place to say so is the [GitHub issue tracker](https://github.com/lyra-viewer/Lyra/issues).
+  them through your package manager (Homebrew, APT, or Scoop) when you're ready. If there's a format, workflow, or
+  feature you'd like to see, the right place to say so is the [GitHub issue tracker](https://github.com/lyra-viewer/Lyra/issues).
 
 ### Recommended hardware & known limitations
 
@@ -108,13 +110,11 @@ perceptual hash never pays to decode a full-resolution mip. Because nothing here
 identically on every platform .NET targets.
 
 For the remaining formats Lyra integrates lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL, and TIFF
-decoding, and delegates format-specific work to focused libraries rather than bundling large native dependencies. The one
-native exception inside the managed codec layer is **Basis Universal** (ETC1S / UASTC) supercompression carried in
-KTX2: rather than reimplement its intricate transcoder, Lyra wraps Binomial's open-source reference transcoder
-(Apache-2.0) in a small native wrapper. System libraries like libheif, OpenJPEG, libjxl, OpenEXR and libtiff are
-expected from the package manager (e.g. Homebrew).
-Originally built for workflows involving texture maps, HDRIs, and assets exported from tools like Blender and Quixel Bridge - but the design 
-generalizes well to any image-heavy workflow.
+decoding, delegating format-specific work to focused libraries. The one native exception inside the managed codec layer
+is **Basis Universal** (ETC1S / UASTC) supercompression carried in KTX2: rather than reimplement its intricate
+transcoder, Lyra wraps Binomial's open-source reference transcoder (Apache-2.0) in a small native wrapper.
+
+How these native libraries are shipped differs by platform - see [Native Libraries & Bundling](#native-libraries--bundling).
 
 > _Developer note:_ Lyra is designed and written simultaneously.
 > As a result, parts of the code reflect iterative exploration rather than a fully pre-planned architecture.
@@ -354,7 +354,7 @@ of bounds, and an unrecognized format fails with a descriptive message naming th
 | `I`                   | Toggle image information overlay                  |
 | `H`                   | Toggle help bar                                   |
 | `Return`              | Reveal image or directory in native file explorer |
-| `Esc`                 | Exit application                                  |
+| `Esc`                 | Cancel an operation, or exit application          |
 
 ### macOS Specific
 
@@ -389,29 +389,43 @@ of bounds, and an unrecognized format fails with a descriptive message naming th
 
 ## Dependencies
 
-| Library           | Purpose                                                                | License       | Repository                                                        |
-|-------------------|------------------------------------------------------------------------|---------------|-------------------------------------------------------------------|
-| SDL3-CS           | Core graphics, input, and windowing                                    | zlib          | [github](https://github.com/edwardgushchin/SDL3-CS)               |
-| SkiaSharp         | Hardware-accelerated 2D rendering                                      | BSD-3-Clause  | [github](https://github.com/mono/SkiaSharp)                       |
-| Svg.Skia          | SVG parsing and rendering                                              | MIT           | [github](https://github.com/wieslawsoltes/Svg.Skia)               |
-| LibHeifSharp      | HEIF / HEIC image decoding                                             | LGPL-3.0      | [github](https://github.com/0xC0000054/libheif-sharp)             |
-| OpenEXR           | High-dynamic-range OpenEXR (.exr) decoding                             | BSD-3-Clause  | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
-| OpenJPEG          | JPEG 2000 still-image decoding                                         | BSD-2-Clause  | [github](https://github.com/uclouvain/openjpeg)                   |
-| libjxl            | JPEG XL decoding (native wrapper)                                      | BSD-3-Clause  | [github](https://github.com/libjxl/libjxl)                        |
-| libtiff           | TIFF decoding                                                          | BSD-like      | [gitlab](https://gitlab.com/libtiff/libtiff)                      |
-| Basis Universal   | KTX2 ETC1S / UASTC transcoding (native wrapper)                        | Apache-2.0    | [github](https://github.com/BinomialLLC/basis_universal)          |
-| ZstdSharp.Port    | Zstandard decompression for KTX2 supercompression                      | MIT           | [github](https://github.com/oleg-st/ZstdSharp)                    |
-| Unicolour         | Color space conversions & perceptual color math (transitive, via the in-house PSD decoder) | MIT | [github](https://github.com/waacton/Unicolour)                    |
-| MetadataExtractor | EXIF metadata extraction                                               | Apache-2.0    | [github](https://github.com/drewnoakes/metadata-extractor-dotnet) |
-| Tomlyn            | TOML parsing for configuration files                                   | BSD-2-Clause  | [github](https://github.com/xoofx/Tomlyn)                         |
-| System.IO.Hashing | Fast non-cryptographic hashing (duplicate detection)                   | MIT           | [github](https://github.com/dotnet/runtime)                       |
+| Library           | Purpose                                                                                    | License      | Repository                                                        |
+|-------------------|--------------------------------------------------------------------------------------------|--------------|-------------------------------------------------------------------|
+| SDL3-CS           | Core graphics, input, and windowing                                                        | zlib         | [github](https://github.com/edwardgushchin/SDL3-CS)               |
+| SkiaSharp         | Hardware-accelerated 2D rendering                                                          | BSD-3-Clause | [github](https://github.com/mono/SkiaSharp)                       |
+| Svg.Skia          | SVG parsing and rendering                                                                  | MIT          | [github](https://github.com/wieslawsoltes/Svg.Skia)               |
+| LibHeifSharp      | HEIF / HEIC image decoding                                                                 | LGPL-3.0     | [github](https://github.com/0xC0000054/libheif-sharp)             |
+| OpenEXR           | High-dynamic-range OpenEXR (.exr) decoding                                                 | BSD-3-Clause | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
+| OpenJPEG          | JPEG 2000 still-image decoding                                                             | BSD-2-Clause | [github](https://github.com/uclouvain/openjpeg)                   |
+| libjxl            | JPEG XL decoding (native wrapper)                                                          | BSD-3-Clause | [github](https://github.com/libjxl/libjxl)                        |
+| libtiff           | TIFF decoding                                                                              | BSD-like     | [gitlab](https://gitlab.com/libtiff/libtiff)                      |
+| Basis Universal   | KTX2 ETC1S / UASTC transcoding (native wrapper)                                            | Apache-2.0   | [github](https://github.com/BinomialLLC/basis_universal)          |
+| ZstdSharp.Port    | Zstandard decompression for KTX2 supercompression                                          | MIT          | [github](https://github.com/oleg-st/ZstdSharp)                    |
+| Unicolour         | Color space conversions & perceptual color math (transitive, via the in-house PSD decoder) | MIT          | [github](https://github.com/waacton/Unicolour)                    |
+| MetadataExtractor | EXIF metadata extraction                                                                   | Apache-2.0   | [github](https://github.com/drewnoakes/metadata-extractor-dotnet) |
+| Tomlyn            | TOML parsing for configuration files                                                       | BSD-2-Clause | [github](https://github.com/xoofx/Tomlyn)                         |
+| System.IO.Hashing | Fast non-cryptographic hashing (duplicate detection)                                       | MIT          | [github](https://github.com/dotnet/runtime)                       |
+
+---
+
+## Native Libraries & Bundling
+
+A handful of formats are decoded through native libraries (libheif, OpenJPEG, libjxl, OpenEXR, libtiff, plus the Basis
+Universal transcoder). How those libraries are delivered depends on the platform:
+
+- **macOS** - expected from the package manager (Homebrew).
+- **Linux** - resolved as APT dependencies of the `.deb`, with the exception of **libjxl**, which is vendored inside the
+  package for now. This is a temporary measure until JPEG XL support is more widely available across Ubuntu releases; it
+  will be dropped in favor of the system package once that lands.
+- **Windows** - bundled with the application. The wrapper DLLs are self-contained and ship inside the distribution, so no
+  separate installation is required.
 
 ---
 
 ## Installation
 
-Lyra Viewer is distributed via **Homebrew** on macOS and an **APT repository** (or a
-direct `.deb`) on Debian/Ubuntu.
+Lyra Viewer is distributed via **Homebrew** on macOS, an **APT repository** (or a
+direct `.deb`) on Debian/Ubuntu, and **Scoop** on Windows.
 
 ### macOS (Homebrew)
 
@@ -420,6 +434,15 @@ brew tap lyra-viewer/lyra
 brew trust --cask lyra-viewer/lyra/lyra-viewer
 brew install --cask lyra-viewer
 ```
+
+### Windows (Scoop)
+
+```sh
+scoop bucket add lyra-viewer https://github.com/lyra-viewer/scoop-lyra
+scoop install lyra-viewer
+```
+
+Updates then arrive through `scoop update lyra-viewer`.
 
 ### Linux (APT)
 
@@ -463,9 +486,10 @@ sudo apt install ./lyra-viewer_0.5.0_amd64.deb
 
 ---
 
-## Configuration & Data Files (UNIX specific)
+## Configuration & Data Files
 
-Lyra stores configuration and runtime data in standard XDG-compliant locations.
+On macOS and Linux, Lyra stores configuration and runtime data in standard XDG-compliant locations. On Windows, both the
+configuration and data files live together under `%LOCALAPPDATA%\lyra-viewer` (the file names below are unchanged).
 
 ### Configuration
 
