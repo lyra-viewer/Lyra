@@ -479,7 +479,7 @@ Prefer not to add a repository? Download `lyra-viewer_<version>_amd64.deb` from 
 directly (`apt` resolves the system dependencies):
 
 ```sh
-sudo apt install ./lyra-viewer_0.5.0_amd64.deb
+sudo apt install ./lyra-viewer_0.5.1_amd64.deb
 ```
 
 > _Note:_ Linux builds are **amd64 (x86-64)** only for now.
