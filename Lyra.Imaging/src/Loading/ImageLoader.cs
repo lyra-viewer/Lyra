@@ -3,7 +3,7 @@ using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 
-namespace Lyra.Imaging.Pipeline;
+namespace Lyra.Imaging.Loading;
 
 internal class ImageLoader : IDisposable
 {

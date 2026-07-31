@@ -2,7 +2,7 @@ using LibHeifSharp;
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
-using Lyra.Imaging.Pipeline;
+using Lyra.Imaging.Metadata;
 using SkiaSharp;
 using static System.Threading.Thread;
 using Lyra.Imaging.Decoding.Support;
@@ -31,13 +31,8 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
             // Decode as 8-bit RGBA interleaved.
             using var decodedImage = imageHandle.Decode(HeifColorspace.Rgb, HeifChroma.InterleavedRgba32);
 
-            // EXIF
-            var exifData = imageHandle.GetExifMetadata();
-            if (exifData != null)
-            {
-                using var stream = new MemoryStream(exifData);
-                composite.ExifInfo = MetadataProcessor.ParseMetadata(stream, path);
-            }
+            composite.ExifInfo = ParseMetadata(imageHandle, path);
+            composite.AppliedOrientation = composite.ExifInfo.ContainerRotation;
 
             var bitmap = DecodedImageToBitmap(decodedImage, ct, ResolveColorSpace(imageHandle));
 
@@ -87,6 +82,20 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
         }
     }
     
+    private static ExifInfo ParseMetadata(HeifImageHandle handle, string path)
+    {
+        var fromFile = MetadataProcessor.ParseMetadata(path);
+        if (fromFile.IsValid() && fromFile.HasData())
+            return fromFile;
+
+        var exifData = handle.GetExifMetadata();
+        if (exifData is null)
+            return fromFile;
+
+        using var stream = new MemoryStream(exifData);
+        return MetadataProcessor.ParseMetadata(stream, path);
+    }
+
     private static HeifImageHandle? TryGetEmbeddedThumbnail(HeifImageHandle handle, int maxDimension)
     {
         try

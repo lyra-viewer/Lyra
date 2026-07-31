@@ -24,6 +24,9 @@ public sealed class InfoSection : IUISection
     private readonly HStack _imageRow;
     private readonly Label _formatLabel;
     private readonly Label _dimensionsLabel;
+    private readonly Label _rotationSeparator;
+    private readonly Label _rotationPrefix;
+    private readonly Label _rotationLabel;
 
     // Collection row
     private readonly HStack _collectionRow;
@@ -61,7 +64,10 @@ public sealed class InfoSection : IUISection
             DimPrefix("[Image]       "),
             _formatLabel = ForegroundLabel(),
             Separator(),
-            _dimensionsLabel = ForegroundLabel()
+            _dimensionsLabel = ForegroundLabel(),
+            _rotationSeparator = Separator(),
+            _rotationPrefix = DimPrefix("Rotated:"),
+            _rotationLabel = ForegroundLabel()
         );
 
         _collectionRow = BuildRow();
@@ -152,6 +158,16 @@ public sealed class InfoSection : IUISection
         // Image row
         _formatLabel.Text = composite.ImageFormatType.Description();
         _dimensionsLabel.Text = $"{composite.LogicalWidth}x{composite.LogicalHeight}";
+        
+        var rotation = composite.AppliedOrientation;
+        var rotated = rotation is not (ExifOrientation.Normal or ExifOrientation.Unknown);
+
+        _rotationSeparator.Present = rotated;
+        _rotationPrefix.Present = rotated;
+        _rotationLabel.Present = rotated;
+
+        if (rotated)
+            _rotationLabel.Text = rotation.Description();
 
         // Displaying row
         _zoomLabel.Text = $"{app.Zoom}%";

@@ -42,8 +42,11 @@ public sealed class Composite : IDisposable
     // Content
     public ICompositeContent? Content;
 
-    // Metadata
-    public ExifInfo? ExifInfo;
+    // Written by a decoder thread and read by the UI thread; volatile so the record's
+    // contents are guaranteed visible to the reader before the reference is.
+    public volatile ExifInfo? ExifInfo;
+    
+    public volatile ExifOrientation AppliedOrientation = ExifOrientation.Normal;
     
     private readonly Dictionary<string, string> _formatSpecific = new();
     private readonly Lock _formatSpecificLock = new();

@@ -2,7 +2,7 @@ using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.ConstraintsProvider;
 using Lyra.Imaging.Content;
-using Lyra.Imaging.Pipeline;
+using Lyra.Imaging.Metadata;
 using Lyra.Psd;
 using Lyra.Psd.Core.Decode.Composite;
 using Lyra.Psd.Core.SectionData;

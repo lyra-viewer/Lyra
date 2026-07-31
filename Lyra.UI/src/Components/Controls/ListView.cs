@@ -214,8 +214,10 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
             var component = _rowFactory(item, isPicked);
 
             component.Transient = true;
-            component.VerticalSize = SizeMode.Shrink; // Rows must be content-sized along scroll axis.
             component.Parent = this;
+            
+            if (component.VerticalSize != SizeMode.Fixed)
+                component.VerticalSize = SizeMode.Shrink;
 
             _rows.Add((item, component));
         }

@@ -2,7 +2,7 @@ using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
-using Lyra.Imaging.Pipeline;
+using Lyra.Imaging.Metadata;
 using Lyra.ManagedCodecs.Raster;
 using SkiaSharp;
 using static System.Threading.Thread;

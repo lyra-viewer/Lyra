@@ -9,19 +9,6 @@ using Lyra.UI.Theme;
 
 namespace Lyra.Renderer.GUI.Sections;
 
-// ============================================================================
-//  ExifSection - sidebar collapsible showing EXIF metadata as a key/value table.
-// ----------------------------------------------------------------------------
-//  Shares its key column with FormatSection via KeyColumnRegistry so the
-//  two sections form a single visual grid.
-//
-//  Refresh has two phases:
-//    1. Always report key widths to the registry (cheap, dedup-independent).
-//    2. Only rebuild the ListView data when the composite identity or state
-//       has changed (expensive).
-//
-//  When EXIF is missing or invalid, shows a status label explaining why.
-// ============================================================================
 public sealed class ExifSection : IUISection
 {
     public const string KeyColumn = "metadata";
@@ -35,6 +22,7 @@ public sealed class ExifSection : IUISection
 
     private Composite? _lastComposite;
     private CompositeState _lastState;
+    private float _keyWidth;
 
     public Collapsible Collapsible => _collapsible;
 
@@ -70,32 +58,37 @@ public sealed class ExifSection : IUISection
     {
         var composite = state.Composite;
 
-        // Phase 1: report widths unconditionally so the registry stays
-        // consistent regardless of whether we end up rebuilding data below.
-        ReportWidths(composite);
+        // Phase 1: dedup the expensive rebuild on (composite, state).
+        if (composite != _lastComposite || state.CompositeState != _lastState)
+        {
+            _lastComposite = composite;
+            _lastState = state.CompositeState;
 
-        // Phase 2: dedup the expensive rebuild on (composite, state).
-        if (composite == _lastComposite && state.CompositeState == _lastState)
-            return;
+            ApplyData(composite);
+            _keyWidth = MeasureKeyWidth(composite);
+        }
 
-        _lastComposite = composite;
-        _lastState = state.CompositeState;
-
-        ApplyData(composite);
+        // Phase 2: the registry is cleared every frame, so the width has to be
+        // reported every frame - but measuring it again would not.
+        _registry.Report(KeyColumn, _keyWidth);
     }
 
-    private void ReportWidths(Composite? composite)
+    private static float MeasureKeyWidth(Composite? composite)
     {
         if (composite?.ExifInfo is not { } exif || !exif.IsValid() || !exif.HasData())
-            return;
+            return 0f;
+
+        var width = 0f;
 
         foreach (var entry in exif.ToKeyValuePairs())
         {
             if (entry.IsSeparator)
                 continue;
 
-            _registry.Report(KeyColumn, Label.MeasureTextWidth(entry.Key));
+            width = Math.Max(width, Label.MeasureTextWidth(entry.Key));
         }
+
+        return width;
     }
 
     private void ApplyData(Composite? composite)
@@ -147,8 +140,9 @@ public sealed class ExifSection : IUISection
                 HorizontalSize = SizeMode.Fixed,
                 Width = _registry.Get(KeyColumn)
             },
-            new Label(item.Value) { Color = Palette.Foreground });
-        
+            new Label(item.Value) { Color = Palette.Foreground }
+        );
+
         return row;
     }
 }

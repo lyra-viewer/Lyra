@@ -27,6 +27,8 @@ public sealed class FormatSection : IUISection
 
     private Composite? _lastComposite;
     private CompositeState _lastState;
+    private int _lastCount = -1;
+    private float _keyWidth;
 
     public Collapsible Collapsible => _collapsible;
 
@@ -55,21 +57,29 @@ public sealed class FormatSection : IUISection
         var composite = state.Composite;
         var metadata = composite?.FormatSpecificSnapshot() ?? [];
 
-        ReportWidths(metadata);
+        // Decoders keep adding entries while the composite identity and state stay put,
+        // so the entry count takes part in the dedup key.
+        if (composite != _lastComposite || state.CompositeState != _lastState || metadata.Count != _lastCount)
+        {
+            _lastComposite = composite;
+            _lastState = state.CompositeState;
+            _lastCount = metadata.Count;
 
-        if (composite == _lastComposite && state.CompositeState == _lastState)
-            return;
+            ApplyData(composite, metadata);
+            _keyWidth = MeasureKeyWidth(metadata);
+        }
 
-        _lastComposite = composite;
-        _lastState = state.CompositeState;
-
-        ApplyData(composite, metadata);
+        _registry.Report(ExifSection.KeyColumn, _keyWidth);
     }
 
-    private void ReportWidths(List<KeyValuePair<string, string>> metadata)
+    private static float MeasureKeyWidth(List<KeyValuePair<string, string>> metadata)
     {
+        var width = 0f;
+
         foreach (var pair in metadata)
-            _registry.Report(ExifSection.KeyColumn, Label.MeasureTextWidth(pair.Key));
+            width = Math.Max(width, Label.MeasureTextWidth(pair.Key));
+
+        return width;
     }
 
     private void ApplyData(Composite? composite, List<KeyValuePair<string, string>> metadata)

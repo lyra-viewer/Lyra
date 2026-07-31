@@ -2,7 +2,7 @@ using Lyra.Common;
 using Lyra.Imaging.Decoding;
 using Lyra.Imaging.Decoding.Decoders;
 
-namespace Lyra.Imaging.Pipeline;
+namespace Lyra.Imaging.Loading;
 
 internal static class DecoderManager
 {

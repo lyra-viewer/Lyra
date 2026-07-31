@@ -1,6 +1,6 @@
 using Lyra.Common;
 using Lyra.Imaging.Decoding;
-using Lyra.Imaging.Pipeline;
+using Lyra.Imaging.Loading;
 using SkiaSharp;
 
 namespace Lyra.Imaging;

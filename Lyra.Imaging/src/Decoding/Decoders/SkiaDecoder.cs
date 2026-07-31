@@ -1,7 +1,7 @@
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
-using Lyra.Imaging.Pipeline;
+using Lyra.Imaging.Metadata;
 using SkiaSharp;
 using static System.Threading.Thread;
 using Lyra.Imaging.Decoding.Support;
@@ -38,7 +38,7 @@ internal class SkiaDecoder : IImageDecoder, IThumbnailDecoder
                 Logger.Warning($"[SkiaDecoder] Unable to create codec for: {path}");
                 return Task.CompletedTask;
             }
-            
+
             var srcColorSpace = codec.Info.ColorSpace ?? SKColorSpace.CreateSrgb();
             var info = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Rgba8888, SKAlphaType.Premul, srcColorSpace);
             var bitmap = new SKBitmap(info);
@@ -70,6 +70,13 @@ internal class SkiaDecoder : IImageDecoder, IThumbnailDecoder
             }
 
             ct.ThrowIfCancellationRequested();
+            
+            var upright = OrientationTransform.Apply(bitmap, codec.EncodedOrigin);
+            
+            if (!ReferenceEquals(upright, bitmap))
+                composite.AppliedOrientation = (ExifOrientation)codec.EncodedOrigin;
+
+            bitmap = upright;
 
             bitmap.SetImmutable();
             var image = SKImage.FromBitmap(bitmap);
@@ -146,6 +153,6 @@ internal class SkiaDecoder : IImageDecoder, IThumbnailDecoder
             return null;
         }
 
-        return bitmap;
+        return OrientationTransform.Apply(bitmap, codec.EncodedOrigin);
     }
 }

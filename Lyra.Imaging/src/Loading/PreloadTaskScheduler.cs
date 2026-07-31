@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Lyra.Imaging.Pipeline;
+namespace Lyra.Imaging.Loading;
 
 internal sealed class PreloadTaskScheduler : TaskScheduler, IDisposable
 {

@@ -3,6 +3,7 @@ using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
+using Lyra.Imaging.Metadata;
 using SkiaSharp;
 using static System.Threading.Thread;
 
@@ -22,6 +23,10 @@ internal class JxlDecoder : IImageDecoder
         Logger.Debug($"[JxlDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
 
         var data = File.ReadAllBytes(path);
+
+        var metadata = IsoBoxMetadata.ReadJxl(data);
+        if (!metadata.IsEmpty)
+            composite.ExifInfo = MetadataProcessor.ParseMetadata(metadata.Exif, metadata.Xmp, path);
 
         ct.ThrowIfCancellationRequested();
 

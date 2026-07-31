@@ -4,7 +4,7 @@ using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
-using Lyra.Imaging.Pipeline;
+using Lyra.Imaging.Metadata;
 using SkiaSharp;
 using static System.Threading.Thread;
 
