@@ -178,10 +178,8 @@ public sealed class ValueSlider : ComponentBase
         _isDragging = false;
     }
 
-    public override void OnPointerLeave()
-    {
-        _isDragging = false;
-    }
+    // No OnPointerLeave cancel: the pointer routinely leaves the track while
+    // dragging, and pointer capture guarantees the release still arrives here.
 
     private void UpdateValueFromX(float x)
     {

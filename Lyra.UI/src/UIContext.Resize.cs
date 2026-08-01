@@ -77,6 +77,9 @@ public partial class UIContext
     /// </summary>
     private bool TryStartResize(SKPoint point)
     {
+        if (IsOverScrollbar(point))
+            return false;
+
         var target = FindResizeTargetAcrossLayers(point);
         if (target is null)
             return false;
@@ -155,6 +158,12 @@ public partial class UIContext
     /// </summary>
     private CursorType UpdateResizeCursor(SKPoint point)
     {
+        if (IsOverScrollbar(point))
+        {
+            RequestCursor(CursorType.Default);
+            return CursorType.Default;
+        }
+
         var target = FindResizeTargetAcrossLayers(point);
         if (target is null)
         {
@@ -165,6 +174,49 @@ public partial class UIContext
         var cursor = GetCursorForEdge(target.Value.edge);
         RequestCursor(cursor);
         return cursor;
+    }
+
+    // --------------------------------------------------------
+    //  Scrollbar priority
+    // --------------------------------------------------------
+    
+    private bool IsOverScrollbar(SKPoint point)
+    {
+        for (var i = _layers.Count - 1; i >= 0; i--)
+        {
+            var layer = _layers[i];
+
+            if (layer.Root is not null && ContainsScrollbar(layer.Root, point))
+                return true;
+
+            if (layer.BlocksInput)
+                return false;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Depth-first search for a scrollbar under the point. Pruned by
+    /// ArrangedBounds - a scrollbar is always drawn inside its host.
+    /// </summary>
+    private static bool ContainsScrollbar(IComponent component, SKPoint point)
+    {
+        if (!component.Present || !component.IsEffectivelyVisible || !component.IsEffectivelyEnabled)
+            return false;
+
+        if (!component.ArrangedBounds.Contains(point))
+            return false;
+
+        if (component is IScrollable scrollable && scrollable.ScrollbarContains(point))
+            return true;
+
+        if (component is IContainer container)
+            for (var i = container.Children.Count - 1; i >= 0; i--)
+                if (ContainsScrollbar(container.Children[i], point))
+                    return true;
+
+        return false;
     }
 
     // --------------------------------------------------------

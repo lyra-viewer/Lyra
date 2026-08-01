@@ -32,8 +32,7 @@ public static class LyraUI
         if (layers.Count == 0)
             return;
 
-        var bounds = canvas.LocalClipBounds;
-        var size = new SKSize(bounds.Width, bounds.Height);
+        var size = GetLayoutSize(canvas);
         var dirty = context.IsDirty;
 
         // Bottom-to-top: layout (if dirty) then render.
@@ -54,5 +53,16 @@ public static class LyraUI
 
         if (dirty)
             context.ClearDirty();
+    }
+    
+    private static SKSize GetLayoutSize(SKCanvas canvas)
+    {
+        var device = canvas.DeviceClipBounds;
+
+        if (!canvas.TotalMatrix.TryInvert(out var inverse))
+            return new SKSize(device.Width, device.Height);
+
+        var local = inverse.MapRect(SKRect.Create(device.Left, device.Top, device.Width, device.Height));
+        return new SKSize(local.Width, local.Height);
     }
 }

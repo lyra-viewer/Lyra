@@ -8,9 +8,18 @@ public class VScrollContainer : ComponentBase, IContainer, IScrollable
     private readonly List<IComponent> _children = [];
     public IReadOnlyList<IComponent> Children => _children;
 
+    private readonly Scrollbar _scrollbar = new();
+
     public float Spacing { get; set; }
     public float ScrollSpeed { get; set; } = 40f;
-    public ScrollbarStyle ScrollbarStyle { get; set; } = ScrollbarStyle.Default;
+
+    public ScrollbarStyle ScrollbarStyle
+    {
+        get => _scrollbar.Style;
+        set => _scrollbar.Style = value;
+    }
+
+    public bool ScrollbarContains(SKPoint point) => _scrollbar.Contains(point);
 
     public float ScrollOffset { get; private set; }
     public float ContentSize { get; private set; }
@@ -143,7 +152,31 @@ public class VScrollContainer : ComponentBase, IContainer, IScrollable
 
         canvas.Restore();
 
-        ScrollbarDrawer.Draw(canvas, contentBounds, this, ScrollbarStyle);
+        _scrollbar.Draw(canvas, contentBounds, this);
+    }
+
+    // --------------------------------------------------------
+    //  Input - scrollbar drag
+    // --------------------------------------------------------
+
+    public override void OnPointerDown(SKPoint point)
+    {
+        _scrollbar.OnPointerDown(point, this);
+    }
+
+    public override void OnPointerMove(SKPoint point)
+    {
+        _scrollbar.OnPointerMove(point, this);
+    }
+
+    public override void OnPointerUp(SKPoint point)
+    {
+        _scrollbar.OnPointerUp();
+    }
+
+    public override void OnPointerLeave()
+    {
+        _scrollbar.OnPointerLeave();
     }
 
     protected override void Dispose(bool disposing)

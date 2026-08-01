@@ -1,3 +1,5 @@
+using SkiaSharp;
+
 namespace Lyra.UI.Components;
 
 public interface IScrollable
@@ -16,6 +18,12 @@ public interface IScrollable
 
     /// True when content exceeds viewport.
     bool NeedsScrollbar => ContentSize > ViewportSize;
+
+    /// True when the point falls on the rendered scrollbar.
+    /// Hit-testing consults this to give the bar priority over the
+    /// children drawn underneath it and over resize-edge zones.
+    /// Implementors that draw a bar forward this to Scrollbar.Contains.
+    bool ScrollbarContains(SKPoint point) => false;
 
     /// Handle scroll input. Returns true if consumed.
     /// Returning false allows UIContext to bubble to the parent.

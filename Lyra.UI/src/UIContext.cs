@@ -187,8 +187,9 @@ public partial class UIContext : IDisposable
         if (TryHandleResizeDrag(logicalPoint))
             return true;
 
-        // Not dragging - update cursor for edge proximity
-        UpdateResizeCursor(logicalPoint);
+        var captured = _capturedComponent;
+        if (captured is null)
+            UpdateResizeCursor(logicalPoint);
 
         // Normal hover tracking across layers
         IComponent? hit = null;
@@ -212,6 +213,13 @@ public partial class UIContext : IDisposable
             _hoveredComponent?.OnPointerLeave();
             _hoveredComponent = hit;
             _hoveredComponent?.OnPointerEnter();
+        }
+        
+        if (captured is not null)
+        {
+            captured.OnPointerMove(logicalPoint);
+            Invalidate();
+            return true;
         }
 
         hit?.OnPointerMove(logicalPoint);
@@ -276,6 +284,9 @@ public partial class UIContext : IDisposable
 
         if (!component.ArrangedBounds.Contains(point))
             return null;
+        
+        if (component is IScrollable scrollable && scrollable.ScrollbarContains(point))
+            return component;
 
         if (component is IContainer container)
         {

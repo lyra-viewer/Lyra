@@ -90,8 +90,15 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
     //  Scroll settings
     // --------------------------------------------------------
 
+    private readonly Scrollbar _scrollbar = new();
+
     public float ScrollSpeed { get; set; } = 40f;
-    public ScrollbarStyle ScrollbarStyle { get; set; } = ScrollbarStyle.Default;
+
+    public ScrollbarStyle ScrollbarStyle
+    {
+        get => _scrollbar.Style;
+        set => _scrollbar.Style = value;
+    }
 
     // --------------------------------------------------------
     //  IScrollable
@@ -119,6 +126,8 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
     {
         ScrollOffset = Math.Clamp(offset, 0, ((IScrollable)this).MaxScroll);
     }
+
+    public bool ScrollbarContains(SKPoint point) => _scrollbar.Contains(point);
 
     // --------------------------------------------------------
     //  Constructor
@@ -431,7 +440,7 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
 
         canvas.Restore();
 
-        ScrollbarDrawer.Draw(canvas, contentBounds, this, ScrollbarStyle);
+        _scrollbar.Draw(canvas, contentBounds, this);
     }
 
     private void DrawArrow(SKCanvas canvas, float cx, float cy, bool expanded)
@@ -483,11 +492,22 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
 
     public override void OnPointerDown(SKPoint point)
     {
+        if (_scrollbar.OnPointerDown(point, this))
+            return;
+
         _isPressed = true;
+    }
+
+    public override void OnPointerMove(SKPoint point)
+    {
+        _scrollbar.OnPointerMove(point, this);
     }
 
     public override void OnPointerUp(SKPoint point)
     {
+        if (_scrollbar.OnPointerUp())
+            return;
+
         if (!_isPressed)
             return;
 
@@ -523,6 +543,7 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
     public override void OnPointerLeave()
     {
         _isPressed = false;
+        _scrollbar.OnPointerLeave();
     }
 
     // --------------------------------------------------------
