@@ -113,11 +113,20 @@ public class JxlColorSpaceTests
                     ? ("libjxl_native.so", "dist-linux")
                     : ("libjxl_native.dylib", "dist-macos");
 
+        string[] relDirs =
+        [
+            Path.Combine("release", "native", distDir),
+            Path.Combine("native", distDir),
+        ];
+
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            var candidate = Path.Combine(dir.FullName, "native", distDir, leaf);
-            if (File.Exists(candidate))
-                return candidate;
+            foreach (var relDir in relDirs)
+            {
+                var candidate = Path.Combine(dir.FullName, relDir, leaf);
+                if (File.Exists(candidate))
+                    return candidate;
+            }
         }
 
         return null;
