@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Lyra.Common;
 using Lyra.Common.Settings;
 using Lyra.DropStatusProvider;
@@ -17,16 +18,14 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
     private SKSurface? _surface;
     private GRBackendRenderTarget? _renderTarget;
     private bool _surfaceDirty = true;
-    
-    private static readonly SKColorSpace SurfaceColorSpace =
-        OperatingSystem.IsMacOS()
-            ? SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Srgb, SKColorSpaceXyz.DisplayP3)
-            : SKColorSpace.CreateSrgb();
+
+    private readonly SKColorSpace _surfaceColorSpace;
 
     public SkiaOpenGlRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, IScanProgressProvider scanProgressProvider)
         : base(drawableSize, dropProgressProvider, viewState, "OpenGL", scanProgressProvider)
     {
         _window = window;
+        _surfaceColorSpace = DetermineSurfaceColorSpace(window);
 
         GLSetAttribute(GLAttr.ContextMajorVersion, 3);
         GLSetAttribute(GLAttr.ContextMinorVersion, 2);
@@ -83,8 +82,54 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
         // If MSAA ever introduced, this will need samples/stencil updates
         _renderTarget = new GRBackendRenderTarget(WindowWidth, WindowHeight, 0, 8, fbInfo);
 
-        _surface = SKSurface.Create(_grContext, _renderTarget, GRSurfaceOrigin.BottomLeft, SKColorType.Rgba8888, SurfaceColorSpace)
+        _surface = SKSurface.Create(_grContext, _renderTarget, GRSurfaceOrigin.BottomLeft, SKColorType.Rgba8888, _surfaceColorSpace)
                    ?? throw new InvalidOperationException("SKSurface.Create returned null for OpenGL surface.");
+    }
+    
+    private static SKColorSpace DetermineSurfaceColorSpace(IntPtr window)
+    {
+        if (OperatingSystem.IsMacOS())
+            return SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Srgb, SKColorSpaceXyz.DisplayP3);
+
+        var displayColorSpace = TryGetDisplayIccColorSpace(window);
+        if (displayColorSpace is not null)
+        {
+            Logger.Debug("[SkiaOpenGlRenderer] Render surface tagged with the display's ICC profile (wide-gamut content preserved).");
+            return displayColorSpace;
+        }
+
+        Logger.Debug("[SkiaOpenGlRenderer] No display ICC profile published; render surface falls back to sRGB (wide-gamut content folds to sRGB).");
+        return SKColorSpace.CreateSrgb();
+    }
+
+    // Reads the raw ICC profile for the window's display via SDL and builds an SKColorSpace
+    // from it. Returns null when SDL publishes no profile or the bytes don't parse.
+    private static SKColorSpace? TryGetDisplayIccColorSpace(IntPtr window)
+    {
+        var profilePtr = GetWindowICCProfile(window, out var sizeBytes);
+        if (profilePtr == IntPtr.Zero)
+            return null;
+
+        try
+        {
+            var size = (int)sizeBytes;
+            if (size <= 0)
+                return null;
+
+            var icc = new byte[size];
+            Marshal.Copy(profilePtr, icc, 0, size);
+
+            return SKColorSpace.CreateIcc(icc);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[SkiaOpenGlRenderer] Could not build a color space from the display ICC profile: {ex.Message}");
+            return null;
+        }
+        finally
+        {
+            Free(profilePtr);
+        }
     }
 
     protected override void AfterRender(SKSurface surface)
