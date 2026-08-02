@@ -103,7 +103,9 @@ public class JxlColorSpaceTests
     }
 
     // Walks up from the test output directory to the repo root and returns the built native
-    // JXL wrapper for this platform, or null if it hasn't been built.
+    // JXL wrapper for this platform, or null if it hasn't been built. release/native/dist-<platform>
+    // is the single canonical build output (see release/native/build-<platform>.sh); there is no
+    // second copy to search, so a stale-vs-fresh mismatch between two paths can't mask a bad build.
     private static string? LocateJxlNative()
     {
         var (leaf, distDir) =
@@ -113,20 +115,13 @@ public class JxlColorSpaceTests
                     ? ("libjxl_native.so", "dist-linux")
                     : ("libjxl_native.dylib", "dist-macos");
 
-        string[] relDirs =
-        [
-            Path.Combine("release", "native", distDir),
-            Path.Combine("native", distDir),
-        ];
+        var relDir = Path.Combine("release", "native", distDir);
 
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            foreach (var relDir in relDirs)
-            {
-                var candidate = Path.Combine(dir.FullName, relDir, leaf);
-                if (File.Exists(candidate))
-                    return candidate;
-            }
+            var candidate = Path.Combine(dir.FullName, relDir, leaf);
+            if (File.Exists(candidate))
+                return candidate;
         }
 
         return null;

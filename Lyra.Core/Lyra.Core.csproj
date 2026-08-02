@@ -32,4 +32,22 @@
     </EmbeddedResource>
   </ItemGroup>
 
+  <PropertyGroup>
+    <NativeDistSubdir Condition="$([MSBuild]::IsOSPlatform('Linux'))">dist-linux</NativeDistSubdir>
+    <NativeDistSubdir Condition="$([MSBuild]::IsOSPlatform('OSX'))">dist-macos</NativeDistSubdir>
+    <NativeDistSubdir Condition="$([MSBuild]::IsOSPlatform('Windows'))">dist-windows</NativeDistSubdir>
+    
+    <NativeLibFolder Condition="$([MSBuild]::IsOSPlatform('Linux'))">Linux</NativeLibFolder>
+    <NativeLibFolder Condition="$([MSBuild]::IsOSPlatform('OSX'))">macOS</NativeLibFolder>
+    <NativeLibFolder Condition="$([MSBuild]::IsOSPlatform('Windows'))">Windows</NativeLibFolder>
+  </PropertyGroup>
+
+  <Target Name="LyraSyncNativeWrappersToOutput" AfterTargets="Build"
+          Condition="'$(NativeDistSubdir)' != '' AND Exists('$(MSBuildThisFileDirectory)..\release\native\$(NativeDistSubdir)')">
+    <ItemGroup>
+      <_LyraNativeWrapperFiles Include="$(MSBuildThisFileDirectory)..\release\native\$(NativeDistSubdir)\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_LyraNativeWrapperFiles)" DestinationFolder="$(OutDir)lib\$(NativeLibFolder)\" SkipUnchangedFiles="true" Condition="'@(_LyraNativeWrapperFiles)' != ''" />
+  </Target>
+
 </Project>
