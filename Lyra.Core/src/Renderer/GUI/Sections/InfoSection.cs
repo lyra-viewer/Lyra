@@ -48,39 +48,32 @@ public sealed class InfoSection : IUISection
 
     public InfoSection()
     {
-        _fileRow = BuildRow();
-        _fileRow.AddComponents(
+        _fileRow = BuildRow().Children(
             DimPrefix("[File]        "),
             _collectionLabel = ForegroundLabel(),
             _dirNavLabel = HighlightedLabel(),
             Separator(),
             _fileNameLabel = ForegroundLabel(),
             Separator(),
-            _fileSizeLabel = ForegroundLabel()
-        );
+            _fileSizeLabel = ForegroundLabel());
 
-        _imageRow = BuildRow();
-        _imageRow.AddComponents(
+        _imageRow = BuildRow().Children(
             DimPrefix("[Image]       "),
             _formatLabel = ForegroundLabel(),
             Separator(),
             _dimensionsLabel = ForegroundLabel(),
             _rotationSeparator = Separator(),
             _rotationPrefix = DimPrefix("Rotated:"),
-            _rotationLabel = ForegroundLabel()
-        );
+            _rotationLabel = ForegroundLabel());
 
-        _collectionRow = BuildRow();
-        _collectionRow.AddComponents(
+        _collectionRow = BuildRow().Children(
             DimPrefix("[Collection]  "),
             _collectionTypeLabel = ForegroundLabel(),
             Separator(),
             DimPrefix("Dir:"),
-            _directoryNameLabel = ForegroundLabel()
-        );
+            _directoryNameLabel = ForegroundLabel());
 
-        _displayingRow = BuildRow();
-        _displayingRow.AddComponents(
+        _displayingRow = BuildRow().Children(
             DimPrefix("[Displaying]  "),
             DimPrefix("Zoom:"),
             _zoomLabel = ForegroundLabel(),
@@ -89,28 +82,23 @@ public sealed class InfoSection : IUISection
             _displayModeLabel = ForegroundLabel(),
             Separator(),
             DimPrefix("Sampling:"),
-            _samplingModeLabel = ForegroundLabel()
-        );
-        
-        _largeImageRow = BuildRow();
-        _largeImageRow.AddComponents(
+            _samplingModeLabel = ForegroundLabel());
+
+        _largeImageRow = BuildRow().Children(
             DimPrefix("[Large Image] "),
             DimPrefix("Preview:"),
             _largeImagePreviewLabel = ForegroundLabel(),
             Separator(),
             DimPrefix("Tiles:"),
-            _largeImageTilesLabel = ForegroundLabel()
-        );
+            _largeImageTilesLabel = ForegroundLabel());
 
-        _root = new VStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            VerticalSize = SizeMode.Shrink,
-            HorizontalAlign = HAlign.Left,
-            Spacing = 2,
-            Padding = new Padding(8)
-        };
-        _root.AddComponents(_fileRow, _imageRow, _collectionRow, _displayingRow, _largeImageRow);
+        _root = new VStack()
+            .ExpandH()
+            .ShrinkV()
+            .Align(HAlign.Left)
+            .Spacing(2)
+            .Padding(8)
+            .Children(_fileRow, _imageRow, _collectionRow, _displayingRow, _largeImageRow);
     }
 
     public void Refresh(UIState state)
@@ -199,34 +187,21 @@ public sealed class InfoSection : IUISection
 
     // ----- helpers -----------------------------------------------------------
 
-    private static HStack BuildRow() => new()
-    {
-        Spacing = 11,
-        HorizontalSize = SizeMode.Expand,
-        HorizontalAlign = HAlign.Left
-    };
+    private static HStack BuildRow() =>
+        new HStack()
+            .Spacing(11)
+            .ExpandH()
+            .Align(HAlign.Left);
 
-    private static Label DimPrefix(string text) => new(text)
-    {
-        Color = Palette.Dim,
-        Transient = true
-    };
+    private static Label DimPrefix(string text) =>
+        new Label(text).Color(Palette.Dim).Transient();
 
-    private static Label Separator() => new("|")
-    {
-        Color = Palette.Dim,
-        Transient = true
-    };
+    private static Label Separator() =>
+        new Label("|").Color(Palette.Dim).Transient();
 
-    private static Label ForegroundLabel() => new("")
-    {
-        Color = Palette.Foreground,
-        Transient = true
-    };
+    private static Label ForegroundLabel() =>
+        new Label("").Color(Palette.Foreground).Transient();
 
-    private static Label HighlightedLabel() => new("")
-    {
-        Color = Palette.SelectedForeground,
-        Transient = true
-    };
+    private static Label HighlightedLabel() =>
+        new Label("").Color(Palette.SelectedForeground).Transient();
 }

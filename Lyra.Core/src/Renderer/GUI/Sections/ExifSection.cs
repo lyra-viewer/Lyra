@@ -47,11 +47,11 @@ public sealed class ExifSection : IUISection
         };
 
         _collapsible = new Collapsible("EXIF METADATA")
-        {
-            HorizontalSize = SizeMode.Expand,
-            Present = false
-        };
-        _collapsible.AddComponents(_statusLabel, _list);
+            {
+                HorizontalSize = SizeMode.Expand,
+                Present = false
+            }
+            .Children(_statusLabel, _list);
     }
 
     public void Refresh(UIState state)
@@ -119,30 +119,28 @@ public sealed class ExifSection : IUISection
 
     private HStack RenderRow(ExifEntry item, bool isPicked)
     {
-        var row = new HStack
-        {
-            Spacing = 8,
-            HorizontalSize = SizeMode.Expand
-        };
-
         if (item.IsSeparator)
-        {
-            row.VerticalSize = SizeMode.Fixed;
-            row.Height = 10;
-            row.Transient = true;
-            return row;
-        }
-
-        row.AddComponents(
-            new Label(item.Key)
+            return new HStack
             {
-                Color = Palette.Dim,
-                HorizontalSize = SizeMode.Fixed,
-                Width = _registry.Get(KeyColumn)
-            },
-            new Label(item.Value) { Color = Palette.Foreground }
-        );
+                Spacing = 8,
+                HorizontalSize = SizeMode.Expand,
+                VerticalSize = SizeMode.Fixed,
+                Height = 10,
+                Transient = true
+            };
 
-        return row;
+        return new HStack
+            {
+                Spacing = 8,
+                HorizontalSize = SizeMode.Expand
+            }
+            .Children(
+                new Label(item.Key)
+                {
+                    Color = Palette.Dim,
+                    HorizontalSize = SizeMode.Fixed,
+                    Width = _registry.Get(KeyColumn)
+                },
+                new Label(item.Value) { Color = Palette.Foreground });
     }
 }

@@ -243,12 +243,56 @@ public abstract class ComponentBase : IComponent
     // --------------------------------------------------------
     //  Input
     // --------------------------------------------------------
+    
+    public Action<SKPoint>? PointerDown { get; set; }
+    public Action<SKPoint>? PointerUp { get; set; }
+    public Action<SKPoint>? PointerMove { get; set; }
+    public Action? PointerEnter { get; set; }
+    public Action? PointerLeave { get; set; }
 
-    public virtual void OnPointerDown(SKPoint point) { }
-    public virtual void OnPointerUp(SKPoint point) { }
-    public virtual void OnPointerMove(SKPoint point) { }
-    public virtual void OnPointerEnter() { }
-    public virtual void OnPointerLeave() { }
+    public void OnPointerDown(SKPoint point)
+    {
+        OnPointerDownCore(point);
+
+        if (IsEffectivelyEnabled)
+            PointerDown?.Invoke(point);
+    }
+
+    public void OnPointerUp(SKPoint point)
+    {
+        OnPointerUpCore(point);
+
+        if (IsEffectivelyEnabled)
+            PointerUp?.Invoke(point);
+    }
+
+    public void OnPointerMove(SKPoint point)
+    {
+        OnPointerMoveCore(point);
+
+        if (IsEffectivelyEnabled)
+            PointerMove?.Invoke(point);
+    }
+
+    public void OnPointerEnter()
+    {
+        OnPointerEnterCore();
+
+        if (IsEffectivelyEnabled)
+            PointerEnter?.Invoke();
+    }
+
+    public void OnPointerLeave()
+    {
+        OnPointerLeaveCore();
+        PointerLeave?.Invoke();
+    }
+
+    protected virtual void OnPointerDownCore(SKPoint point) { }
+    protected virtual void OnPointerUpCore(SKPoint point) { }
+    protected virtual void OnPointerMoveCore(SKPoint point) { }
+    protected virtual void OnPointerEnterCore() { }
+    protected virtual void OnPointerLeaveCore() { }
 
     // --------------------------------------------------------
     //  Dispose

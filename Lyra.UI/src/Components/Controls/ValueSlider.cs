@@ -160,20 +160,20 @@ public sealed class ValueSlider : ComponentBase
     //  Input
     // --------------------------------------------------------
 
-    public override void OnPointerDown(SKPoint point)
+    protected override void OnPointerDownCore(SKPoint point)
     {
         if (!IsEffectivelyEnabled) return;
         _isDragging = true;
         UpdateValueFromX(point.X);
     }
 
-    public override void OnPointerMove(SKPoint point)
+    protected override void OnPointerMoveCore(SKPoint point)
     {
         if (!_isDragging) return;
         UpdateValueFromX(point.X);
     }
 
-    public override void OnPointerUp(SKPoint point)
+    protected override void OnPointerUpCore(SKPoint point)
     {
         _isDragging = false;
     }

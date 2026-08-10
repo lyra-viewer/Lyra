@@ -128,7 +128,7 @@ public class MenuItem : ComponentBase, IPickable
         Click?.Invoke();
     }
 
-    public override void OnPointerDown(SKPoint point)
+    protected override void OnPointerDownCore(SKPoint point)
     {
         if (!IsEffectivelyEnabled)
             return;
@@ -136,7 +136,7 @@ public class MenuItem : ComponentBase, IPickable
         _isPressed = true;
     }
 
-    public override void OnPointerUp(SKPoint point)
+    protected override void OnPointerUpCore(SKPoint point)
     {
         if (!IsEffectivelyEnabled)
             return;
@@ -148,7 +148,7 @@ public class MenuItem : ComponentBase, IPickable
         OnClick();
     }
 
-    public override void OnPointerEnter()
+    protected override void OnPointerEnterCore()
     {
         if (!IsEffectivelyEnabled)
             return;
@@ -156,7 +156,7 @@ public class MenuItem : ComponentBase, IPickable
         _isHovered = true;
     }
 
-    public override void OnPointerLeave()
+    protected override void OnPointerLeaveCore()
     {
         _isHovered = false;
         _isPressed = false;

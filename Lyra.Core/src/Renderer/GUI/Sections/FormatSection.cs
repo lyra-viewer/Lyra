@@ -45,11 +45,11 @@ public sealed class FormatSection : IUISection
         };
 
         _collapsible = new Collapsible("FORMAT SPECIFIC")
-        {
-            HorizontalSize = SizeMode.Expand,
-            Present = false
-        };
-        _collapsible.AddComponent(_list);
+            {
+                HorizontalSize = SizeMode.Expand,
+                Present = false
+            }
+            .Child(_list);
     }
 
     public void Refresh(UIState state)
@@ -99,25 +99,22 @@ public sealed class FormatSection : IUISection
 
     private HStack RenderRow(KeyValuePair<string, string> item, bool isPicked)
     {
-        var row = new HStack
-        {
-            Spacing = 8,
-            HorizontalSize = SizeMode.Expand
-        };
-        
-        row.AddComponents(
-            new Label(item.Key)
+        return new HStack
             {
-                Color = Palette.Dim,
-                HorizontalSize = SizeMode.Fixed,
-                Width = _registry.Get(ExifSection.KeyColumn)
-            },
-            new Label(item.Value)
-            {
-                Color = Palette.Foreground,
-                HorizontalAlign = HAlign.Left
-            });
-        
-        return row;
+                Spacing = 8,
+                HorizontalSize = SizeMode.Expand
+            }
+            .Children(
+                new Label(item.Key)
+                {
+                    Color = Palette.Dim,
+                    HorizontalSize = SizeMode.Fixed,
+                    Width = _registry.Get(ExifSection.KeyColumn)
+                },
+                new Label(item.Value)
+                {
+                    Color = Palette.Foreground,
+                    HorizontalAlign = HAlign.Left
+                });
     }
 }

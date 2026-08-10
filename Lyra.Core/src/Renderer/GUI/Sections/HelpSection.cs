@@ -23,21 +23,13 @@ public sealed class HelpSection : IUISection
 
     public HelpSection()
     {
-        _keys = new VStack
-        {
-            HorizontalSize = SizeMode.Shrink,
-            VerticalSize = SizeMode.Shrink,
-            HorizontalAlign = HAlign.Right,
-            Spacing = 2
-        };
+        _keys = new VStack()
+            .Align(HAlign.Right)
+            .Spacing(2);
 
-        _descriptions = new VStack
-        {
-            HorizontalSize = SizeMode.Shrink,
-            VerticalSize = SizeMode.Shrink,
-            HorizontalAlign = HAlign.Left,
-            Spacing = 2
-        };
+        _descriptions = new VStack()
+            .Align(HAlign.Left)
+            .Spacing(2);
 
         var isMac = OperatingSystem.IsMacOS();
         
@@ -60,23 +52,14 @@ public sealed class HelpSection : IUISection
         AddRow("F",   "Toggle fullscreen");
         AddRow("Esc", "Abort / Quit");
 
-        var grid = new HStack
-        {
-            HorizontalSize = SizeMode.Shrink,
-            VerticalSize = SizeMode.Shrink,
-            VerticalAlign = VAlign.Top,
-            Spacing = 12
-        };
-        grid.AddComponents(_keys, _descriptions);
-
-        _root = new VStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            VerticalSize = SizeMode.Shrink,
-            HorizontalAlign = HAlign.Left,
-            Padding = new Padding(8)
-        };
-        _root.AddComponents(grid);
+        _root = new VStack()
+            .ExpandH()
+            .Align(HAlign.Left)
+            .Padding(8)
+            .Child(new HStack()
+                .Align(VAlign.Top)
+                .Spacing(12)
+                .Children(_keys, _descriptions));
     }
 
     public void Refresh(UIState state)
@@ -103,10 +86,10 @@ public sealed class HelpSection : IUISection
 
     private (Label key, Label desc) AddRow(string key, string description)
     {
-        var k = new Label(key)         { Color = Palette.Dim };
-        var d = new Label(description) { Color = Palette.Dim };
-        _keys.AddComponents(k);
-        _descriptions.AddComponents(d);
+        var k = new Label(key).Color(Palette.Dim);
+        var d = new Label(description).Color(Palette.Dim);
+        _keys.AddComponent(k);
+        _descriptions.AddComponent(d);
         return (k, d);
     }
 }

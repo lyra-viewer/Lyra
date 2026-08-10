@@ -74,12 +74,12 @@ public sealed class DirectoryTreeSection : IUISection, IDisposable
         _treeView.Picked += _presenter.HandlePicked;
 
         _collapsible = new Collapsible("DIRECTORIES")
-        {
-            HorizontalSize = SizeMode.Expand,
-            Present = false,
-            IsExpanded = true
-        };
-        _collapsible.AddComponent(_treeView);
+            {
+                HorizontalSize = SizeMode.Expand,
+                Present = false,
+                IsExpanded = true
+            }
+            .Child(_treeView);
     }
 
     public void Refresh(UIState state)

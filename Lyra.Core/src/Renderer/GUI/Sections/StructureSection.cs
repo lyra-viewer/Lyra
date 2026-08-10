@@ -47,11 +47,11 @@ public sealed class StructureSection : IUISection
         };
 
         _collapsible = new Collapsible("STRUCTURE")
-        {
-            HorizontalSize = SizeMode.Expand,
-            Present = false
-        };
-        _collapsible.AddComponent(_groups);
+            {
+                HorizontalSize = SizeMode.Expand,
+                Present = false
+            }
+            .Child(_groups);
     }
 
     public void Refresh(UIState state)
@@ -138,26 +138,23 @@ public sealed class StructureSection : IUISection
 
     private HStack RenderRow(KeyValuePair<string, string> field, bool isPicked)
     {
-        var row = new HStack
-        {
-            Spacing = 8,
-            HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(16, 1, 0, 1)
-        };
-
-        row.AddComponents(
-            new Label(field.Key)
+        return new HStack
             {
-                Color = Palette.Dim,
-                HorizontalSize = SizeMode.Fixed,
-                Width = _registry.Get(KeyColumn)
-            },
-            new Label(field.Value)
-            {
-                Color = Palette.Foreground,
-                HorizontalAlign = HAlign.Left
-            });
-
-        return row;
+                Spacing = 8,
+                HorizontalSize = SizeMode.Expand,
+                Padding = new Padding(16, 1, 0, 1)
+            }
+            .Children(
+                new Label(field.Key)
+                {
+                    Color = Palette.Dim,
+                    HorizontalSize = SizeMode.Fixed,
+                    Width = _registry.Get(KeyColumn)
+                },
+                new Label(field.Value)
+                {
+                    Color = Palette.Foreground,
+                    HorizontalAlign = HAlign.Left
+                });
     }
 }

@@ -37,73 +37,48 @@ public sealed class DuplicatesFinderSection : IUISection
     public DuplicatesFinderSection()
     {
         _exactCopiesOnly = new CheckBox("Exact copies only")
-        {
-            HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(0, 4f, 0, 0)
-        };
-        _exactCopiesOnly.CheckedChanged += v => ExactCopiesOnlyChanged?.Invoke(v);
-
-        var toleranceLabel = new Label("Perceptual tolerance:")
-        {
-            Color = Palette.Muted,
-            FontSize = 11f,
-            Padding = new Padding(0, 8f, 0, 0)
-        };
+            .ExpandH()
+            .PadTop(4f)
+            .OnCheckedChanged(v => ExactCopiesOnlyChanged?.Invoke(v));
 
         _toleranceSlider = new ValueSlider(1, 9, 5)
-        {
-            HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(15f, 2f, 15f, 4f)
-        };
-        _toleranceSlider.ValueChanged += v => ToleranceChanged?.Invoke(v);
+            .ExpandH()
+            .Padding(15f, 2f, 15f, 4f)
+            .OnValueChanged(v => ToleranceChanged?.Invoke(v));
 
-        _findButton = new Button(FindCaption)
-        {
-            CornerRadius = 0f,
-            HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(0, 4f, 0, 0)
-        };
-        _findButton.Click += () => FindClicked?.Invoke();
+        _findButton = MenuButton(FindCaption)
+            .OnClick(() => FindClicked?.Invoke());
 
-        _goBackButton = new Button("Go Back")
-        {
-            CornerRadius = 0f,
-            HorizontalSize = SizeMode.Expand,
-            Enabled = false,
-            Padding = new Padding(0, 4f, 0, 0)
-        };
-        _goBackButton.Click += () => GoBackClicked?.Invoke();
-
-        var closeButton = new Button("Close", ButtonVariant.Danger)
-        {
-            CornerRadius = 0f,
-            HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(0, 4f, 0, 0)
-        };
-        closeButton.Click += () => CloseClicked?.Invoke();
+        _goBackButton = MenuButton("Go Back")
+            .Enabled(false)
+            .OnClick(() => GoBackClicked?.Invoke());
 
         _noDuplicatesLabel = new Label("No duplicates found")
-        {
-            Color = Palette.Dim,
-            Transient = true,
-            Present = false,
-            Padding = new Padding(0, 4f, 0, 0)
-        };
-        
-        var bottomSeparator = new HStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            Transient = true,
-            Padding = new Padding(0, 0, 0, 12f)
-        };
+            .Color(Palette.Dim)
+            .Transient()
+            .Present(false)
+            .PadTop(4f);
 
         _collapsible = new Collapsible("DUPLICATES FINDER")
-        {
-            HorizontalSize = SizeMode.Expand,
-            IsExpanded =  true,
-            Present = false // revealed by the menu
-        };
-        _collapsible.AddComponents(_exactCopiesOnly, toleranceLabel, _toleranceSlider, _findButton, _goBackButton, closeButton, _noDuplicatesLabel, bottomSeparator);
+            .ExpandH()
+            .Expanded()
+            .Present(false)
+            .Children(
+                _exactCopiesOnly,
+                new Label("Perceptual tolerance:")
+                    .Color(Palette.Muted)
+                    .FontSize(11f)
+                    .PadTop(8f),
+                _toleranceSlider,
+                _findButton,
+                _goBackButton,
+                MenuButton("Close", ButtonVariant.Danger)
+                    .OnClick(() => CloseClicked?.Invoke()),
+                _noDuplicatesLabel,
+                new HStack()
+                    .ExpandH()
+                    .Transient()
+                    .PadBottom(12f));
     }
 
     public void SetState(bool inDuplicatesMode, bool noDuplicatesFound)
@@ -115,6 +90,12 @@ public sealed class DuplicatesFinderSection : IUISection
 
     public void Show() => _collapsible.Present = true;
     public void Hide() => _collapsible.Present = false;
+
+    private static Button MenuButton(string text, ButtonVariant variant = ButtonVariant.Default) =>
+        new Button(text, variant)
+            .CornerRadius(0f)
+            .ExpandH()
+            .PadTop(4f);
 
     public void Refresh(UIState state)
     {

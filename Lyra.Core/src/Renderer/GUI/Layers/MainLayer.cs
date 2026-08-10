@@ -222,31 +222,22 @@ public class MainLayer : IUIEvents, IDisposable
 
     private Layer BuildLayer()
     {
-        // Left pane: info rows on top, empty content area in the middle,
-        // shortcuts at the bottom.
-        var contentArea = new VStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            VerticalSize = SizeMode.Expand,
-            Transient = true
-        };
-
-        var leftPane = new VStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            VerticalSize = SizeMode.Expand,
-            Transient = true
-        };
-        leftPane.AddComponents(_infoSection.Root, contentArea, _helpSection.Root);
-
-        // Root: left pane on the left, sidebar on the right.
-        var root = new HStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            VerticalSize = SizeMode.Expand,
-            Transient = true
-        };
-        root.AddComponents(leftPane, _sidebar);
+        var root = new HStack()
+            .Expand()
+            .Transient()
+            .Children(
+                new VStack()
+                    .Expand()
+                    .Transient()
+                    .Children(
+                        _infoSection.Root,
+                        // Content area: deliberately empty. It reserves the
+                        // middle of the pane so info and help sit at the edges.
+                        new VStack().Expand().Transient(),
+                        _helpSection.Root
+                    ),
+                _sidebar
+            );
 
         var layer = _context.AddLayer("Main");
         layer.Root = root;
@@ -270,22 +261,17 @@ public class MainLayer : IUIEvents, IDisposable
             c.Toggled += () => c.VerticalSize = c.IsExpanded ? SizeMode.Flexible : SizeMode.Shrink;
         }
 
-        var sidebar = new VStack
-        {
-            HorizontalSize = SizeMode.Fixed,
-            VerticalSize = SizeMode.Expand,
-            VerticalAlign = VAlign.Top,
-            Width = 350,
-            MinWidth = 200,
-            MaxWidth = 800,
-            ResizeEdges = ResizeEdge.Left,
-            Spacing = SidebarSpacing,
-            Padding = new Padding(4),
-            BackgroundColor = Palette.Panel
-        };
-        sidebar.AddComponents(sidebarEntries.Select(e => e.Section.Root).ToArray());
-
-        return sidebar;
+        return new VStack()
+            .Width(350)
+            .MinWidth(200)
+            .MaxWidth(800)
+            .ExpandV()
+            .Align(VAlign.Top)
+            .Resizable(ResizeEdge.Left)
+            .Spacing(SidebarSpacing)
+            .Padding(4)
+            .Background(Palette.Panel)
+            .Children(sidebarEntries.Select(e => e.Section.Root).ToArray());
     }
 
     // --------------------------------------------------------

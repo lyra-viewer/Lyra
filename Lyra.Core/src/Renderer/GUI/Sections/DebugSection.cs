@@ -92,8 +92,7 @@ public sealed class DebugSection : IUISection
         var keyLabels = new List<Label>();
 
         // Input-driven rows
-        var pointerRow = BuildRow(keyLabels, "Pointer", "-", out _pointerValue);
-        pointerRow.Padding = new Padding(0, 4, 0, 0);
+        var pointerRow = BuildRow(keyLabels, "Pointer", "-", out _pointerValue).PadTop(4);
         var hitRow = BuildRow(keyLabels, "Hit", "-", out _hitValue);
         var actionRow = BuildRow(keyLabels, "Action", "-", out _actionValue);
 
@@ -123,43 +122,44 @@ public sealed class DebugSection : IUISection
         _recordGroupRow = BuildRow(keyLabels, "Rec Group", "-", out _recordGroupValue);
 
         // Compute the shared key-column width once and apply to every key label.
+        // .Width sets the Fixed size mode too - assigning the Width property
+        // alone would be ignored by Measure.
         var maxKeyWidth = 0f;
         foreach (var label in keyLabels)
             maxKeyWidth = Math.Max(maxKeyWidth, Label.MeasureTextWidth(label.Text));
 
         foreach (var label in keyLabels)
-            label.Width = maxKeyWidth;
+            label.Width(maxKeyWidth);
 
         _collapsible = new Collapsible("DEBUG")
-        {
-            HorizontalSize = SizeMode.Expand,
-            IsExpanded = false
-        };
-        _collapsible.AddComponents(
-            pointerRow,
-            hitRow,
-            actionRow,
-            Spacer(),
-            _stateRow,
-            _decoderRow,
-            _timeEstRow,
-            _timeCompleteRow,
-            Spacer(),
-            _dropStatusRow,
-            dropEnqueuedRow,
-            dropFilesRow,
-            dropSupportedRow,
-            Spacer(),
-            _scanStatusRow,
-            scanPhaseRow,
-            scanProgressRow,
-            Spacer(),
-            _recordNameRow,
-            _recordDirRow,
-            _recordSizeRow,
-            _recordContentHashRow,
-            _recordPHashRow,
-            _recordGroupRow);
+            .ExpandH()
+            .Expanded(false)
+            .Children(
+                pointerRow,
+                hitRow,
+                actionRow,
+                Spacer(),
+                _stateRow,
+                _decoderRow,
+                _timeEstRow,
+                _timeCompleteRow,
+                Spacer(),
+                _dropStatusRow,
+                dropEnqueuedRow,
+                dropFilesRow,
+                dropSupportedRow,
+                Spacer(),
+                _scanStatusRow,
+                scanPhaseRow,
+                scanProgressRow,
+                Spacer(),
+                _recordNameRow,
+                _recordDirRow,
+                _recordSizeRow,
+                _recordContentHashRow,
+                _recordPHashRow,
+                _recordGroupRow
+            );
     }
 
     public void Refresh(UIState state)
@@ -268,40 +268,22 @@ public sealed class DebugSection : IUISection
 
     public void SetAction(string actionDescription) => _actionValue.Text = actionDescription;
 
-    private static HStack BuildRow(
-        List<Label> keyLabelCollector,
-        string key,
-        string initialValue,
-        out Label valueLabel)
+    private static HStack BuildRow(List<Label> keyLabelCollector, string key, string initialValue, out Label valueLabel)
     {
-        var keyLabel = new Label(key)
-        {
-            Color = Palette.Dim,
-            HorizontalSize = SizeMode.Fixed,
-            // Width is set in the constructor after all keys are collected.
-            Transient = true
-        };
+        // Sizing is deliberately left alone here: the shared column width is
+        // applied by the constructor once every key is known, and .Width()
+        // sets the Fixed size mode along with the value.
+        var keyLabel = new Label(key).Color(Palette.Dim).Transient();
         keyLabelCollector.Add(keyLabel);
 
-        valueLabel = new Label(initialValue)
-        {
-            Color = Palette.Dim,
-            Transient = true
-        };
+        valueLabel = new Label(initialValue).Color(Palette.Dim).Transient();
 
-        var row = new HStack
-        {
-            Spacing = 8,
-            HorizontalSize = SizeMode.Expand,
-            HorizontalAlign = HAlign.Left
-        };
-        row.AddComponents(keyLabel, valueLabel);
-        return row;
+        return new HStack()
+            .Spacing(8)
+            .ExpandH()
+            .Align(HAlign.Left)
+            .Children(keyLabel, valueLabel);
     }
 
-    private static Label Spacer() => new(" ")
-    {
-        Color = Palette.Dim,
-        Transient = true
-    };
+    private static Label Spacer() => new Label(" ").Color(Palette.Dim).Transient();
 }

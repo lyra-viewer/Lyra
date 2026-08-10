@@ -60,7 +60,7 @@ public sealed class Overlay : ComponentBase, IContainer
         _content.Render(canvas);
     }
 
-    public override void OnPointerDown(SKPoint point)
+    protected override void OnPointerDownCore(SKPoint point)
     {
         // Hit-testing routes clicks on the child to deeper components,
         // so reaching here means the click was outside the child.

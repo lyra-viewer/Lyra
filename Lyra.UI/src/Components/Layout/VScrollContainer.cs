@@ -159,22 +159,22 @@ public class VScrollContainer : ComponentBase, IContainer, IScrollable
     //  Input - scrollbar drag
     // --------------------------------------------------------
 
-    public override void OnPointerDown(SKPoint point)
+    protected override void OnPointerDownCore(SKPoint point)
     {
         _scrollbar.OnPointerDown(point, this);
     }
 
-    public override void OnPointerMove(SKPoint point)
+    protected override void OnPointerMoveCore(SKPoint point)
     {
         _scrollbar.OnPointerMove(point, this);
     }
 
-    public override void OnPointerUp(SKPoint point)
+    protected override void OnPointerUpCore(SKPoint point)
     {
         _scrollbar.OnPointerUp();
     }
 
-    public override void OnPointerLeave()
+    protected override void OnPointerLeaveCore()
     {
         _scrollbar.OnPointerLeave();
     }

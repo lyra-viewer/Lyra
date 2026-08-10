@@ -6,7 +6,6 @@ using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Controls.Button;
 using Lyra.UI.Components.Layout;
-using Lyra.UI.SupportingTypes;
 
 namespace Lyra.Renderer.GUI.Sections;
 
@@ -32,134 +31,71 @@ public sealed class MenuSection : IUISection
 
     public MenuSection(IPopupHost popupHost)
     {
-        var openFileButton = new Button("OPEN")
-        {
-            CornerRadius = 0f,
-            HorizontalSize = SizeMode.Expand,
-        };
-        openFileButton.Click += () => OpenFileClicked?.Invoke();
-
-        var openDirButton = new Button("OPEN DIR")
-        {
-            CornerRadius = 0f,
-            HorizontalSize = SizeMode.Expand
-        };
-        openDirButton.Click += () => OpenDirectoryClicked?.Invoke();
-
-        var openRow = new HStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            Spacing = 4f,
-            Transient = true,
-            Padding = new Padding(0, 4f, 0, 0f)
-        };
-        openRow.AddComponents(openFileButton, openDirButton);
-
-        var fullscreenButton = new Button("FULL SCREEN")
-        {
-            CornerRadius = 0f,
-            HorizontalSize = SizeMode.Expand
-        };
-        fullscreenButton.Click += () => FullscreenClicked?.Invoke();
-
-        var quitButton = new Button("QUIT", ButtonVariant.Danger)
-        {
-            CornerRadius = 0f,
-            HorizontalSize = SizeMode.Expand
-        };
-        quitButton.Click += () => QuitClicked?.Invoke();
-
-        var quitRow = new HStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            Spacing = 4f,
-            Transient = true,
-            Padding = new Padding(0, 4f, 0, 0)
-        };
-        quitRow.AddComponents(fullscreenButton, quitButton);
-        
-        var duplicatesFinderButton = new Button("DUPLICATES FINDER")
-        {
-            CornerRadius = 0f,
-            HorizontalSize = SizeMode.Expand
-        };
-        duplicatesFinderButton.Click += () => ShowDuplicatesFinderClicked?.Invoke();
-
-        var duplicatesFinderRow = new HStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            Spacing = 4f,
-            Transient = true,
-            Padding = new Padding(0, 4f, 0, 0)
-        };
-        duplicatesFinderRow.AddComponents(duplicatesFinderButton);
-
-        var aboutButton = new Button("ABOUT")
-        {
-            CornerRadius = 0f,
-            HorizontalSize = SizeMode.Expand
-        };
-        aboutButton.Click += () => AboutClicked?.Invoke();
-
-        var aboutRow = new HStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            Spacing = 4f,
-            Transient = true,
-            Padding = new Padding(0, 4f, 0, 0)
-        };
-        aboutRow.AddComponents(aboutButton);
-
-        _initDisplayModeDropdown = new DropDownMenu<InitDisplayMode>(
-            popupHost,
-            Enum.GetValues<InitDisplayMode>(),
-            m => m.Description(),
+        _initDisplayModeDropdown = Dropdown(
+            popupHost, "INIT DISPLAY MODE",
             SettingsManager.UiSettings.InitDisplayMode,
-            headerDisplay: m => $"INIT DISPLAY MODE: {m.Description()}")
-        {
-            HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(0, 4f, 0, 0)
-        };
-        _initDisplayModeDropdown.SelectionChanged += mode => InitDisplayModeChanged?.Invoke(mode);
+            mode => InitDisplayModeChanged?.Invoke(mode));
 
-        _backgroundDropdown = new DropDownMenu<BackgroundMode>(
-            popupHost,
-            Enum.GetValues<BackgroundMode>(),
-            m => m.Description(),
+        _backgroundDropdown = Dropdown(
+            popupHost, "BACKGROUND",
             SettingsManager.UiSettings.BackgroundMode,
-            headerDisplay: m => $"BACKGROUND: {m.Description()}")
-        {
-            HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(0, 4f, 0, 0)
-        };
-        _backgroundDropdown.SelectionChanged += mode => BackgroundModeChanged?.Invoke(mode);
+            mode => BackgroundModeChanged?.Invoke(mode));
 
-        _samplingDropdown = new DropDownMenu<SamplingMode>(
-            popupHost,
-            Enum.GetValues<SamplingMode>(),
-            m => m.Description(),
+        _samplingDropdown = Dropdown(
+            popupHost, "SAMPLING",
             SettingsManager.UiSettings.SamplingMode,
-            headerDisplay: m => $"SAMPLING: {m.Description()}")
-        {
-            HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(0, 4f, 0, 0f)
-        };
-        _samplingDropdown.SelectionChanged += mode => SamplingModeChanged?.Invoke(mode);
+            mode => SamplingModeChanged?.Invoke(mode));
 
-        var bottomSeparator = new HStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            Transient = true,
-            Padding = new Padding(0, 0, 0, 12f)
-        };
-
-        var collapsible = new Collapsible("MENU")
-        {
-            HorizontalSize = SizeMode.Expand
-        };
-        collapsible.AddComponents(openRow, quitRow, duplicatesFinderRow, aboutRow, _initDisplayModeDropdown, _backgroundDropdown, _samplingDropdown, bottomSeparator);
-        Collapsible = collapsible;
+        Collapsible = new Collapsible("MENU")
+            .ExpandH()
+            .Children(
+                Row(
+                    MenuButton("OPEN").OnClick(() => OpenFileClicked?.Invoke()),
+                    MenuButton("OPEN DIR").OnClick(() => OpenDirectoryClicked?.Invoke())),
+                Row(
+                    MenuButton("FULL SCREEN").OnClick(() => FullscreenClicked?.Invoke()),
+                    MenuButton("QUIT", ButtonVariant.Danger).OnClick(() => QuitClicked?.Invoke())),
+                Row(MenuButton("DUPLICATES FINDER").OnClick(() => ShowDuplicatesFinderClicked?.Invoke())),
+                Row(MenuButton("ABOUT").OnClick(() => AboutClicked?.Invoke())),
+                _initDisplayModeDropdown,
+                _backgroundDropdown,
+                _samplingDropdown,
+                Separator());
     }
+
+    private static HStack Row(params IComponent[] children) =>
+        new HStack()
+            .ExpandH()
+            .Spacing(4f)
+            .Transient()
+            .PadTop(4f)
+            .Children(children);
+
+    private static Button MenuButton(string text, ButtonVariant variant = ButtonVariant.Default) =>
+        new Button(text, variant)
+            .CornerRadius(0f)
+            .ExpandH();
+
+    private static HStack Separator() =>
+        new HStack()
+            .ExpandH()
+            .Transient()
+            .PadBottom(12f);
+
+    private static DropDownMenu<T> Dropdown<T>(
+        IPopupHost popupHost,
+        string label,
+        T selected,
+        Action<T> onChanged) where T : struct, Enum =>
+        new DropDownMenu<T>(
+                popupHost,
+                Enum.GetValues<T>(),
+                m => m.Description(),
+                selected,
+                headerDisplay: m => $"{label}: {m.Description()}")
+            .ExpandH()
+            .PadTop(4f)
+            .OnSelectionChanged(onChanged);
 
     public void SetInitDisplayMode(InitDisplayMode mode) => _initDisplayModeDropdown.Selected = mode;
 

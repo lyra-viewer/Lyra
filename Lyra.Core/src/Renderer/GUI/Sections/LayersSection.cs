@@ -54,11 +54,11 @@ public sealed class LayersSection : IUISection
         };
 
         _collapsible = new Collapsible("PSD LAYERS")
-        {
-            HorizontalSize = SizeMode.Expand,
-            Present = false
-        };
-        _collapsible.AddComponents(_statusLabel, _tree);
+            {
+                HorizontalSize = SizeMode.Expand,
+                Present = false
+            }
+            .Children(_statusLabel, _tree);
     }
 
     public void Refresh(UIState state)
@@ -125,17 +125,17 @@ public sealed class LayersSection : IUISection
 
         // Hidden layers: label (Expand) + trailing visibility_off icon.
         // Expand pushes the icon to the right edge.
-        var row = new HStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            Spacing = 4
-        };
-
-        var icon = new SvgImage(ResourceLoader.GetSvg("visibility_off"), VisibilityIconSize, VisibilityIconSize);
-        icon.VerticalAlign = VAlign.Center;
-        icon.Padding = new Padding(0, 0, 12, 0);
-
-        row.AddComponents(label, icon);
-        return row;
+        return new HStack
+            {
+                HorizontalSize = SizeMode.Expand,
+                Spacing = 4
+            }
+            .Children(
+                label,
+                new SvgImage(ResourceLoader.GetSvg("visibility_off"), VisibilityIconSize, VisibilityIconSize)
+                {
+                    VerticalAlign = VAlign.Center,
+                    Padding = new Padding(0, 0, 12, 0)
+                });
     }
 }

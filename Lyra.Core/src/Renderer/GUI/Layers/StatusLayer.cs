@@ -1,6 +1,7 @@
 namespace Lyra.Renderer.GUI.Layers;
 
 using UI;
+using UI.Components;
 using UI.Components.Layout;
 using UI.Components.Primitives;
 using UI.SupportingTypes;
@@ -26,21 +27,16 @@ public class StatusLayer : IDisposable
     public StatusLayer(UIContext context)
     {
         _label = new Label("")
-        {
-            FontSize = 22f,
-            HorizontalAlign = HAlign.Center,
-            Transient = true
-        };
+            .FontSize(22f)
+            .Align(HAlign.Center)
+            .Transient();
 
-        _root = new VStack
-        {
-            HorizontalSize = SizeMode.Expand,
-            VerticalSize = SizeMode.Expand,
-            ContentAlign = HAlign.Center,
-            Transient = true,
-            Present = false
-        };
-        _root.AddComponents(_label);
+        _root = new VStack()
+            .Expand()
+            .ContentAlign(HAlign.Center)
+            .Transient()
+            .Present(false)
+            .Child(_label);
 
         Layer = context.AddLayer("Status");
         Layer.Root = _root;

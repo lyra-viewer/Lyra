@@ -490,7 +490,7 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
 
     private bool _isPressed;
 
-    public override void OnPointerDown(SKPoint point)
+    protected override void OnPointerDownCore(SKPoint point)
     {
         if (_scrollbar.OnPointerDown(point, this))
             return;
@@ -498,12 +498,12 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
         _isPressed = true;
     }
 
-    public override void OnPointerMove(SKPoint point)
+    protected override void OnPointerMoveCore(SKPoint point)
     {
         _scrollbar.OnPointerMove(point, this);
     }
 
-    public override void OnPointerUp(SKPoint point)
+    protected override void OnPointerUpCore(SKPoint point)
     {
         if (_scrollbar.OnPointerUp())
             return;
@@ -540,7 +540,7 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
         }
     }
 
-    public override void OnPointerLeave()
+    protected override void OnPointerLeaveCore()
     {
         _isPressed = false;
         _scrollbar.OnPointerLeave();

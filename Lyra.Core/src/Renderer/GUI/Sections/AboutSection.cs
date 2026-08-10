@@ -26,51 +26,31 @@ public sealed class AboutSection : IDisposable
     {
         _iconSource = LoadIcon();
 
-        var icon = new Image(IconSize, IconSize)
-        {
-            Source = _iconSource,
-            HorizontalAlign = HAlign.Center
-        };
-
-        var title = new Label("Lyra Viewer")
-        {
-            FontSize = 18f,
-            Bold = true,
-            Color = Palette.Foreground,
-            HorizontalAlign = HAlign.Center
-        };
-
-        var version = new Label($"Version {ResolveVersion()}")
-        {
-            FontSize = 12f,
-            Color = Palette.Dim,
-            HorizontalAlign = HAlign.Center
-        };
-
-        var repoLink = new Button(RepoLabel, ButtonVariant.Link)
-        {
-            HorizontalAlign = HAlign.Center
-        };
-        repoLink.Click += () => UrlOpener.Open(RepoUrl);
-
-        var copyright = new Label("Copyright © 2026 Nineveh · MIT License")
-        {
-            FontSize = 11f,
-            Color = Palette.Dim,
-            HorizontalAlign = HAlign.Center
-        };
-
-        _panel = new VStack
-        {
-            HorizontalSize = SizeMode.Shrink,
-            VerticalSize = SizeMode.Shrink,
-            MinWidth = 300,
-            Spacing = 10f,
-            Padding = new Padding(28f, 24f, 28f, 24f),
-            BackgroundColor = Palette.Panel
-        };
-        
-        _panel.AddComponents(icon, title, version, repoLink, copyright);
+        _panel = new VStack()
+            .MinWidth(300)
+            .Spacing(10f)
+            .Padding(28f, 24f, 28f, 24f)
+            .Background(Palette.Panel)
+            .Children(
+                new Image(IconSize, IconSize)
+                    .Source(_iconSource)
+                    .Align(HAlign.Center),
+                new Label("Lyra Viewer")
+                    .FontSize(18f)
+                    .Bold()
+                    .Color(Palette.Foreground)
+                    .Align(HAlign.Center),
+                new Label($"Version {ResolveVersion()}")
+                    .FontSize(12f)
+                    .Color(Palette.Dim)
+                    .Align(HAlign.Center),
+                new Button(RepoLabel, ButtonVariant.Link)
+                    .Align(HAlign.Center)
+                    .OnClick(() => UrlOpener.Open(RepoUrl)),
+                new Label("Copyright © 2026 Nineveh · MIT License")
+                    .FontSize(11f)
+                    .Color(Palette.Dim)
+                    .Align(HAlign.Center));
     }
 
     private static SKImage? LoadIcon()

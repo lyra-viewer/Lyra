@@ -182,7 +182,7 @@ public class Button : ComponentBase
         Click?.Invoke();
     }
 
-    public override void OnPointerDown(SKPoint point)
+    protected override void OnPointerDownCore(SKPoint point)
     {
         if (!IsEffectivelyEnabled)
             return;
@@ -190,7 +190,7 @@ public class Button : ComponentBase
         _isPressed = true;
     }
 
-    public override void OnPointerUp(SKPoint point)
+    protected override void OnPointerUpCore(SKPoint point)
     {
         if (!IsEffectivelyEnabled)
             return;
@@ -202,7 +202,7 @@ public class Button : ComponentBase
             OnClick();
     }
 
-    public override void OnPointerEnter()
+    protected override void OnPointerEnterCore()
     {
         if (!IsEffectivelyEnabled)
             return;
@@ -210,7 +210,7 @@ public class Button : ComponentBase
         _isHovered = true;
     }
 
-    public override void OnPointerLeave()
+    protected override void OnPointerLeaveCore()
     {
         _isHovered = false;
     }
