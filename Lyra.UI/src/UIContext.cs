@@ -39,7 +39,7 @@ public partial class UIContext : IDisposable
     /// </summary>
     public Layer AddLayer(string name)
     {
-        var layer = new Layer(name);
+        var layer = new Layer(name, this);
         _layers.Add(layer);
         Invalidate();
         return layer;
@@ -56,7 +56,7 @@ public partial class UIContext : IDisposable
         if (index < 0)
             return null;
 
-        var layer = new Layer(name);
+        var layer = new Layer(name, this);
         _layers.Insert(index, layer);
         Invalidate();
         return layer;
@@ -82,7 +82,7 @@ public partial class UIContext : IDisposable
         if (main is not null)
             return main;
 
-        main = new Layer("Main");
+        main = new Layer("Main", this);
         _layers.Insert(0, main);
         return main;
     }
@@ -226,7 +226,10 @@ public partial class UIContext : IDisposable
         return hit != null;
     }
 
-    public bool HandleScroll(SKPoint logicalPoint, float deltaX, float deltaY)
+    /// <summary>
+    /// Routes a wheel delta to the nearest IScrollable under the point.
+    /// </summary>
+    public bool HandleScroll(SKPoint logicalPoint, float delta)
     {
         for (var i = _layers.Count - 1; i >= 0; i--)
         {
@@ -249,7 +252,7 @@ public partial class UIContext : IDisposable
             var current = hit;
             while (current != null)
             {
-                if (current is IScrollable scrollable && scrollable.OnScroll(deltaX, deltaY))
+                if (current is IScrollable scrollable && scrollable.OnScroll(delta))
                     return true;
 
                 current = current.Parent;
@@ -290,9 +293,11 @@ public partial class UIContext : IDisposable
 
         if (component is IContainer container)
         {
-            for (var i = container.Children.Count - 1; i >= 0; i--)
+            // Hoisted: Children is a property, and this runs on every pointer event.
+            var children = container.Children;
+            for (var i = children.Count - 1; i >= 0; i--)
             {
-                var hit = HitTest(container.Children[i], point);
+                var hit = HitTest(children[i], point);
                 if (hit != null)
                     return hit;
             }

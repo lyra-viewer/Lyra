@@ -8,13 +8,15 @@ public abstract class StackBase : ComponentBase, IContainer
     private readonly List<IComponent> _children = [];
     public IReadOnlyList<IComponent> Children => _children;
 
-    public float Spacing { get; set; }
+    private float _spacing;
+    public float Spacing { get => _spacing; set => Set(ref _spacing, value); }
 
     /// <summary>
     /// Main-axis alignment of children within the container.
     /// Only visible when children don't fill the full main axis.
     /// </summary>
-    public HAlign ContentAlign { get; set; } = HAlign.Left;
+    private HAlign _contentAlign = HAlign.Left;
+    public HAlign ContentAlign { get => _contentAlign; set => Set(ref _contentAlign, value); }
 
     // Unconstrained content sizes for Flexible children,
     // captured during Measure and used by Resolve for growth caps.

@@ -7,7 +7,8 @@ namespace Lyra.UI;
 // ----------------------------------------------------------------------------
 //  Distinct from the popup host (UIContext.Popups.cs): popups anchor at a
 //  point and dim nothing; a modal centers on screen, blocks all input to the
-//  layers beneath it, and dims them with a scrim (BlocksInput + BlocksVisual).
+//  layers beneath it (BlocksInput), and dims them with a scrim that the
+//  ModalOverlay draws itself.
 //
 //  The modal content is an external reference - the ModalOverlay does not own
 //  it, so the caller keeps ownership and is responsible for disposal. This is
@@ -30,7 +31,6 @@ public partial class UIContext
 
         var layer = GetLayer(ModalLayerName) ?? AddLayer(ModalLayerName);
         layer.BlocksInput = true;
-        layer.BlocksVisual = true;
         layer.Root = new ModalOverlay(content, () => DismissModal());
 
         _modalDismissCallback = onDismiss;
@@ -47,11 +47,13 @@ public partial class UIContext
         if (layer?.Root is null)
             return false;
 
-        // The ModalOverlay does not own its content, so dropping the
-        // reference is enough - the source still owns and disposes it.
+        // The ModalOverlay does not own its content, but it did adopt it as a
+        // child - disposing the overlay detaches it without touching the
+        // content, which the caller still owns.
+        var overlay = layer.Root;
         layer.Root = null;
         layer.BlocksInput = false;
-        layer.BlocksVisual = false;
+        overlay.Dispose();
 
         var cb = _modalDismissCallback;
         _modalDismissCallback = null;

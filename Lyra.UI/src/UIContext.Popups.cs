@@ -29,11 +29,13 @@ public partial class UIContext : IPopupHost
         if (layer?.Root is null)
             return;
 
-        // The Overlay does not own its content, so dropping the
-        // reference is enough - the source component still owns
-        // and will dispose its panel.
+        // The Overlay does not own its content, but it did adopt it as a child -
+        // disposing the overlay detaches it without touching the panel, which
+        // the source component still owns and will dispose.
+        var overlay = layer.Root;
         layer.Root = null;
         layer.BlocksInput = false;
+        overlay.Dispose();
 
         var cb = _popupDismissCallback;
         _popupDismissCallback = null;

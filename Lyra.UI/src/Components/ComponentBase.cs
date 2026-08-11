@@ -25,41 +25,204 @@ public abstract class ComponentBase : IComponent
     //  Tree
     // --------------------------------------------------------
 
-    public IContainer? Parent { get; set; }
+    private IContainer? _parent;
+    private UIContext? _context;
+
+    public IContainer? Parent
+    {
+        get => _parent;
+        set
+        {
+            _parent = value;
+            
+            if (value?.Context is { } inherited)
+                Context = inherited;
+        }
+    }
+
+    /// <summary>
+    /// The context this component is displayed in, or null while detached.
+    ///
+    /// Set by the framework on attach - assigning a Layer's Root, or adding a
+    /// child to a container that already has one - and pushed down the subtree,
+    /// so a component built before attachment still ends up connected.
+    ///
+    /// This is what lets a component mark the UI dirty when it changes. Without
+    /// it every mutation depended on the caller remembering to invalidate, which
+    /// only held because input handling invalidated unconditionally.
+    /// </summary>
+    public UIContext? Context
+    {
+        get => _context;
+        set
+        {
+            if (ReferenceEquals(_context, value))
+                return;
+
+            _context = value;
+            PropagateContext(value);
+        }
+    }
+
+    /// <summary>
+    /// Pushes the context to everything this component owns.
+    ///
+    /// The base covers IContainer.Children. Controls that own components outside
+    /// that list - a Button's Content, a Collapsible's internal stack - must
+    /// override and forward to them as well, or those parts stay detached and
+    /// silently cannot invalidate.
+    /// </summary>
+    protected virtual void PropagateContext(UIContext? context)
+    {
+        if (this is not IContainer container)
+            return;
+
+        foreach (var child in container.Children)
+            child.Context = context;
+    }
+
+    /// <summary>
+    /// Marks the UI as needing a new layout and paint. A no-op while detached.
+    /// </summary>
+    protected void Invalidate() => _context?.Invalidate();
+
+    /// <summary>
+    /// Assigns a property and invalidates, but only when the value actually
+    /// changes.
+    ///
+    /// The equality guard is the point. Refresh code writes the same values back
+    /// every frame - the same label text, the same Present flag - and without a
+    /// guard each of those writes would dirty the layout and force a full
+    /// re-measure of every layer for no reason.
+    /// </summary>
+    protected void Set<TValue>(ref TValue field, TValue value)
+    {
+        if (EqualityComparer<TValue>.Default.Equals(field, value))
+            return;
+
+        field = value;
+        Invalidate();
+    }
 
     // --------------------------------------------------------
     //  Sizing
     // --------------------------------------------------------
 
-    public SizeMode HorizontalSize { get; set; } = SizeMode.Shrink;
-    public SizeMode VerticalSize { get; set; } = SizeMode.Shrink;
+    private SizeMode _horizontalSize = SizeMode.Shrink;
+    private SizeMode _verticalSize = SizeMode.Shrink;
+    private float? _width;
+    private float? _height;
+    private float? _minWidth;
+    private float? _maxWidth;
+    private float? _minHeight;
+    private float? _maxHeight;
+    private Padding _padding;
+    private ResizeEdge _resizeEdges = ResizeEdge.None;
 
-    public float? Width { get; set; }
-    public float? Height { get; set; }
+    public SizeMode HorizontalSize
+    {
+        get => _horizontalSize;
+        set => Set(ref _horizontalSize, value);
+    }
 
-    public float? MinWidth { get; set; }
-    public float? MaxWidth { get; set; }
-    public float? MinHeight { get; set; }
-    public float? MaxHeight { get; set; }
+    public SizeMode VerticalSize
+    {
+        get => _verticalSize;
+        set => Set(ref _verticalSize, value);
+    }
 
-    public Padding Padding { get; set; }
-    
-    public ResizeEdge ResizeEdges { get; set; } = ResizeEdge.None;
+    public float? Width
+    {
+        get => _width;
+        set => Set(ref _width, value);
+    }
+
+    public float? Height
+    {
+        get => _height;
+        set => Set(ref _height, value);
+    }
+
+    public float? MinWidth
+    {
+        get => _minWidth;
+        set => Set(ref _minWidth, value);
+    }
+
+    public float? MaxWidth
+    {
+        get => _maxWidth;
+        set => Set(ref _maxWidth, value);
+    }
+
+    public float? MinHeight
+    {
+        get => _minHeight;
+        set => Set(ref _minHeight, value);
+    }
+
+    public float? MaxHeight
+    {
+        get => _maxHeight;
+        set => Set(ref _maxHeight, value);
+    }
+
+    public Padding Padding
+    {
+        get => _padding;
+        set => Set(ref _padding, value);
+    }
+
+    public ResizeEdge ResizeEdges
+    {
+        get => _resizeEdges;
+        set => Set(ref _resizeEdges, value);
+    }
 
     // --------------------------------------------------------
     //  Alignment
     // --------------------------------------------------------
 
-    public HAlign HorizontalAlign { get; set; } = HAlign.Left;
-    public VAlign VerticalAlign { get; set; } = VAlign.Top;
+    private HAlign _horizontalAlign = HAlign.Left;
+    private VAlign _verticalAlign = VAlign.Top;
+
+    public HAlign HorizontalAlign
+    {
+        get => _horizontalAlign;
+        set => Set(ref _horizontalAlign, value);
+    }
+
+    public VAlign VerticalAlign
+    {
+        get => _verticalAlign;
+        set => Set(ref _verticalAlign, value);
+    }
 
     // --------------------------------------------------------
     //  Presence
     // --------------------------------------------------------
 
-    public bool Present { get; set; } = true;
-    public bool Visible { get; set; } = true;
-    public bool Enabled { get; set; } = true;
+    private bool _present = true;
+    private bool _visible = true;
+    private bool _enabled = true;
+
+    public bool Present
+    {
+        get => _present;
+        set => Set(ref _present, value);
+    }
+
+    public bool Visible
+    {
+        get => _visible;
+        set => Set(ref _visible, value);
+    }
+
+    public bool Enabled
+    {
+        get => _enabled;
+        set => Set(ref _enabled, value);
+    }
 
     public bool IsEffectivelyVisible
     {
@@ -83,17 +246,29 @@ public abstract class ComponentBase : IComponent
     //  Visuals
     // --------------------------------------------------------
 
+    private SKColor? _backgroundColor;
+
     /// <summary>
     /// Background fill rendered at ArrangedBounds before content.
     /// Null means no background is drawn (the default).
     /// </summary>
-    public SKColor? BackgroundColor { get; set; }
+    public SKColor? BackgroundColor
+    {
+        get => _backgroundColor;
+        set => Set(ref _backgroundColor, value);
+    }
 
     // --------------------------------------------------------
     //  Hit-testing
     // --------------------------------------------------------
 
-    public bool Transient { get; set; }
+    private bool _transient;
+
+    public bool Transient
+    {
+        get => _transient;
+        set => Set(ref _transient, value);
+    }
 
     // --------------------------------------------------------
     //  Layout state
@@ -138,7 +313,7 @@ public abstract class ComponentBase : IComponent
 
         if (MaxHeight.HasValue)
             contentAvailable = contentAvailable with { Height = Math.Min(contentAvailable.Height, MaxHeight.Value) };
-        
+
         if (HorizontalSize == SizeMode.Fixed && Width.HasValue)
             contentAvailable = contentAvailable with { Width = Math.Min(contentAvailable.Width, Width.Value) };
 
@@ -225,7 +400,8 @@ public abstract class ComponentBase : IComponent
 
         if (BackgroundColor.HasValue)
         {
-            using var bgPaint = new SKPaint { Color = BackgroundColor.Value };
+            using var bgPaint = new SKPaint();
+            bgPaint.Color = BackgroundColor.Value;
             canvas.DrawRect(ArrangedBounds, bgPaint);
         }
 
@@ -243,7 +419,7 @@ public abstract class ComponentBase : IComponent
     // --------------------------------------------------------
     //  Input
     // --------------------------------------------------------
-    
+
     public Action<SKPoint>? PointerDown { get; set; }
     public Action<SKPoint>? PointerUp { get; set; }
     public Action<SKPoint>? PointerMove { get; set; }

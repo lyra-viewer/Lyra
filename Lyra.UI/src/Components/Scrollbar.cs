@@ -21,10 +21,19 @@ public sealed class Scrollbar
     public bool IsDragging => _dragging;
 
     // --------------------------------------------------------
-    //  Render
+    //  Layout
     // --------------------------------------------------------
 
-    public void Draw(SKCanvas canvas, SKRect viewportBounds, IScrollable scrollable)
+    /// <summary>
+    /// Publishes the bar's geometry for the current layout. Hosts call this from
+    /// ArrangeContent.
+    ///
+    /// This has to happen in Arrange rather than Draw, because hit-testing reads
+    /// the geometry: input arrives between frames, so a bar positioned during
+    /// Draw answers Contains() with wherever it was on the *previous* frame. A
+    /// panel that just resized or expanded would take clicks in the old place.
+    /// </summary>
+    public void UpdateLayout(SKRect viewportBounds, IScrollable scrollable)
     {
         _visible = scrollable.NeedsScrollbar;
 
@@ -38,6 +47,20 @@ public sealed class Scrollbar
         }
 
         UpdateGeometry(viewportBounds, scrollable);
+    }
+
+    // --------------------------------------------------------
+    //  Render
+    // --------------------------------------------------------
+
+    public void Draw(SKCanvas canvas, SKRect viewportBounds, IScrollable scrollable)
+    {
+        // Recomputed here as well as in UpdateLayout: ScrollOffset changes during
+        // a drag without a re-arrange, so the thumb must track it within a frame.
+        UpdateLayout(viewportBounds, scrollable);
+
+        if (!_visible)
+            return;
 
         using var paint = new SKPaint();
         paint.IsAntialias = true;

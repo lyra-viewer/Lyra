@@ -33,7 +33,7 @@ public class CheckBox : ComponentBase
     public bool Checked
     {
         get => _checked;
-        set => _checked = value;
+        set => Set(ref _checked, value);
     }
 
     public string Text

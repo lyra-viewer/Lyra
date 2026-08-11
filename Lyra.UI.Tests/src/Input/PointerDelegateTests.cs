@@ -3,10 +3,9 @@ using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Layout;
 using SkiaSharp;
 using Xunit;
-
 using Button = Lyra.UI.Components.Controls.Button.Button;
 
-namespace Lyra.Core.Tests.UI;
+namespace Lyra.UI.Tests.Input;
 
 public class PointerDelegateTests
 {
@@ -48,31 +47,61 @@ public class PointerDelegateTests
     }
 
     [Fact]
-    public void HandlersCombineRatherThanReplace()
+    public void TheExtensionCombinesButAssigningThePropertyReplaces()
     {
-        var first = 0;
-        var second = 0;
+        // The two are documented to differ: chaining attaches, so a second
+        // .OnPointerDown never silently drops the first, while assigning the
+        // property is the escape hatch for taking sole ownership.
+        var viaExtension = 0;
+        var viaAssignment = 0;
 
         var button = new Button("Test")
-            .OnPointerDown(_ => first++)
-            .OnPointerDown(_ => second++);
+            .OnPointerDown(_ => viaExtension++)
+            .OnPointerDown(_ => viaExtension++);
 
         button.OnPointerDown(Origin);
+        Assert.Equal(2, viaExtension);
 
-        Assert.Equal(1, first);
-        Assert.Equal(1, second);
+        button.PointerDown = _ => viaAssignment++;
+        button.OnPointerDown(Origin);
+
+        Assert.Equal(2, viaExtension);
+        Assert.Equal(1, viaAssignment);
     }
 
     [Fact]
-    public void HandlerReceivesThePointerPosition()
+    public void SettingTheHandlerToNullDetachesIt()
     {
-        var seen = new SKPoint(-1, -1);
+        var fired = 0;
+        var button = new Button("Test").OnPointerDown(_ => fired++);
 
-        var button = new Button("Test").OnPointerMove(p => seen = p);
+        button.OnPointerDown(Origin);
+        Assert.Equal(1, fired);
 
-        button.OnPointerMove(new SKPoint(12, 34));
+        button.PointerDown = null;
+        button.OnPointerDown(Origin);
 
-        Assert.Equal(new SKPoint(12, 34), seen);
+        Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public void HandlerReceivesTheDispatchedPosition()
+    {
+        // Guards the entry point passing the point through unchanged - it does
+        // real work either side of the call (gating, ordering), so the argument
+        // is not simply forwarded by the compiler.
+        var seen = new List<SKPoint>();
+
+        var button = new Button("Test")
+            .OnPointerDown(seen.Add)
+            .OnPointerMove(seen.Add)
+            .OnPointerUp(seen.Add);
+
+        button.OnPointerDown(new SKPoint(12, 34));
+        button.OnPointerMove(new SKPoint(56, 78));
+        button.OnPointerUp(new SKPoint(90, 12));
+
+        Assert.Equal([new SKPoint(12, 34), new SKPoint(56, 78), new SKPoint(90, 12)], seen);
     }
 
     // --------------------------------------------------------

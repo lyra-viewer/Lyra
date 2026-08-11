@@ -3,7 +3,7 @@ using Lyra.UI.Components;
 using SkiaSharp;
 using Xunit;
 
-namespace Lyra.Core.Tests.UI;
+namespace Lyra.UI.Tests.Layout;
 
 /// <summary>
 /// LyraUI.Process must lay out at the exact logical size of the surface.

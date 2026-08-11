@@ -22,7 +22,9 @@ namespace Lyra.Renderer;
 //    - StatusLayer  - centered status text (No image, Loading...)
 //    - MainLayer    - primary UI tree (info pane, sidebar, sections)
 //    - PopupLayer   - dropdowns, context menus  (BlocksInput, lazy)
-//    - (future) ModalLayer  - settings, dialogs        (BlocksInput + BlocksVisual)
+//    - (future) ModalLayer  - settings, dialogs        (BlocksInput; the
+//                                                       ModalOverlay draws its
+//                                                       own scrim)
 // ============================================================================
 public class UIManager : IDisposable
 {
@@ -224,10 +226,10 @@ public class UIManager : IDisposable
         _context.Invalidate();
     }
 
-    public bool HandleScroll(float x, float y, float deltaX, float deltaY)
+    public bool HandleScroll(float x, float y, float delta)
     {
         var p = ToUiSpace(x, y);
-        var consumed = _context.HandleScroll(p, deltaX, deltaY);
+        var consumed = _context.HandleScroll(p, delta);
 
         if (consumed)
             _context.Invalidate();

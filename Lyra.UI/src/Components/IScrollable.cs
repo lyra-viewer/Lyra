@@ -25,9 +25,10 @@ public interface IScrollable
     /// Implementors that draw a bar forward this to Scrollbar.Contains.
     bool ScrollbarContains(SKPoint point) => false;
 
-    /// Handle scroll input. Returns true if consumed.
-    /// Returning false allows UIContext to bubble to the parent.
-    bool OnScroll(float deltaX, float deltaY);
+    /// Handle scroll input along the scroll axis. Positive moves toward the
+    /// start of the content. Returns true if consumed; returning false allows
+    /// UIContext to bubble to the parent.
+    bool OnScroll(float delta);
 
     /// Scroll to an absolute offset (clamped to [0, MaxScroll]).
     void ScrollTo(float offset);

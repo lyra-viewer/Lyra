@@ -88,6 +88,17 @@ public class Button : ComponentBase
 
     protected override void ResolveContent() => Content?.Resolve();
 
+    protected override void PropagateContext(UIContext? context)
+    {
+        _label.Context = context;
+
+        if (IconImage is not null)
+            IconImage.Context = context;
+
+        if (Content is not null)
+            Content.Context = context;
+    }
+
     protected override void ArrangeContent(SKRect contentBounds)
     {
         // Inset by content padding

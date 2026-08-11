@@ -10,7 +10,14 @@ public class VScrollContainer : ComponentBase, IContainer, IScrollable
 
     private readonly Scrollbar _scrollbar = new();
 
-    public float Spacing { get; set; }
+    private float _spacing;
+
+    public float Spacing
+    {
+        get => _spacing;
+        set => Set(ref _spacing, value);
+    }
+
     public float ScrollSpeed { get; set; } = 40f;
 
     public ScrollbarStyle ScrollbarStyle
@@ -25,17 +32,13 @@ public class VScrollContainer : ComponentBase, IContainer, IScrollable
     public float ContentSize { get; private set; }
     public float ViewportSize { get; private set; }
 
-    public bool OnScroll(float deltaX, float deltaY)
+    public bool OnScroll(float delta)
     {
         if (!((IScrollable)this).NeedsScrollbar)
             return false;
 
         var previous = ScrollOffset;
-        ScrollOffset = Math.Clamp(
-            ScrollOffset - deltaY * ScrollSpeed,
-            0, 
-            ((IScrollable)this).MaxScroll
-        );
+        ScrollOffset = Math.Clamp(ScrollOffset - delta * ScrollSpeed, 0, ((IScrollable)this).MaxScroll);
 
         // ReSharper disable once CompareOfFloatsByEqualityOperator
         return ScrollOffset != previous;
@@ -81,7 +84,7 @@ public class VScrollContainer : ComponentBase, IContainer, IScrollable
 
             if (!first)
                 totalHeight += Spacing;
-            
+
             first = false;
 
             child.Measure(new SKSize(availableSize.Width, float.MaxValue));
@@ -91,6 +94,15 @@ public class VScrollContainer : ComponentBase, IContainer, IScrollable
 
         ContentSize = totalHeight;
         return new SKSize(maxWidth, totalHeight);
+    }
+
+    protected override void ResolveContent()
+    {
+        foreach (var child in _children)
+        {
+            if (child.Present)
+                child.Resolve();
+        }
     }
 
     protected override void ArrangeContent(SKRect contentBounds)
@@ -108,7 +120,7 @@ public class VScrollContainer : ComponentBase, IContainer, IScrollable
 
             if (!first)
                 yOffset += Spacing;
-            
+
             first = false;
 
             var childWidth = child.HorizontalSize == SizeMode.Expand
@@ -132,6 +144,9 @@ public class VScrollContainer : ComponentBase, IContainer, IScrollable
 
             yOffset += child.DesiredSize.Height;
         }
+
+        // Publish the bar's hit region now, not at Draw - input arrives between frames.
+        _scrollbar.UpdateLayout(contentBounds, this);
     }
 
     protected override void RenderContent(SKCanvas canvas, SKRect contentBounds)

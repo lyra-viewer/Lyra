@@ -139,7 +139,9 @@ public partial class SdlCore
 
     private void OnMouseWheel(Event e)
     {
-        if (_renderer.UIManager.HandleScroll(e.Wheel.MouseX, e.Wheel.MouseY, e.Wheel.X, e.Wheel.Y))
+        // e.Wheel.X (horizontal) is intentionally dropped: no UI component scrolls
+        // sideways, and zooming reads the vertical delta only. Maybe in future.
+        if (_renderer.UIManager.HandleScroll(e.Wheel.MouseX, e.Wheel.MouseY, e.Wheel.Y))
             return;
 
 

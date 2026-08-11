@@ -33,6 +33,8 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
 
     private readonly List<(TreeNode<T> Node, IComponent Component)> _rows = [];
     private bool _rowsDirty = true;
+    
+    private readonly List<IComponent> _childrenView = [];
     private bool _scrollToPickedPending;
 
     // --------------------------------------------------------
@@ -50,7 +52,7 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
                 return;
 
             _pickedNode = value;
-            _rowsDirty = true;
+            MarkRowsDirty();
         }
     }
 
@@ -108,15 +110,13 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
     public float ContentSize { get; private set; }
     public float ViewportSize { get; private set; }
 
-    public bool OnScroll(float deltaX, float deltaY)
+    public bool OnScroll(float delta)
     {
         if (!((IScrollable)this).NeedsScrollbar)
             return false;
 
         var previous = ScrollOffset;
-        ScrollOffset = Math.Clamp(
-            ScrollOffset - deltaY * ScrollSpeed,
-            0, ((IScrollable)this).MaxScroll);
+        ScrollOffset = Math.Clamp(ScrollOffset - delta * ScrollSpeed, 0, ((IScrollable)this).MaxScroll);
 
         // ReSharper disable once CompareOfFloatsByEqualityOperator
         return ScrollOffset != previous;
@@ -133,9 +133,16 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
     //  Constructor
     // --------------------------------------------------------
 
+    /// <param name="roots">The list is copied; the nodes themselves are not. Node
+    /// objects stay shared on purpose - TreeNode is the data model and carries
+    /// expand state - but reordering or adding to the caller's list no longer
+    /// desyncs the rows. Call UpdateData to publish structural changes.</param>
     public TreeView(List<TreeNode<T>> roots, Func<TreeNode<T>, bool, IComponent> rowFactory)
     {
-        _roots = roots;
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(rowFactory);
+
+        _roots = [..roots];
         _rowFactory = rowFactory;
     }
 
@@ -143,33 +150,32 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
     //  IContainer
     // --------------------------------------------------------
 
-    public IReadOnlyList<IComponent> Children =>
-        _rows.Select(r => r.Component).ToList();
+    public IReadOnlyList<IComponent> Children => _childrenView;
 
     public void AddComponent(IComponent child) =>
-        throw new NotSupportedException(
-            "TreeView children are managed by the tree data model. " +
-            "Use TreeNode<T>.AddChild or UpdateData instead.");
+        throw new NotSupportedException("TreeView children are managed by the tree data model. Use TreeNode<T>.AddChild or UpdateData instead.");
 
     public void AddComponents(params IComponent[] children) =>
-        throw new NotSupportedException(
-            "TreeView children are managed by the tree data model. " +
-            "Use TreeNode<T>.AddChild or UpdateData instead.");
+        throw new NotSupportedException("TreeView children are managed by the tree data model. Use TreeNode<T>.AddChild or UpdateData instead.");
 
     // --------------------------------------------------------
     //  Public API - data management
     // --------------------------------------------------------
 
-    /// Replaces the entire tree with new roots.
-    /// Clears pick state.
+    /// Replaces the entire tree with new roots. The root list is copied;
+    /// the nodes are not. Clears pick state.
     public void UpdateData(List<TreeNode<T>> roots)
     {
-        _roots = roots;
+        ArgumentNullException.ThrowIfNull(roots);
+
+        _roots = [..roots];
         _pickedNode = null;
-        _rowsDirty = true;
+        MarkRowsDirty();
     }
 
-    /// Removes the first node matching the predicate.
+    /// Removes the first node matching the predicate. A root is removed from this
+    /// control's copy of the root list; a nested node is removed from its parent's
+    /// Children, which is shared with the caller.
     /// Clears pick if the removed node was picked.
     /// Returns true if a node was removed.
     public bool Remove(Func<T, bool> predicate)
@@ -180,7 +186,7 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
             _pickedNode = null;
 
         if (removed)
-            _rowsDirty = true;
+            MarkRowsDirty();
 
         return removed;
     }
@@ -233,9 +239,12 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
     }
 
     /// Marks rows for rebuild.
-    public void InvalidateRows()
+    public void InvalidateRows() => MarkRowsDirty();
+
+    private void MarkRowsDirty()
     {
         _rowsDirty = true;
+        Invalidate();
     }
 
     // --------------------------------------------------------
@@ -248,6 +257,7 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
             component.Dispose();
 
         _rows.Clear();
+        _childrenView.Clear();
 
         foreach (var root in _roots)
         {
@@ -258,8 +268,10 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
 
                 component.Transient = true;
                 component.Parent = this;
+                component.Context = Context;
 
                 _rows.Add((node, component));
+                _childrenView.Add(component);
             }
         }
 
@@ -300,6 +312,20 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
     }
 
     // --------------------------------------------------------
+    //  Resolve - cascade into rows
+    // --------------------------------------------------------
+    //  Rows are laid out by this control, but a row is itself a
+    //  container that may hold Flexible children, and those are
+    //  only distributed during Resolve.
+    // --------------------------------------------------------
+
+    protected override void ResolveContent()
+    {
+        foreach (var (_, component) in _rows)
+            component.Resolve();
+    }
+
+    // --------------------------------------------------------
     //  Arrange - indented rows with scroll offset
     // --------------------------------------------------------
 
@@ -337,10 +363,14 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
                 contentBounds.Left + indent,
                 contentBounds.Top + yOffset - ScrollOffset,
                 contentBounds.Left + indent + contentWidth,
-                contentBounds.Top + yOffset - ScrollOffset + rowHeight));
+                contentBounds.Top + yOffset - ScrollOffset + rowHeight)
+            );
 
             yOffset += rowHeight;
         }
+
+        // Publish the bar's hit region now, not at Draw - input arrives between frames.
+        _scrollbar.UpdateLayout(contentBounds, this);
     }
 
     /// <summary>
@@ -413,11 +443,9 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
                     contentBounds.Left, rowTop,
                     contentBounds.Right, rowBottom);
 
-                using var highlightPaint = new SKPaint
-                {
-                    Color = PickedBackground,
-                    IsAntialias = true
-                };
+                using var highlightPaint = new SKPaint();
+                highlightPaint.Color = PickedBackground;
+                highlightPaint.IsAntialias = true;
                 canvas.DrawRect(highlightRect, highlightPaint);
             }
 
@@ -447,12 +475,10 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
     {
         var half = ArrowSize / 2f;
 
-        using var paint = new SKPaint
-        {
-            Color = ArrowColor,
-            IsAntialias = true,
-            Style = SKPaintStyle.Fill
-        };
+        using var paint = new SKPaint();
+        paint.Color = ArrowColor;
+        paint.IsAntialias = true;
+        paint.Style = SKPaintStyle.Fill;
 
         using var builder = new SKPathBuilder();
 
@@ -528,7 +554,7 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
             if (!node.IsLeaf && point.X < arrowRight)
             {
                 node.IsExpanded = !node.IsExpanded;
-                _rowsDirty = true;
+                MarkRowsDirty();
             }
             else
             {
@@ -558,6 +584,7 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
                 component.Dispose();
 
             _rows.Clear();
+            _childrenView.Clear();
         }
 
         base.Dispose(disposing);

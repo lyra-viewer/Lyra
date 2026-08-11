@@ -54,6 +54,12 @@ public static class ControlExtensions
         c.Underline = value;
         return c;
     }
+    
+    public static Label Ellipsize(this Label c, bool value = true)
+    {
+        c.Ellipsize = value;
+        return c;
+    }
 
     public static Label Antialias(this Label c, bool value = true)
     {
@@ -166,13 +172,13 @@ public static class ControlExtensions
     //  DropDownMenu
     // --------------------------------------------------------
 
-    public static DropDownMenu<T> Selected<T>(this DropDownMenu<T> c, T value)
+    public static DropDownMenu<T> Selected<T>(this DropDownMenu<T> c, T value) where T : notnull
     {
         c.Selected = value;
         return c;
     }
 
-    public static DropDownMenu<T> OnSelectionChanged<T>(this DropDownMenu<T> c, Action<T> handler)
+    public static DropDownMenu<T> OnSelectionChanged<T>(this DropDownMenu<T> c, Action<T> handler) where T : notnull
     {
         c.SelectionChanged += handler;
         return c;

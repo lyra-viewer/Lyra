@@ -26,6 +26,12 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
     private List<(T Item, IComponent Component)> _rows = [];
     private bool _rowsDirty = true;
 
+    // Stable backing list for the Children property. Rebuilt alongside _rows
+    // rather than projected per access: hit-testing indexes Children inside a
+    // loop, so a projecting property allocates once per child per traversal,
+    // and every pointer move runs three traversals.
+    private readonly List<IComponent> _childrenView = [];
+
     // --------------------------------------------------------
     //  Pick state
     // --------------------------------------------------------
@@ -73,13 +79,13 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
     public float ContentSize { get; private set; }
     public float ViewportSize { get; private set; }
 
-    public bool OnScroll(float deltaX, float deltaY)
+    public bool OnScroll(float delta)
     {
         if (!((IScrollable)this).NeedsScrollbar)
             return false;
 
         var previous = ScrollOffset;
-        ScrollOffset = Math.Clamp(ScrollOffset - deltaY * ScrollSpeed, 0, ((IScrollable)this).MaxScroll);
+        ScrollOffset = Math.Clamp(ScrollOffset - delta * ScrollSpeed, 0, ((IScrollable)this).MaxScroll);
 
         // ReSharper disable once CompareOfFloatsByEqualityOperator
         return ScrollOffset != previous;
@@ -96,9 +102,15 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
     //  Constructor
     // --------------------------------------------------------
 
+    /// <param name="items">Copied on entry. The control keeps its own list so that
+    /// later edits to the caller's list cannot desync the rows and pick index from
+    /// the data behind them - call UpdateData to publish changes.</param>
     public ListView(List<T> items, Func<T, bool, IComponent> rowFactory)
     {
-        _items = items;
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(rowFactory);
+
+        _items = [.. items];
         _rowFactory = rowFactory;
     }
 
@@ -106,34 +118,32 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
     //  IContainer
     // --------------------------------------------------------
 
-    public IReadOnlyList<IComponent> Children =>
-        _rows.Select(r => r.Component).ToList();
+    public IReadOnlyList<IComponent> Children => _childrenView;
 
     public void AddComponent(IComponent child) =>
-        throw new NotSupportedException(
-            "ListView children are managed by the data model. " +
-            "Use UpdateData instead.");
+        throw new NotSupportedException("ListView children are managed by the data model. Use UpdateData instead.");
 
     public void AddComponents(params IComponent[] children) =>
-        throw new NotSupportedException(
-            "ListView children are managed by the data model. " +
-            "Use UpdateData instead.");
+        throw new NotSupportedException("ListView children are managed by the data model. Use UpdateData instead.");
 
     // --------------------------------------------------------
     //  Public API — data management
     // --------------------------------------------------------
 
-    /// Replaces the entire list with new items.
+    /// Replaces the entire list with new items. The list is copied.
     /// Clears pick state.
     public void UpdateData(List<T> items)
     {
-        _items = items;
+        ArgumentNullException.ThrowIfNull(items);
+
+        _items = [.. items];
         _pickedItem = default;
         _pickedIndex = -1;
-        _rowsDirty = true;
+        MarkRowsDirty();
     }
 
-    /// Removes the first item matching the predicate.
+    /// Removes the first item matching the predicate from this control's copy;
+    /// the list originally passed in is left alone.
     /// Clears pick if the removed item was picked.
     /// Returns true if an item was removed.
     public bool Remove(Func<T, bool> predicate)
@@ -154,7 +164,7 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
             }
 
             _items.RemoveAt(i);
-            _rowsDirty = true;
+            MarkRowsDirty();
             return true;
         }
 
@@ -186,13 +196,16 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
     {
         _pickedItem = default;
         _pickedIndex = -1;
-        _rowsDirty = true;
+        MarkRowsDirty();
     }
 
     /// Marks rows for rebuild.
-    public void InvalidateRows()
+    public void InvalidateRows() => MarkRowsDirty();
+
+    private void MarkRowsDirty()
     {
         _rowsDirty = true;
+        Invalidate();
     }
 
     private void SetPicked(int index)
@@ -202,7 +215,7 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
 
         _pickedIndex = index;
         _pickedItem = index >= 0 && index < _items.Count ? _items[index] : default;
-        _rowsDirty = true;
+        MarkRowsDirty();
     }
 
     // --------------------------------------------------------
@@ -215,6 +228,7 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
             component.Dispose();
 
         _rows.Clear();
+        _childrenView.Clear();
 
         for (var i = 0; i < _items.Count; i++)
         {
@@ -224,11 +238,13 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
 
             component.Transient = true;
             component.Parent = this;
-            
+            component.Context = Context;
+
             if (component.VerticalSize != SizeMode.Fixed)
                 component.VerticalSize = SizeMode.Shrink;
 
             _rows.Add((item, component));
+            _childrenView.Add(component);
         }
 
         _rowsDirty = false;
@@ -251,7 +267,7 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
         {
             if (!first)
                 totalHeight += RowSpacing;
-            
+
             first = false;
 
             component.Measure(new SKSize(availableSize.Width, float.MaxValue));
@@ -262,6 +278,20 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
 
         ContentSize = totalHeight;
         return new SKSize(maxWidth, totalHeight);
+    }
+
+    // --------------------------------------------------------
+    //  Resolve - cascade into rows
+    // --------------------------------------------------------
+    //  Rows are laid out by this control, but a row is itself a
+    //  container that may hold Flexible children, and those are
+    //  only distributed during Resolve.
+    // --------------------------------------------------------
+
+    protected override void ResolveContent()
+    {
+        foreach (var (_, component) in _rows)
+            component.Resolve();
     }
 
     // --------------------------------------------------------
@@ -280,7 +310,7 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
         {
             if (!first)
                 yOffset += RowSpacing;
-            
+
             first = false;
 
             var rowHeight = component.DesiredSize.Height;
@@ -306,6 +336,9 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
 
             yOffset += rowHeight;
         }
+
+        // Publish the bar's hit region now, not at Draw - input arrives between frames.
+        _scrollbar.UpdateLayout(contentBounds, this);
     }
 
     // --------------------------------------------------------
@@ -333,11 +366,9 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
                     contentBounds.Left, component.ArrangedBounds.Top,
                     contentBounds.Right, component.ArrangedBounds.Bottom);
 
-                using var highlightPaint = new SKPaint
-                {
-                    Color = PickedBackground,
-                    IsAntialias = true
-                };
+                using var highlightPaint = new SKPaint();
+                highlightPaint.Color = PickedBackground;
+                highlightPaint.IsAntialias = true;
                 canvas.DrawRect(highlightRect, highlightPaint);
             }
 
@@ -413,6 +444,7 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
                 component.Dispose();
 
             _rows.Clear();
+            _childrenView.Clear();
         }
 
         base.Dispose(disposing);

@@ -44,12 +44,15 @@ public sealed class ValueSlider : ComponentBase
             var clamped = Math.Clamp(value, Min, Max);
             if (clamped == _value) return;
             _value = clamped;
+            Invalidate();
             ValueChanged?.Invoke(_value);
         }
     }
-
+    
     public ValueSlider(int min, int max, int initialValue)
     {
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(min, max);
+
         Min = min;
         Max = max;
         _value = Math.Clamp(initialValue, min, max);
@@ -184,9 +187,12 @@ public sealed class ValueSlider : ComponentBase
     private void UpdateValueFromX(float x)
     {
         var track = TrackGeometry(ContentBounds);
-        var t = Math.Clamp((x - track.Left) / (track.Right - track.Left), 0f, 1f);
-        var newValue = Min + (int)Math.Round(t * (Max - Min));
-        Value = newValue;
+        var span = track.Right - track.Left;
+        if (span <= 0f)
+            return;
+
+        var t = Math.Clamp((x - track.Left) / span, 0f, 1f);
+        Value = Min + (int)Math.Round(t * (Max - Min));
     }
 
     // --------------------------------------------------------

@@ -76,4 +76,21 @@ public sealed class Overlay : ComponentBase, IContainer
 
     public void AddComponents(params IComponent[] children) =>
         throw new NotSupportedException("Overlay content is defined via its constructor.");
+
+    // --------------------------------------------------------
+    //  Dispose - detach, never dispose the content
+    // --------------------------------------------------------
+    //  The content outlives this overlay (a dropdown reuses its options panel
+    //  across opens), so leaving Parent pointing here would keep a discarded
+    //  overlay reachable and make the panel's effective visibility depend on
+    //  an object no longer in any layer.
+    // --------------------------------------------------------
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && ReferenceEquals(_content.Parent, this))
+            _content.Parent = null;
+
+        base.Dispose(disposing);
+    }
 }

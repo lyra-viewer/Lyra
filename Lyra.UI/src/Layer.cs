@@ -13,17 +13,37 @@ namespace Lyra.UI;
 ///   receive no pointer or scroll events, even if nothing in this
 ///   layer was hit.  Use for context menus and modal panels.
 ///
-/// <see cref="BlocksVisual"/> - when true, a scrim is rendered
-///   before this layer's content.  Use for modal overlays that
-///   dim the background.  (Scrim rendering is the caller's
-///   responsibility; this flag is advisory.)
+/// There is deliberately no BlocksVisual flag. Dimming is the job of
+/// the layer's own root: ModalOverlay draws its scrim in RenderContent.
+/// A layer-level flag would have to be honored by LyraUI.Process, and
+/// the version that existed here was set by ShowModal but read by
+/// nothing - it looked like it dimmed the background and did not.
 /// </summary>
-public class Layer(string name) : IDisposable
+public class Layer(string name, UIContext? context = null) : IDisposable
 {
+    private IComponent? _root;
+
     public string Name { get; } = name;
-    public IComponent? Root { get; set; }
+    
+    public IComponent? Root
+    {
+        get => _root;
+        set
+        {
+            if (ReferenceEquals(_root, value))
+                return;
+
+            if (_root is not null)
+                _root.Context = null;
+
+            _root = value;
+
+            if (_root is not null)
+                _root.Context = context;
+        }
+    }
+
     public bool BlocksInput { get; set; }
-    public bool BlocksVisual { get; set; }
 
     public void Dispose() => Root?.Dispose();
 }

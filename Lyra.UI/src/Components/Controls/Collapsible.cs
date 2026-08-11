@@ -26,6 +26,9 @@ public class Collapsible : ComponentBase, IContainer
         get => _isExpanded;
         set
         {
+            if (_isExpanded == value)
+                return;
+
             _isExpanded = value;
             _content.Present = value;
 
@@ -39,6 +42,8 @@ public class Collapsible : ComponentBase, IContainer
             {
                 _headerButton.IconImage = value ? _expandedIcon : _collapsedIcon;
             }
+
+            Invalidate();
         }
     }
 
@@ -129,6 +134,14 @@ public class Collapsible : ComponentBase, IContainer
     public void AddComponent(IComponent child) => _content.AddComponent(child);
 
     public void AddComponents(params IComponent[] children) => _content.AddComponents(children);
+
+    // Children exposes the main container's children rather than the container
+    // itself, so the base propagation skips it.
+    protected override void PropagateContext(UIContext? context)
+    {
+        base.PropagateContext(context);
+        _mainContainer.Context = context;
+    }
 
     // --------------------------------------------------------
     //  Layout - delegate to MainContainer

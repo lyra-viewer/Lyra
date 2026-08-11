@@ -27,6 +27,13 @@ public interface IComponent : IDisposable
     /// </summary>
     IContainer? Parent { get; set; }
 
+    /// <summary>
+    /// The context this component is displayed in, or null while detached.
+    /// Set by the framework on attach and pushed down the subtree; components
+    /// use it to mark the UI dirty when they change.
+    /// </summary>
+    UIContext? Context { get; set; }
+
     // --------------------------------------------------------
     //  Sizing
     // --------------------------------------------------------

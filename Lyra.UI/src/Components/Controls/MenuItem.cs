@@ -29,10 +29,22 @@ public class MenuItem : ComponentBase, IPickable
     public event Action? Click;
 
     // Pickable state
-    public bool IsPicked { get; set; }
+    private bool _isPicked;
+
+    public bool IsPicked
+    {
+        get => _isPicked;
+        set => Set(ref _isPicked, value);
+    }
 
     // Visuals
-    public float CornerRadius { get; set; }
+    private float _cornerRadius;
+
+    public float CornerRadius
+    {
+        get => _cornerRadius;
+        set => Set(ref _cornerRadius, value);
+    }
 
     public string Text
     {
@@ -76,6 +88,13 @@ public class MenuItem : ComponentBase, IPickable
         return new SKSize(
             width + ButtonDrawer.ContentPadH * 2,
             height + ButtonDrawer.ContentPadV * 2);
+    }
+
+    // Private structure, not reached by the base propagation.
+    protected override void PropagateContext(UIContext? context)
+    {
+        _label.Context = context;
+        _checkIcon.Context = context;
     }
 
     protected override void ArrangeContent(SKRect contentBounds)

@@ -212,9 +212,12 @@ public partial class UIContext
             return true;
 
         if (component is IContainer container)
-            for (var i = container.Children.Count - 1; i >= 0; i--)
-                if (ContainsScrollbar(container.Children[i], point))
+        {
+            var children = container.Children;
+            for (var i = children.Count - 1; i >= 0; i--)
+                if (ContainsScrollbar(children[i], point))
                     return true;
+        }
 
         return false;
     }
@@ -259,6 +262,9 @@ public partial class UIContext
     private static (IComponent component, ResizeEdge edge)? FindResizeTarget(
         IComponent component, SKPoint point)
     {
+        if (!component.Present || !component.IsEffectivelyVisible || !component.IsEffectivelyEnabled)
+            return null;
+
         // Check this component first (parent wins over children)
         if (component.ResizeEdges != ResizeEdge.None)
         {
@@ -270,14 +276,10 @@ public partial class UIContext
         // Then recurse into children (back-to-front for z-order)
         if (component is IContainer container)
         {
-            for (var i = container.Children.Count - 1; i >= 0; i--)
+            var children = container.Children;
+            for (var i = children.Count - 1; i >= 0; i--)
             {
-                var child = container.Children[i];
-
-                if (!child.Present || !child.IsEffectivelyVisible || !child.IsEffectivelyEnabled)
-                    continue;
-
-                var result = FindResizeTarget(child, point);
+                var result = FindResizeTarget(children[i], point);
                 if (result.HasValue)
                     return result;
             }
