@@ -7,6 +7,7 @@ background          = "#03081C"
 foreground          = "#C2D4EE"
 muted               = "#8AAACF"
 dim                 = "#5A7898"
+faint               = "#3E566E"
 
 selected_foreground = "#5A9AE8"
 selected_background = "#FFFFFF19"

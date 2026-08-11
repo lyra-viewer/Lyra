@@ -13,6 +13,7 @@ public static class Palette
         Foreground          = new SKColor(205, 208, 212),
         Muted               = new SKColor(165, 168, 172),
         Dim                 = new SKColor(135, 138, 143),
+        Faint               = new SKColor(100, 103, 108),
 
         SelectedForeground  = new SKColor(235, 175, 70),
         SelectedBackground  = new SKColor(255, 255, 255, 25),
@@ -53,6 +54,7 @@ public static class Palette
     public static SKColor Foreground => _current.Foreground;
     public static SKColor Muted => _current.Muted;
     public static SKColor Dim => _current.Dim;
+    public static SKColor Faint => _current.Faint;
 
     // Solid amber accent
     public static SKColor SelectedForeground => _current.SelectedForeground;

@@ -69,6 +69,7 @@ public class UIManager : IDisposable
             Foreground          = Pick(c, "foreground", d.Foreground),
             Muted               = Pick(c, "muted", d.Muted),
             Dim                 = Pick(c, "dim", d.Dim),
+            Faint               = Pick(c, "faint", d.Faint),
 
             SelectedForeground  = Pick(c, "selected_foreground", d.SelectedForeground),
             SelectedBackground  = Pick(c, "selected_background", d.SelectedBackground),

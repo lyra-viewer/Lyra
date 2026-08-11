@@ -1,0 +1,37 @@
+type = "dark"
+version = 1
+
+[colors]
+background          = "#0A0B0C"
+
+foreground          = "#E8EAED"
+muted               = "#9AA0A6"
+dim                 = "#6B7280"
+faint               = "#4A505A"
+
+selected_foreground = "#4A7FF5"
+selected_background = "#4A7FF51F"
+foreground_dark     = "#0A0B0C"
+
+primary             = "#1C1F23"
+hover_primary       = "#24282D"
+pressed_primary     = "#16191C"
+
+disabled            = "#00000080"
+
+accent              = "#4A7FF5"
+hover_accent        = "#6494F8"
+pressed_accent      = "#2F5FD6"
+
+danger              = "#7F2432"
+hover_danger        = "#982C3C"
+pressed_danger      = "#661C28"
+
+subtle              = "#FFFFFF0A"
+hover_subtle        = "#FFFFFF14"
+pressed_subtle      = "#FFFFFF1F"
+
+border              = "#FFFFFF14"
+border_active       = "#4A7FF559"
+
+panel               = "#0E0F11F0"

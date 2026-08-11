@@ -58,7 +58,7 @@ public class MenuItem : ComponentBase, IPickable
 
     public MenuItem(string text, float iconSize = 16f)
     {
-        MinHeight = 30;
+        MinHeight = 24;
 
         _label = new Label(text)
         {

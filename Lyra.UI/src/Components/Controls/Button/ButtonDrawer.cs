@@ -12,7 +12,7 @@ public static class ButtonDrawer
 {
     public const float BorderWidth = 1f;
     public const float ContentPadH = 8f;
-    public const float ContentPadV = 4f;
+    public const float ContentPadV = 2f;
     public const float IconTextGap = 6f;
 
     // ============================================================

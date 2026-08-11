@@ -9,6 +9,7 @@ public sealed record Theme
     public required SKColor Foreground { get; init; }
     public required SKColor Muted { get; init; }
     public required SKColor Dim { get; init; }
+    public required SKColor Faint { get; init; }
 
     public required SKColor SelectedForeground { get; init; }
     public required SKColor SelectedBackground { get; init; }

@@ -50,7 +50,22 @@ public sealed class AboutSection : IDisposable
                 new Label("Copyright © 2026 Nineveh · MIT License")
                     .FontSize(11f)
                     .Color(Palette.Dim)
-                    .Align(HAlign.Center));
+                    .Align(HAlign.Center),
+                // Attribution for the bundled typeface. The SIL Open Font
+                // License asks that the copyright notice travel with the font;
+                // the license text itself is embedded next to the faces.
+                new VStack()
+                    .Spacing(2f)
+                    .Align(HAlign.Center)
+                    .Children(
+                        new Label("Bundled font: JetBrains Mono · SIL OFL 1.1")
+                            .FontSize(10f)
+                            .Color(Palette.Faint)
+                            .Align(HAlign.Center),
+                        new Label("© 2020 The JetBrains Mono Project Authors")
+                            .FontSize(10f)
+                            .Color(Palette.Faint)
+                            .Align(HAlign.Center)));
     }
 
     private static SKImage? LoadIcon()

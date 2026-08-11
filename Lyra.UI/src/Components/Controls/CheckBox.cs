@@ -46,7 +46,7 @@ public class CheckBox : ComponentBase
 
     public CheckBox(string text, float iconSize = 20f)
     {
-        MinHeight = 28f;
+        MinHeight = 24f;
 
         _checkedIcon = new SvgImage(ResourceLoader.GetSvg("check_box"), iconSize, iconSize);
         _blankIcon = new SvgImage(ResourceLoader.GetSvg("check_box_outline_blank"), iconSize, iconSize);

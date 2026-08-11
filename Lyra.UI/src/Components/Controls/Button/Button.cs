@@ -53,7 +53,7 @@ public class Button : ComponentBase
     {
         Variant = variant;
         MinWidth = 64;
-        MinHeight = 30;
+        MinHeight = 24;
 
         _label = new Label(text)
         {

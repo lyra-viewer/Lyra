@@ -129,10 +129,8 @@ public class Label : ComponentBase
                 bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal,
                 italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright
             );
-
-        public SKFontStyle ToStyle() => new(Weight, SKFontStyleWidth.Normal, Slant);
-
-        public SKFont CreateFont() => new(SKTypeface.FromFamilyName(Family, ToStyle()), Size);
+        
+        public SKFont CreateFont() => new(Fonts.Resolve(Family, Weight, Slant), Size);
     }
 
     // Fonts for the static measure helper, keyed by the properties that affect

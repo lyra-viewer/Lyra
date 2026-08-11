@@ -93,6 +93,9 @@ public partial class SdlCore : IDisposable
         }
 
         ColdStartReset();
+        
+        BundledFonts.Register();
+
         InitializeWindowAndRenderer();
         InitializeInput();
         ImageStore.Initialize();

@@ -30,6 +30,15 @@
     <EmbeddedResource Include="Resources\AppIcon.png">
       <LogicalName>LyraViewer.AppIcon.png</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="Resources\JetBrainsMono-Regular.ttf">
+      <LogicalName>LyraViewer.Fonts.JetBrainsMono-Regular.ttf</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\JetBrainsMono-Bold.ttf">
+      <LogicalName>LyraViewer.Fonts.JetBrainsMono-Bold.ttf</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\OFL.txt">
+      <LogicalName>LyraViewer.Fonts.OFL.txt</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <PropertyGroup>
