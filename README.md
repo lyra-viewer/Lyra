@@ -18,6 +18,9 @@
     - [GPU Formats](#gpu-formats)
     - [Document / Vector Formats](#document--vector-formats)
     - [Minor Formats](#minor-formats)
+- [Color Management](#color-management)
+    - [What this means on a standard-gamut display](#what-this-means-on-a-standard-gamut-display)
+    - [Rendering intent](#rendering-intent)
 - [PSD / PSB Decoding Model](#psd--psb-decoding-model)
     - [PSD Color Mode Support](#psd-color-mode-support)
     - [PSB Support](#psb-support)
@@ -179,6 +182,54 @@ How these native libraries are shipped differs by platform - see [Native Librari
 
 ---
 
+## Color Management
+
+Lyra is color-managed from decode to screen. Wide-gamut images are never clamped to sRGB at decode time - the
+conversion happens once, at draw time, against the gamut of the display being drawn to.
+
+- **Decode** tags every image with the gamut it was authored in. That means the embedded ICC profile wherever one
+  exists (PNG, JPEG, TIFF, JPEG 2000, HEIF / AVIF, PSD), the NCLX primaries when a HEIF / AVIF file carries those
+  instead, and Display P3 for JPEG XL, which Lyra asks libjxl to decode into P3 rather than fold down to sRGB. An
+  image carrying no color information at all is interpreted as sRGB - the only defensible assumption.
+- **Display** tags the render surface with the gamut of the screen. On macOS that is Display P3. On Windows and
+  Linux, Lyra asks the windowing system for the monitor's ICC profile and uses it; if the system publishes no
+  profile, or publishes one that cannot be expressed as a matrix/transfer-function color space, the surface falls
+  back to sRGB.
+- **Draw** is where the transform happens, per frame, on the GPU. Because both ends carry real profiles, a
+  Display-P3 photograph on a Display-P3 screen keeps its saturated colors instead of being flattened on the way in.
+
+### What this means on a standard-gamut display
+
+**Colors outside the display's physical gamut are folded into the ones it can reproduce.** This is correct behavior
+rather than a defect, and it is documented here because it is easy to mistake for one.
+
+The clearest illustration is the well-known **WebKit Display-P3 logo test image**, which circulates in PNG, JPEG XL
+and other formats. It is constructed so the logo and its background are *different* colors in Display P3 but clamp to
+the *same* color in sRGB. The intended outcome is:
+
+| Display                 | Color-managed viewer                | Non-color-managed viewer |
+|-------------------------|-------------------------------------|--------------------------|
+| Display P3 / wide gamut | Logo visible                        | Logo visible             |
+| sRGB / standard gamut   | **Flat rectangle - logo invisible** | Logo visible             |
+
+So if Lyra renders a flat rectangle on a standard-gamut monitor, the pipeline is working exactly as intended.
+
+### Rendering intent
+
+Lyra converts using **relative colorimetric intent with clipping**, the same choice web browsers make. Colors inside
+the display's gamut are reproduced exactly; colors outside it are clipped to the gamut boundary.
+
+The alternative - **perceptual** intent - compresses the whole gamut inward so that out-of-gamut *relationships*
+survive, at the cost of desaturating colors that were perfectly reproducible to begin with. That trades fidelity for
+the preservation of differences, and Lyra does not make that trade: accuracy for the colors a display can show takes
+precedence over a hint of the ones it cannot.
+
+> _Note:_ Gamut and dynamic range are separate concerns. High-dynamic-range sources (EXR, Radiance HDR, BC6H, float
+> textures, HDR JPEG XL) are additionally tone-mapped for display as described in their sections above; that handles
+> brightness range, not color gamut.
+
+---
+
 ## PSD / PSB Decoding Model
 
 Lyra currently focuses on decoding the flattened **Image Data** section of Photoshop files, rather than individual
@@ -223,6 +274,9 @@ Lyra fully supports PSB (Photoshop Big Document Format) files.
 ![PSB Large](docs/images/psd-large.png)
 
 ### ICC Color Profiles
+
+See [Color Management](#color-management) for how profiles are handled across all formats; this section covers what is
+specific to PSD / PSB.
 
 Lyra honors embedded ICC color profiles whenever they are present.
 If a PSD / PSB document does not contain an embedded profile - most notably in CMYK color modes - Lyra falls back to
