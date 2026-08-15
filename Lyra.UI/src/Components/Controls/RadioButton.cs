@@ -5,35 +5,30 @@ using SkiaSharp;
 
 namespace Lyra.UI.Components.Controls;
 
-/// <summary>
-/// A labelled check box: an SVG box icon (checked / blank) followed by a caption.
-/// Behaves like a single click target with the same hover / pressed background
-/// feedback as <see cref="Button.Button"/> (Ghost variant).
-/// </summary>
-public class CheckBox : ComponentBase
+public class RadioButton : ComponentBase
 {
     private const float ContentPadH = 6f;
-    private const float ContentPadV = 4f;
+    private const float ContentPadV = 2f;
 
     private readonly Label _label;
-    private readonly SvgImage _checkedIcon;
-    private readonly SvgImage _blankIcon;
+    private readonly SvgImage _selectedIcon;
+    private readonly SvgImage _emptyIcon;
 
-    /// <summary>Raised when the checked state changes through user interaction or <see cref="Toggle"/>.</summary>
-    public event Action<bool>? CheckedChanged;
+    /// <summary>Raised only when the user selects this button while it was not selected.</summary>
+    public event Action? Selected;
 
-    private bool _checked;
+    private bool _isSelected;
     private bool _isHovered;
     private bool _isPressed;
 
     public float IconTextGap { get; set; } = 6f;
-    public float CornerRadius { get; set; } = 4f;
+    public float CornerRadius { get; set; } = 0f;
 
-    /// <summary>Current state. Setting this does not raise <see cref="CheckedChanged"/>.</summary>
-    public bool Checked
+    /// <summary>Current state. Setting this does not raise <see cref="Selected"/>.</summary>
+    public bool IsSelected
     {
-        get => _checked;
-        set => Set(ref _checked, value);
+        get => _isSelected;
+        set => Set(ref _isSelected, value);
     }
 
     public string Text
@@ -42,14 +37,14 @@ public class CheckBox : ComponentBase
         set => _label.Text = value;
     }
 
-    private SvgImage CurrentIcon => _checked ? _checkedIcon : _blankIcon;
+    private SvgImage CurrentIcon => _isSelected ? _selectedIcon : _emptyIcon;
 
-    public CheckBox(string text, float iconSize = 18f)
+    public RadioButton(string text, float iconSize = 18f)
     {
         MinHeight = 24f;
 
-        _checkedIcon = new SvgImage(ResourceLoader.GetSvg("check_box"), iconSize, iconSize);
-        _blankIcon = new SvgImage(ResourceLoader.GetSvg("check_box_outline_blank"), iconSize, iconSize);
+        _selectedIcon = new SvgImage(ResourceLoader.GetSvg("radio_button_checked"), iconSize, iconSize);
+        _emptyIcon = new SvgImage(ResourceLoader.GetSvg("radio_button_unchecked"), iconSize, iconSize);
 
         _label = new Label(text)
         {
@@ -61,14 +56,14 @@ public class CheckBox : ComponentBase
 
     protected override SKSize MeasureContent(SKSize availableSize)
     {
-        var iconSize = _blankIcon.Measure(availableSize);
-        _checkedIcon.Measure(availableSize);
+        var iconSize = _emptyIcon.Measure(availableSize);
+        _selectedIcon.Measure(availableSize);
         var labelSize = _label.Measure(availableSize);
 
         var width = iconSize.Width + IconTextGap + labelSize.Width;
         var height = Math.Max(iconSize.Height, labelSize.Height);
 
-        return new SKSize(width + ContentPadH * 2, height + ContentPadV * 2);
+        return new SKSize(width + (ContentPadH * 2), height + (ContentPadV * 2));
     }
 
     protected override void ArrangeContent(SKRect contentBounds)
@@ -77,15 +72,16 @@ public class CheckBox : ComponentBase
             contentBounds.Left + ContentPadH,
             contentBounds.Top + ContentPadV,
             contentBounds.Right - ContentPadH,
-            contentBounds.Bottom - ContentPadV);
+            contentBounds.Bottom - ContentPadV
+        );
 
-        var iconW = _blankIcon.DesiredSize.Width;
-        var iconH = _blankIcon.DesiredSize.Height;
-        var iconTop = inner.MidY - iconH / 2f;
+        var iconW = _emptyIcon.DesiredSize.Width;
+        var iconH = _emptyIcon.DesiredSize.Height;
+        var iconTop = inner.MidY - (iconH / 2f);
         var iconRect = new SKRect(inner.Left, iconTop, inner.Left + iconW, iconTop + iconH);
 
-        _checkedIcon.Arrange(iconRect);
-        _blankIcon.Arrange(iconRect);
+        _selectedIcon.Arrange(iconRect);
+        _emptyIcon.Arrange(iconRect);
 
         var labelLeft = inner.Left + iconW + IconTextGap;
         _label.Arrange(new SKRect(labelLeft, inner.Top, inner.Right, inner.Bottom));
@@ -96,12 +92,6 @@ public class CheckBox : ComponentBase
         ButtonDrawer.DrawBackground(canvas, contentBounds, ButtonVariant.Ghost, CornerRadius, _isHovered, _isPressed);
         CurrentIcon.Render(canvas);
         _label.Render(canvas);
-    }
-
-    public void Toggle()
-    {
-        _checked = !_checked;
-        CheckedChanged?.Invoke(_checked);
     }
 
     protected override void OnPointerDownCore(SKPoint point)
@@ -120,8 +110,11 @@ public class CheckBox : ComponentBase
         var wasPressed = _isPressed;
         _isPressed = false;
 
-        if (wasPressed && _isHovered)
-            Toggle();
+        if (!wasPressed || !_isHovered || _isSelected)
+            return;
+
+        IsSelected = true;
+        Selected?.Invoke();
     }
 
     protected override void OnPointerEnterCore()
@@ -142,8 +135,8 @@ public class CheckBox : ComponentBase
         if (disposing)
         {
             _label.Dispose();
-            _checkedIcon.Dispose();
-            _blankIcon.Dispose();
+            _selectedIcon.Dispose();
+            _emptyIcon.Dispose();
         }
 
         base.Dispose(disposing);
