@@ -59,4 +59,9 @@
     <Copy SourceFiles="@(_LyraNativeWrapperFiles)" DestinationFolder="$(OutDir)lib\$(NativeLibFolder)\" SkipUnchangedFiles="true" Condition="'@(_LyraNativeWrapperFiles)' != ''" />
   </Target>
 
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Lyra.Core.Tests" />
+  </ItemGroup>
+
 </Project>

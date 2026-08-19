@@ -14,7 +14,7 @@ public sealed class RasterLargeContent : ICompositeContent
         PreviewImage = previewImage;
     }
 
-    public CompositeContentKind Kind => CompositeContentKind.RasterLarge;
+    public bool IsResolutionIndependent => false;
 
     public float FullWidth { get; }
     public float FullHeight { get; }

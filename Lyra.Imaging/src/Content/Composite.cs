@@ -53,7 +53,8 @@ public sealed class Composite : IDisposable
 
     public IReadOnlyList<StructureGroup>? Structure;
     public LayerRecord[]? PsdLayers;
-    public bool IsGrayscale;
+    
+    public bool IsHdrDecoded => Content is HdrRasterContent;
 
     // Derived sizes for UI/zoom/pan: always prefer Full dims, else fall back to best known dims from content.
     public float LogicalWidth => FullWidth ?? Content?.DecodedWidth ?? 0f;

@@ -4,7 +4,7 @@ namespace Lyra.Imaging.Content;
 
 public sealed class VectorContent(SKPicture picture) : ICompositeContent
 {
-    public CompositeContentKind Kind => CompositeContentKind.Vector;
+    public bool IsResolutionIndependent => true;
 
     public SKPicture Picture { get; private set; } = picture ?? throw new ArgumentNullException(nameof(picture));
 

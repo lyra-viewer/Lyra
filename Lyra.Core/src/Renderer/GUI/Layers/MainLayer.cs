@@ -42,6 +42,7 @@ public class MainLayer : IUIEvents, IDisposable
     private readonly FormatSection _formatSection;
     private readonly StructureSection _structureSection;
     private readonly LayersSection _layersSection;
+    private readonly VariantsSection _variantsSection;
     private readonly HelpSection _helpSection;
     private readonly DebugSection _debugSection;
 
@@ -69,6 +70,7 @@ public class MainLayer : IUIEvents, IDisposable
     public event Action<InitDisplayMode>? InitDisplayModeChanged;
     public event Action<BackgroundMode>? BackgroundModeChanged;
     public event Action<SamplingMode>? SamplingModeChanged;
+    public event Action<int>? VariantSelected;
 
     public MainLayer(UIContext context)
     {
@@ -82,6 +84,7 @@ public class MainLayer : IUIEvents, IDisposable
         _formatSection = new FormatSection(_keyColumnRegistry);
         _structureSection = new StructureSection(_keyColumnRegistry);
         _layersSection = new LayersSection();
+        _variantsSection = new VariantsSection();
         _helpSection = new HelpSection();
         _debugSection = new DebugSection();
 
@@ -96,6 +99,7 @@ public class MainLayer : IUIEvents, IDisposable
         _menuSection.BackgroundModeChanged += mode => OnMenu("BACKGROUND", BackgroundModeChanged, mode);
         _menuSection.SamplingModeChanged += mode => OnMenu("SAMPLING", SamplingModeChanged, mode);
         _directoryTreeSection.DirectoryPicked += path => DirectoryPicked?.Invoke(path);
+        _variantsSection.VariantSelected += index => OnMenu("SIZE", VariantSelected, index);
 
         _duplicatesFinderSection.FindClicked += () => OnMenu("FIND DUPLICATES", FindDuplicatesRequested);
         _duplicatesFinderSection.GoBackClicked += () => OnMenu("DUPLICATES BACK", DuplicatesGoBackRequested);
@@ -112,6 +116,7 @@ public class MainLayer : IUIEvents, IDisposable
             new SectionEntry(_duplicatesFinderSection, SectionPlacement.Sidebar),
             new SectionEntry(_directoryTreeSection, SectionPlacement.Sidebar, _directoryTreeSection.Collapsible),
             new SectionEntry(_exifSection, SectionPlacement.Sidebar, _exifSection.Collapsible),
+            new SectionEntry(_variantsSection, SectionPlacement.Sidebar, _variantsSection.Collapsible),
             new SectionEntry(_formatSection, SectionPlacement.Sidebar, _formatSection.Collapsible),
             new SectionEntry(_structureSection, SectionPlacement.Sidebar, _structureSection.Collapsible),
             new SectionEntry(_layersSection, SectionPlacement.Sidebar, _layersSection.Collapsible),

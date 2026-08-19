@@ -410,6 +410,7 @@ public partial class SdlCore : IDisposable
         events.DuplicatesExactOnlyChanged     += OnDuplicatesExactOnlyChanged;
         events.DuplicatesHashToleranceChanged += OnDuplicatesHashToleranceChanged;
         events.DirectoryPicked                += OnDirectoryPicked;
+        events.VariantSelected                += OnVariantSelected;
 
         _duplicateScanService.Completed       += OnDuplicateScanCompleted;
         _duplicateScanService.Aborted         += OnDuplicateScanAborted;
@@ -430,6 +431,22 @@ public partial class SdlCore : IDisposable
     private void OnCompositeProgress(Composite c)
     {
         DispatchToMain(() => _renderer.UIManager.RefreshCurrent());
+    }
+
+    private void OnVariantSelected(int index)
+    {
+        if (_composite?.Content is not VariantRasterContent variants || !variants.Select(index))
+            return;
+
+        _displayMode = DimensionHelper.GetDisplayMode(_window, _composite, _viewState.InitDisplayMode, out _zoomPercentage);
+        _panHelper = new PanHelper(_window, _composite, _zoomPercentage);
+
+        _renderer.SetComposite(_composite);
+        _renderer.SetOffset(SKPoint.Empty);
+        _renderer.SetDisplayMode(_displayMode);
+        _renderer.SetZoom(_zoomPercentage);
+
+        _renderer.UIManager.RefreshCurrent();
     }
     
     private void OnAboutRequested()
