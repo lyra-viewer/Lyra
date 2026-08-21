@@ -34,9 +34,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
             ct.ThrowIfCancellationRequested();
 
             var bitmap = LoadBitmap(path, ct, tagColorSpace: true);
-            bitmap.SetImmutable();
-            var image = SKImage.FromBitmap(bitmap);
-            composite.Content = new RasterContent(bitmap, image);
+            composite.Content = RasterContentBuilder.Build(bitmap, composite);
         }
         catch (OperationCanceledException)
         {

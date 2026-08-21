@@ -42,9 +42,7 @@ internal sealed class TgaDecoder : IImageDecoder, IThumbnailDecoder
             DecoderValidation.RequireSaneDimensions(GetType().Name, decoded.Width, decoded.Height);
 
             var bitmap = ToSkBitmap(decoded);
-            bitmap.SetImmutable();
-            var skImage = SKImage.FromBitmap(bitmap);
-            composite.Content = new RasterContent(bitmap, skImage);
+            composite.Content = RasterContentBuilder.Build(bitmap, composite);
         }
         catch (OperationCanceledException)
         {

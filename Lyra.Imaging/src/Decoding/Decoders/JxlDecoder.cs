@@ -67,7 +67,7 @@ internal class JxlDecoder : IImageDecoder
 
                     composite.Content = isHdr != 0
                         ? BuildHdr((byte*)nativePixels, width, height, composite, ct)
-                        : BuildSdr((byte*)nativePixels, width, height, ct);
+                        : BuildSdr((byte*)nativePixels, width, height, composite, ct);
                 }
             }
 
@@ -89,23 +89,18 @@ internal class JxlDecoder : IImageDecoder
         }
     }
 
-    private static unsafe RasterContent BuildHdr(byte* src, int width, int height, Composite composite, CancellationToken ct)
+    private static unsafe ICompositeContent BuildHdr(byte* src, int width, int height, Composite composite, CancellationToken ct)
     {
         var rgba = new Span<float>(src, checked(width * height * 4));
-
-        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-        var bitmap = new SKBitmap(info);
-
-        HdrToneMap.ToBitmap(rgba, bitmap, ct, out var isGrayscale);
+        var content = HdrImageBuilder.Build(rgba, width, height, composite, ct, out var isGrayscale);
         composite.AddFormatSpecific("GrayScale", isGrayscale.ToString());
 
         ct.ThrowIfCancellationRequested();
 
-        bitmap.SetImmutable();
-        return new RasterContent(bitmap, SKImage.FromBitmap(bitmap));
+        return content;
     }
 
-    private static unsafe RasterContent BuildSdr(byte* src, int width, int height, CancellationToken ct)
+    private static unsafe ICompositeContent BuildSdr(byte* src, int width, int height, Composite composite, CancellationToken ct)
     {
         // Native hands back tightly packed, straight-alpha RGBA8. Premultiply
         // into the bitmap, matching the proven raster path used by J2KDecoder.
@@ -159,7 +154,6 @@ internal class JxlDecoder : IImageDecoder
             }
         }
 
-        bitmap.SetImmutable();
-        return new RasterContent(bitmap, SKImage.FromBitmap(bitmap));
+        return RasterContentBuilder.Build(bitmap, composite);
     }
 }

@@ -38,9 +38,7 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
 
             ct.ThrowIfCancellationRequested();
 
-            bitmap.SetImmutable();
-            var skImage = SKImage.FromBitmap(bitmap);
-            composite.Content = new RasterContent(bitmap, skImage);
+            composite.Content = RasterContentBuilder.Build(bitmap, composite);
         }
         catch (OperationCanceledException)
         {

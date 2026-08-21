@@ -205,7 +205,7 @@ public partial class SdlCore
 
     private void ToggleSampling()
     {
-        if (_renderer.IsCompositeVector)
+        if (_renderer.IsCompositeResolutionIndependent)
             return;
 
         _viewState.ToggleSampling();

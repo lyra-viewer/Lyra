@@ -289,7 +289,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     private string GetSamplingModeDescription()
     {
-        return _composite?.Content?.Kind == CompositeContentKind.Vector
+        return _composite?.Content?.IsResolutionIndependent == true
             ? "Disabled (resolution-independent)"
             : _viewState.SamplingMode.Description();
     }
@@ -316,7 +316,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     public void SetZoom(int zoomPercentage) => _zoomPercentage = zoomPercentage;
     
-    public bool IsCompositeVector => _composite?.Content?.Kind == CompositeContentKind.Vector;
+    public bool IsCompositeResolutionIndependent => _composite?.Content?.IsResolutionIndependent == true;
 
     public virtual void Dispose()
     {

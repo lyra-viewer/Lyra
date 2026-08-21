@@ -179,6 +179,23 @@ public class UIManager : IDisposable
         Invalidate();
     }
 
+    /// <summary>
+    /// Updates the tone-map dropdown's selected value. Does not fire
+    /// <see cref="IUIEvents.ToneMapModeChanged"/>.
+    /// </summary>
+    public void SetToneMapMode(ToneMapMode mode)
+    {
+        _mainLayer.SetToneMapMode(mode);
+        Invalidate();
+    }
+
+    /// <summary>Updates the exposure slider. Does not fire <see cref="IUIEvents.ExposureStopsChanged"/>.</summary>
+    public void SetExposureStops(int stops)
+    {
+        _mainLayer.SetExposureStops(stops);
+        Invalidate();
+    }
+
     /// <summary>Reflects duplicate-scan state on the Duplicates Finder section.</summary>
     public void SetDuplicatesState(bool inDuplicatesMode, bool noDuplicatesFound)
     {

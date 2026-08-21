@@ -41,11 +41,8 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
         ct.ThrowIfCancellationRequested();
         DecoderValidation.RequireSaneDimensions(nameof(KtxDecoder), surface.Width, surface.Height);
 
-        var bitmap = DecodeToBitmap(texture, surface, ct);
-        bitmap.SetImmutable();
-        var image = SKImage.FromBitmap(bitmap);
+        composite.Content = TextureBitmap.DecodeToContent(texture, surface, composite, ct, flipVertical: texture.Origin == TextureOrigin.BottomLeft);
 
-        composite.Content = new RasterContent(bitmap, image);
         return Task.CompletedTask;
     }
 
@@ -76,9 +73,7 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
         composite.AddFormatSpecific("Format", BasisTranscoder.CodecName(bytes));
         composite.AddFormatSpecific("Has Alpha", HasTranslucentPixels(bitmap) ? "Yes" : "No");
 
-        bitmap.SetImmutable();
-        var image = SKImage.FromBitmap(bitmap);
-        composite.Content = new RasterContent(bitmap, image);
+        composite.Content = RasterContentBuilder.Build(bitmap, composite);
     }
 
     /// <summary>Dispatches to the KTX 1.x or KTX 2.0 reader by the file's leading identifier bytes.</summary>
@@ -132,31 +127,10 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
         // Decoders emit top-left RGBA; flip a bottom-up (OpenGL-convention) source into place.
         if (texture.Origin == TextureOrigin.BottomLeft)
         {
-            FlipVertical(bitmap);
+            TextureBitmap.FlipBitmapRows(bitmap);
         }
 
         return bitmap;
-    }
-
-    private static unsafe void FlipVertical(SKBitmap bitmap)
-    {
-        var height = bitmap.Height;
-        var rowBytes = bitmap.RowBytes;
-        var pixels = (byte*)bitmap.GetPixels();
-
-        var row = new byte[rowBytes];
-        fixed (byte* tmp = row)
-        {
-            for (var y = 0; y < height / 2; y++)
-            {
-                var top = pixels + (long)y * rowBytes;
-                var bottom = pixels + (long)(height - 1 - y) * rowBytes;
-
-                Buffer.MemoryCopy(top, tmp, rowBytes, rowBytes);
-                Buffer.MemoryCopy(bottom, top, rowBytes, rowBytes);
-                Buffer.MemoryCopy(tmp, bottom, rowBytes, rowBytes);
-            }
-        }
     }
 
     private static unsafe bool HasTranslucentPixels(SKBitmap bitmap)

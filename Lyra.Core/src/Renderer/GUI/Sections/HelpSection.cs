@@ -79,9 +79,10 @@ public sealed class HelpSection : IUISection
             _dirEdgeDesc.Text    = "Prev / Next directory edge";
         }
 
-        var vector = state.Composite?.Content?.Kind == CompositeContentKind.Vector;
-        _samplingKey.Present  = !vector;
-        _samplingDesc.Present = !vector;
+        // No sampling row for content that has no sampling to choose.
+        var resolutionIndependent = state.Composite?.Content?.IsResolutionIndependent == true;
+        _samplingKey.Present  = !resolutionIndependent;
+        _samplingDesc.Present = !resolutionIndependent;
     }
 
     private (Label key, Label desc) AddRow(string key, string description)

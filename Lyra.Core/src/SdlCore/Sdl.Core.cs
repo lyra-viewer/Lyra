@@ -2,12 +2,14 @@ using System.Collections.Concurrent;
 using Lyra.Common;
 using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
+using Lyra.Common.SystemExtensions;
 using Lyra.DropStatusProvider;
 using Lyra.FileLoader.Duplicates;
 using Lyra.FileLoader.Duplicates.Perceptual;
 using Lyra.FileLoader.Navigation;
 using Lyra.Imaging;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Decoding.Support;
 using Lyra.Renderer;
 using Lyra.UI.SupportingTypes;
 using SkiaSharp;
@@ -99,6 +101,7 @@ public partial class SdlCore : IDisposable
         InitializeWindowAndRenderer();
         InitializeInput();
         ImageStore.Initialize();
+        HdrDecodeSettings.InitializeFromSettings();
 
         LoadStartupArgs(startupArgs);
     }
@@ -418,6 +421,8 @@ public partial class SdlCore : IDisposable
         // Dropdown changes route into ViewState (single source of truth).
         events.BackgroundModeChanged          += _viewState.SetBackgroundMode;
         events.SamplingModeChanged            += _viewState.SetSamplingMode;
+        events.ToneMapModeChanged             += _viewState.SetToneMapMode;
+        events.ExposureStopsChanged           += _viewState.SetExposureStops;
         events.InitDisplayModeChanged         += _viewState.SetInitDisplayMode;
 
         // ViewState changes auto-sync the dropdowns. UIManager.Set* is
@@ -425,12 +430,28 @@ public partial class SdlCore : IDisposable
         // is a second line of defense against feedback loops.
         _viewState.BackgroundModeChanged      += _renderer.UIManager.SetBackgroundMode;
         _viewState.SamplingModeChanged        += _renderer.UIManager.SetSamplingMode;
+        _viewState.ToneMapModeChanged         += _renderer.UIManager.SetToneMapMode;
+        _viewState.ToneMapModeChanged         += OnToneMapModeChanged;
+        _viewState.ExposureStopsChanged       += _renderer.UIManager.SetExposureStops;
+        _viewState.ExposureStopsChanged       += OnExposureStopsChanged;
         _viewState.InitDisplayModeChanged     += _renderer.UIManager.SetInitDisplayMode;
     }
 
     private void OnCompositeProgress(Composite c)
     {
         DispatchToMain(() => _renderer.UIManager.RefreshCurrent());
+    }
+    
+    private void OnToneMapModeChanged(ToneMapMode mode)
+    {
+        HdrDecodeSettings.ToneMapMode = mode;
+        _renderer.UIManager.Invalidate();
+    }
+
+    private void OnExposureStopsChanged(int stops)
+    {
+        HdrDecodeSettings.ExposureStops = stops;
+        _renderer.UIManager.Invalidate();
     }
 
     private void OnVariantSelected(int index)

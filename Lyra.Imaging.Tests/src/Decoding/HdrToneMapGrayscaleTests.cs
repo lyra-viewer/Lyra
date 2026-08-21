@@ -45,7 +45,7 @@ public class HdrToneMapGrayscaleTests
         try
         {
             using var composite = Decode(path);
-            var raster = Assert.IsType<RasterContent>(composite.Content);
+            var raster = Assert.IsAssignableFrom<RasterContent>(composite.Content);
             using var bitmap = SKBitmap.FromImage(raster.Image);
 
             var px = bitmap.GetPixel(1, 1);
@@ -66,7 +66,7 @@ public class HdrToneMapGrayscaleTests
         try
         {
             using var composite = Decode(path);
-            Assert.IsType<RasterContent>(composite.Content);
+            Assert.IsAssignableFrom<RasterContent>(composite.Content);
             Assert.Equal("True", GrayScaleFlag(composite));
         }
         finally

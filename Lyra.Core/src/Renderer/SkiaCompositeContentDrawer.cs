@@ -1,4 +1,5 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Decoding.Support;
 using SkiaSharp;
 
 namespace Lyra.Renderer;
@@ -18,6 +19,10 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
 
         switch (content)
         {
+            case HdrRasterContent hdr:
+                DrawHdr(canvas, hdr, destFullRect, sampling);
+                break;
+
             case RasterContent raster:
                 canvas.DrawImage(raster.Image, destFullRect, sampling);
                 break;
@@ -32,6 +37,44 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
                 break;
             }
         }
+    }
+
+    /// <summary>
+    /// Tone-maps at draw time from the current settings, so moving the exposure slider is a
+    /// uniform change rather than a re-decode. Falls back to drawing the image as-is when the
+    /// runtime effect is unavailable - washed out, but visible, which beats a blank canvas.
+    /// </summary>
+    private static void DrawHdr(SKCanvas canvas, HdrRasterContent hdr, SKRect destFullRect, SKSamplingOptions sampling)
+    {
+        var image = hdr.Image;
+        if (image.Width <= 0 || image.Height <= 0)
+            return;
+
+        var localMatrix = SKMatrix.CreateScaleTranslation(
+            destFullRect.Width / image.Width,
+            destFullRect.Height / image.Height,
+            destFullRect.Left,
+            destFullRect.Top
+        );
+
+        var exposure = HdrDecodeSettings.ExposureScale;
+
+        using var paint = HdrToneMapShader.CreatePaint(
+            image,
+            sampling,
+            localMatrix,
+            HdrDecodeSettings.ToneMapMode,
+            exposure,
+            hdr.WhitePoint * exposure
+        );
+
+        if (paint is null)
+        {
+            canvas.DrawImage(image, destFullRect, sampling);
+            return;
+        }
+
+        canvas.DrawRect(destFullRect, paint);
     }
 
     private static void DrawPictureScaled(SKCanvas canvas, SKPicture picture, SKRect destFullRect)

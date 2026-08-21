@@ -26,6 +26,8 @@ public static class ImageStore
     {
         ImageLoader.PreloadAdjacent(paths);
     }
+    
+    public static long ResidentBytes() => ImageLoader.ResidentBytes();
 
     public static void Cleanup(string[] keep)
     {

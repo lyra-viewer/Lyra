@@ -1,7 +1,6 @@
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
-using SkiaSharp;
 using static System.Threading.Thread;
 using Lyra.Imaging.Decoding.Support;
 
@@ -12,10 +11,10 @@ internal abstract class FloatRgbaDecoderBase : IImageDecoder
     public abstract bool CanDecode(ImageFormatType format);
 
     /// <summary>
-    /// Loads RGBA float pixels for <paramref name="path"/>. Implementations throw on failure;
-    /// the returned buffer is owned by this base and released via its <c>Dispose</c>.
+    /// Loads RGBA float pixels for <paramref name="composite"/>'s file. Implementations throw on
+    /// failure; the returned buffer is owned by this base and released via its <c>Dispose</c>.
     /// </summary>
-    protected abstract FloatImageBuffer LoadPixels(string path);
+    protected abstract FloatImageBuffer LoadPixels(Composite composite);
 
     public Task DecodeAsync(Composite composite, CancellationToken ct)
     {
@@ -25,31 +24,21 @@ internal abstract class FloatRgbaDecoderBase : IImageDecoder
 
         ct.ThrowIfCancellationRequested();
 
-        using var pixels = LoadPixels(path);
+        using var pixels = LoadPixels(composite);
 
         ct.ThrowIfCancellationRequested();
 
         var width = pixels.Width;
         var height = pixels.Height;
         DecoderValidation.RequireSaneDimensions(GetType().Name, width, height, bytesPerPixel: sizeof(float) * 4);
-
-        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-        var bitmap = new SKBitmap(info);
-
-        bool isGrayscale;
-        unsafe
-        {
-            HdrToneMap.ToBitmap(pixels.AsSpan(), bitmap, ct, out isGrayscale);
-        }
+        
+        var content = HdrImageBuilder.Build(pixels.AsSpan(), width, height, composite, ct, out var isGrayscale);
 
         composite.AddFormatSpecific("GrayScale", isGrayscale.ToString());
 
         ct.ThrowIfCancellationRequested();
 
-        bitmap.SetImmutable();
-        var image = SKImage.FromBitmap(bitmap);
-
-        composite.Content = new RasterContent(bitmap, image);
+        composite.Content = content;
 
         return Task.CompletedTask;
     }

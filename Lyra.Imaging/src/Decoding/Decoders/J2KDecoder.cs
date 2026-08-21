@@ -88,9 +88,7 @@ internal class J2KDecoder : IImageDecoder
                         UpdateGrayscaleFlag(src, nativeStrideBytes, width, height, ref isGrayscale);
                         // composite.FormatSpecific["Grayscale"] = isGrayscale.ToString();
 
-                        bitmap.SetImmutable();
-                        var image = SKImage.FromBitmap(bitmap);
-                        composite.Content = new RasterContent(bitmap, image);
+                        composite.Content = RasterContentBuilder.Build(bitmap, composite);
                         return Task.CompletedTask;
                     }
 
@@ -140,9 +138,7 @@ internal class J2KDecoder : IImageDecoder
 
                     // composite.FormatSpecific["Grayscale"] = isGrayscale.ToString();
 
-                    bitmap.SetImmutable();
-                    var skImage = SKImage.FromBitmap(bitmap);
-                    composite.Content = new RasterContent(bitmap, skImage);
+                    composite.Content = RasterContentBuilder.Build(bitmap, composite);
                 }
             }
 
@@ -201,10 +197,8 @@ internal class J2KDecoder : IImageDecoder
 
     private static unsafe void CopyRows(byte* src, int srcStride, byte* dst, int dstStride, int height, int bytesPerRow)
     {
-        for (var y = 0; y < height; y++)
-        {
+        for (var y = 0; y < height; y++) 
             Buffer.MemoryCopy(src + (nint)y * (nint)srcStride, dst + (nint)y * (nint)dstStride, dstStride, bytesPerRow);
-        }
     }
 
     private static unsafe void UpdateGrayscaleFlag(byte* src, int stride, int width, int height, ref bool isGrayscale)

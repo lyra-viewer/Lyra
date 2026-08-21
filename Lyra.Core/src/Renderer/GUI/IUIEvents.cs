@@ -17,6 +17,8 @@ public interface IUIEvents
     event Action<InitDisplayMode>? InitDisplayModeChanged;
     event Action<BackgroundMode>? BackgroundModeChanged;
     event Action<SamplingMode>? SamplingModeChanged;
+    event Action<ToneMapMode>? ToneMapModeChanged;
+    event Action<int>? ExposureStopsChanged;
 
     /// <summary>A size was picked in the SIZES dropdown; the payload is the variant index.</summary>
     event Action<int>? VariantSelected;

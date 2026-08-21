@@ -12,6 +12,9 @@ public static class SettingsManager
 
     private const int CurrentVersion = 4;
 
+    public const int MinExposureStops = -8;
+    public const int MaxExposureStops = 8;
+
     public static AppSettings AppSettings = DefaultAppSettings;
     public static UISettings UiSettings = DefaultUiSettings;
 
@@ -91,6 +94,8 @@ public static class SettingsManager
         var samplingRaw = table.GetInt("sampling_mode", (int)DefaultUiSettings.SamplingMode);
         var backgroundRaw = table.GetInt("background_mode", (int)DefaultUiSettings.BackgroundMode);
         var initDisplayRaw = table.GetInt("init_display_mode", (int)DefaultUiSettings.InitDisplayMode);
+        var toneMapRaw = table.GetInt("tone_map_mode", (int)DefaultUiSettings.ToneMapMode);
+        var exposure = Math.Clamp(table.GetInt("exposure_stops", DefaultUiSettings.ExposureStops), MinExposureStops, MaxExposureStops);
         var info = table.GetBool("info_visible", DefaultUiSettings.InfoVisible);
         var help = table.GetBool("help_visible", DefaultUiSettings.HelpVisible);
         var sidebar = table.GetBool("sidebar_visible", DefaultUiSettings.SidebarVisible);
@@ -116,7 +121,14 @@ public static class SettingsManager
         if (!Enum.IsDefined(typeof(InitDisplayMode), initDisplayRaw))
             Logger.Warning($"[SettingsManager] Invalid init_display_mode={initDisplayRaw}, using default {(int)DefaultUiSettings.InitDisplayMode}");
 
-        UiSettings = new UISettings(sampling, background, initDisplay, info, help, sidebar);
+        var toneMap = Enum.IsDefined(typeof(ToneMapMode), toneMapRaw)
+            ? (ToneMapMode)toneMapRaw
+            : DefaultUiSettings.ToneMapMode;
+
+        if (!Enum.IsDefined(typeof(ToneMapMode), toneMapRaw))
+            Logger.Warning($"[SettingsManager] Invalid tone_map_mode={toneMapRaw}, using default {(int)DefaultUiSettings.ToneMapMode}");
+
+        UiSettings = new UISettings(sampling, background, initDisplay, toneMap, exposure, info, help, sidebar);
     }
 
     private static string BuildUserSettingsToml(UISettings s)
@@ -128,6 +140,8 @@ public static class SettingsManager
                 sampling_mode = {(int)s.SamplingMode}
                 background_mode = {(int)s.BackgroundMode}
                 init_display_mode = {(int)s.InitDisplayMode}
+                tone_map_mode = {(int)s.ToneMapMode}
+                exposure_stops = {s.ExposureStops}
                 info_visible = {s.InfoVisible.ToString().ToLowerInvariant()}
                 help_visible = {s.HelpVisible.ToString().ToLowerInvariant()}
                 sidebar_visible = {s.SidebarVisible.ToString().ToLowerInvariant()}

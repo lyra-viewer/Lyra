@@ -78,11 +78,8 @@ internal class SkiaDecoder : IImageDecoder, IThumbnailDecoder
 
             bitmap = upright;
 
-            bitmap.SetImmutable();
-            var image = SKImage.FromBitmap(bitmap);
-
-            // Important: keep bitmap alive for image lifetime
-            composite.Content = new RasterContent(bitmap, image);
+            // The builder takes ownership of the bitmap and keeps it alive for the image it makes.
+            composite.Content = RasterContentBuilder.Build(bitmap, composite);
         }
         catch (OperationCanceledException)
         {
