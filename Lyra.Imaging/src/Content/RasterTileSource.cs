@@ -47,6 +47,21 @@ public sealed class RasterTileSource : ITileSource
         }
     }
 
+    /// <summary>Sum of the tiles decoded so far; slots not yet filled cost nothing.</summary>
+    public long ByteSize
+    {
+        get
+        {
+            var tiles = Volatile.Read(ref _tiles);
+            var total = 0L;
+
+            for (var i = 0; i < tiles.Length; i++)
+                total += RasterLargeContent.Bytes(Volatile.Read(ref tiles[i]));
+
+            return total;
+        }
+    }
+
     public IEnumerable<RasterTile> GetTiles(SKRect visibleFullRect, SKSize imageSize)
     {
         if (visibleFullRect.IsEmpty)

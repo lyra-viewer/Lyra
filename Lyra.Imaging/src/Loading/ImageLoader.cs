@@ -31,7 +31,19 @@ internal class ImageLoader : IDisposable
 
     #region Fields
 
+    /// <summary>
+    /// How much decoded pixel data the cache may hold before neighbors are evicted.
+    /// </summary>
+    private const long CacheByteBudget = 1536L * 1024 * 1024;
+
     private readonly ConcurrentDictionary<string, Lazy<ImageJob>> _images = new();
+
+    /// <summary>
+    /// The most recent keep window, so the budget can be re-enforced when decode completes.
+    /// Checking only at Cleanup time is not enough: that runs before the new image is decoded, and
+    /// the decodes it triggers land afterward, so the peak falls between two checks.
+    /// </summary>
+    private volatile string[] _lastKeepWindow = [];
     private readonly PreloadTaskScheduler _preloadScheduler = new(2);
     private readonly TaskFactory _preloadTaskFactory;
     private volatile Composite? _currentImage;
@@ -48,9 +60,7 @@ internal class ImageLoader : IDisposable
     /// <summary>Returns a stable Composite immediately. Starts async load if needed (non-blocking).</summary>
     public Composite GetImage(string path)
     {
-        var lazy = _images.GetOrAdd(
-            path,
-            p => CreateLazyJob(p, isPreload: false));
+        var lazy = _images.GetOrAdd(path, p => CreateLazyJob(p, isPreload: false));
 
         ImageJob job;
         try
@@ -75,11 +85,100 @@ internal class ImageLoader : IDisposable
             TryPreload(path);
     }
 
+    /// <summary>
+    /// Drops cached images, furthest from the current one first, until the resident set fits the
+    /// budget. The current image is never evicted, however large it is - refusing to show what
+    /// the user asked for would be worse than the memory.
+    /// </summary>
+    private void EnforceByteBudget(string[] keep)
+    {
+        var resident = ResidentBytes();
+        if (resident <= CacheByteBudget)
+            return;
+
+        var current = _currentImage;
+        var currentPath = current?.FileInfo.FullName;
+
+        var centre = currentPath is null
+            ? keep.Length / 2
+            : Math.Max(0, Array.FindIndex(keep, p => PathComparer.Equals(p, currentPath)));
+
+        var order = keep
+            .Select((path, index) => (path, distance: Math.Abs(index - centre)))
+            .OrderByDescending(e => e.distance)
+            .Select(e => e.path);
+
+        foreach (var path in order)
+        {
+            if (resident <= CacheByteBudget)
+                return;
+
+            if (!_images.TryGetValue(path, out var lazy) || !lazy.IsValueCreated)
+                continue;
+
+            if (ReferenceEquals(lazy.Value.Composite, current))
+                continue;
+
+            var bytes = SafeByteSize(lazy.Value.Composite);
+            if (bytes <= 0)
+                continue;
+
+            RemoveMatching(key => PathComparer.Equals(key, path), "Budget:");
+            resident -= bytes;
+
+            Logger.Debug($"[ImageLoader] Evicted {Path.GetFileName(path)} ({bytes / 1024 / 1024} MB) to stay in budget.");
+        }
+    }
+
+    /// <summary>
+    /// Re-checks the budget against the window last navigated to. Called when a decode finishes,
+    /// which is the moment residency actually grows.
+    /// </summary>
+    private void EnforceByteBudgetAfterDecode() => EnforceByteBudget(_lastKeepWindow);
+
+    /// <summary>Decoded bytes currently held by the cache. Exposed for profiling.</summary>
+    public long ResidentBytes()
+    {
+        var total = 0L;
+
+        foreach (var lazy in _images.Values)
+        {
+            if (!lazy.IsValueCreated)
+                continue;
+
+            total += SafeByteSize(lazy.Value.Composite);
+        }
+
+        return total;
+    }
+
+    /// <summary>
+    /// A composite's footprint, tolerating one being disposed on another thread mid-measurement -
+    /// this runs while decodes and evictions are in flight, and a torn read here must not take
+    /// down navigation.
+    /// </summary>
+    private static long SafeByteSize(Composite composite)
+    {
+        try
+        {
+            return composite.Content?.ByteSize ?? 0;
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+    }
+
     /// <summary>Remove everything not in 'keep' array. Cancels in-flight work and disposes completed images not current.</summary>
     public void Cleanup(string[] keep)
     {
         var keepSet = new HashSet<string>(keep);
         RemoveMatching(key => !keepSet.Contains(key), "Cleanup:");
+
+        // The window says which neighbors are worth keeping; the budget says how many of them
+        // actually fit.
+        _lastKeepWindow = keep;
+        EnforceByteBudget(keep);
     }
 
     public void Purge(string path)
@@ -122,9 +221,7 @@ internal class ImageLoader : IDisposable
         if (ImageFormat.IsPreloadDisabled(Path.GetExtension(path)))
             return;
 
-        var lazy = _images.GetOrAdd(
-            path,
-            p => CreateLazyJob(p, isPreload: true));
+        var lazy = _images.GetOrAdd(path, p => CreateLazyJob(p, isPreload: true));
 
         // Touching Value starts the preload (exactly once for the stored Lazy).
         try
@@ -171,6 +268,8 @@ internal class ImageLoader : IDisposable
                 largeContent.TilesProgressChanged += _ => composite.SignalProgress();
 
             composite.SignalReady();
+            
+            EnforceByteBudgetAfterDecode();
 
             // Promote to Complete if:
             // - decoder finished everything synchronously (still Loading), or
@@ -306,7 +405,8 @@ internal class ImageLoader : IDisposable
             state,
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+            TaskScheduler.Default
+        );
     }
 
     private static void OnJobFinished(Task task, object? stateObj)

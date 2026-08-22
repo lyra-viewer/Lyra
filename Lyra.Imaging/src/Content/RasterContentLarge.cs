@@ -15,6 +15,13 @@ public sealed class RasterLargeContent : ICompositeContent
     }
 
     public bool IsResolutionIndependent => false;
+    
+    public long ByteSize => Bytes(PreviewImage) + Bytes(FullImage) + (TileSource?.ByteSize ?? 0);
+
+    internal static long Bytes(SKImage? image) =>
+        image is null || image.Handle == IntPtr.Zero
+            ? 0
+            : (long)image.Width * image.Height * Math.Max(1, image.ColorType.GetBytesPerPixel());
 
     public float FullWidth { get; }
     public float FullHeight { get; }
@@ -44,6 +51,16 @@ public sealed class RasterLargeContent : ICompositeContent
         ArgumentOutOfRangeException.ThrowIfNegative(total);
         TilesTotal = total;
         Interlocked.Exchange(ref _tilesReady, 0);
+    }
+    
+    public void MarkAllTilesReady(int total)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(total);
+
+        TilesTotal = total;
+        Interlocked.Exchange(ref _tilesReady, total);
+
+        TilesProgressChanged?.Invoke(this);
     }
 
     public void IncrementTileReady()
@@ -99,6 +116,8 @@ public sealed class RasterLargeContent : ICompositeContent
 public interface ITileSource : IDisposable
 {
     IEnumerable<RasterTile> GetTiles(SKRect visibleFullRect, SKSize imageSize);
+    
+    long ByteSize { get; }
 }
 
 public readonly record struct RasterTile(SKImage Image, SKRect DestRect);
