@@ -2,11 +2,11 @@ using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
 using SkiaSharp;
 
-namespace Lyra.Renderer;
+namespace Lyra.Renderer.Drawing;
 
 public class SkiaCompositeContentDrawer : ICompositeContentDrawer
 {
-    public void Draw(SKCanvas canvas, Composite composite, SKRect destFullRect, SKRect visibleFullRect, SKSamplingOptions sampling, float zoomScale, float displayScale)
+    public void Draw(SKCanvas canvas, Composite composite, SKRect destFullRect, SKRect visibleFullRect, SKSamplingOptions sampling, float zoomScale, float displayScale, SurfaceProfile surface)
     {
         var content = composite.Content;
         if (content is null)
@@ -20,7 +20,7 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
         switch (content)
         {
             case HdrRasterContent hdr:
-                DrawHdr(canvas, hdr, destFullRect, sampling);
+                DrawHdr(canvas, hdr, destFullRect, sampling, surface);
                 break;
 
             case RasterContent raster:
@@ -33,10 +33,37 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
 
             case RasterLargeContent large:
             {
-                DrawRasterLarge(canvas, composite, destFullRect, visibleFullRect, large, sampling, zoomScale, displayScale);
+                DrawRasterLarge(canvas, composite, destFullRect, visibleFullRect, large, sampling, zoomScale, displayScale, surface);
                 break;
             }
         }
+    }
+    
+    private static void DrawPreview(SKCanvas canvas, RasterLargeContent rasterLarge, SKImage preview, SKRect destFullRect, SKSamplingOptions sampling, SurfaceProfile surface)
+    {
+        if (rasterLarge.PreviewWhitePoint is not { } whitePoint)
+        {
+            canvas.DrawImage(preview, destFullRect, sampling);
+            return;
+        }
+
+        var localMatrix = SKMatrix.CreateScaleTranslation(
+            destFullRect.Width / preview.Width,
+            destFullRect.Height / preview.Height,
+            destFullRect.Left,
+            destFullRect.Top
+        );
+
+        var exposure = HdrDecodeSettings.ExposureScale;
+
+        using var paint = HdrToneMapShader.CreatePaint(preview, sampling, localMatrix, HdrDecodeSettings.ToneMapMode, exposure, whitePoint * exposure, surface);
+        if (paint is null)
+        {
+            canvas.DrawImage(preview, destFullRect, sampling);
+            return;
+        }
+
+        canvas.DrawRect(destFullRect, paint);
     }
 
     /// <summary>
@@ -44,7 +71,7 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
     /// uniform change rather than a re-decode. Falls back to drawing the image as-is when the
     /// runtime effect is unavailable - washed out, but visible, which beats a blank canvas.
     /// </summary>
-    private static void DrawHdr(SKCanvas canvas, HdrRasterContent hdr, SKRect destFullRect, SKSamplingOptions sampling)
+    private static void DrawHdr(SKCanvas canvas, HdrRasterContent hdr, SKRect destFullRect, SKSamplingOptions sampling, SurfaceProfile surface)
     {
         var image = hdr.Image;
         if (image.Width <= 0 || image.Height <= 0)
@@ -65,7 +92,8 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
             localMatrix,
             HdrDecodeSettings.ToneMapMode,
             exposure,
-            hdr.WhitePoint * exposure
+            hdr.WhitePoint * exposure,
+            surface
         );
 
         if (paint is null)
@@ -91,7 +119,7 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
         canvas.Restore();
     }
 
-    private static void DrawRasterLarge(SKCanvas canvas, Composite composite, SKRect destFullRect, SKRect visibleFullRect, RasterLargeContent rasterLarge, SKSamplingOptions sampling, float zoomScale, float displayScale)
+    private static void DrawRasterLarge(SKCanvas canvas, Composite composite, SKRect destFullRect, SKRect visibleFullRect, RasterLargeContent rasterLarge, SKSamplingOptions sampling, float zoomScale, float displayScale, SurfaceProfile surface)
     {
         // Decide if preview is sharp enough at current zoom.
         // Yes -> draw preview only (skip tiles).
@@ -100,7 +128,7 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
         var tileSource = rasterLarge.TileSource;
 
         if (preview != null)
-            canvas.DrawImage(preview, destFullRect, sampling);
+            DrawPreview(canvas, rasterLarge, preview, destFullRect, sampling, surface);
 
         if (tileSource == null)
             return;
@@ -112,9 +140,7 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
         // Safety: if there's no preview, rely on tiles.
         if (preview == null)
         {
-            foreach (var tile in tileSource.GetTiles(visibleFullRect, new SKSize(composite.LogicalWidth, composite.LogicalHeight)))
-                canvas.DrawImage(tile.Image, tile.DestRect, sampling);
-            
+            DrawTiles(canvas, composite, rasterLarge, tileSource, visibleFullRect, sampling, surface);
             return;
         }
 
@@ -134,7 +160,39 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
         if (!useTiles)
             return;
 
-        foreach (var tile in tileSource.GetTiles(visibleFullRect, new SKSize(composite.LogicalWidth, composite.LogicalHeight)))
-            canvas.DrawImage(tile.Image, tile.DestRect, sampling);
+        DrawTiles(canvas, composite, rasterLarge, tileSource, visibleFullRect, sampling, surface);
+    }
+    
+    private static void DrawTiles(SKCanvas canvas, Composite composite, RasterLargeContent rasterLarge, ITileSource tileSource, SKRect visibleFullRect, SKSamplingOptions sampling, SurfaceProfile surface)
+    {
+        var fullSize = new SKSize(composite.LogicalWidth, composite.LogicalHeight);
+        var whitePoint = rasterLarge.TileWhitePoint;
+
+        foreach (var tile in tileSource.GetTiles(visibleFullRect, fullSize))
+        {
+            if (whitePoint is not { } measured)
+            {
+                canvas.DrawImage(tile.Image, tile.DestRect, sampling);
+                continue;
+            }
+
+            var localMatrix = SKMatrix.CreateScaleTranslation(
+                tile.DestRect.Width / tile.Image.Width,
+                tile.DestRect.Height / tile.Image.Height,
+                tile.DestRect.Left,
+                tile.DestRect.Top
+            );
+
+            var exposure = HdrDecodeSettings.ExposureScale;
+
+            using var paint = HdrToneMapShader.CreatePaint(tile.Image, sampling, localMatrix, HdrDecodeSettings.ToneMapMode, exposure, measured * exposure, surface);
+            if (paint is null)
+            {
+                canvas.DrawImage(tile.Image, tile.DestRect, sampling);
+                continue;
+            }
+
+            canvas.DrawRect(tile.DestRect, paint);
+        }
     }
 }

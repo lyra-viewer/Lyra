@@ -39,6 +39,9 @@
     <EmbeddedResource Include="Resources\OFL.txt">
       <LogicalName>LyraViewer.Fonts.OFL.txt</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Shaders\HdrToneMap.sksl">
+      <LogicalName>LyraViewer.Shaders.HdrToneMap.sksl</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <PropertyGroup>

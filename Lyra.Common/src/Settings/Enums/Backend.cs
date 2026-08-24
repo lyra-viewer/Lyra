@@ -8,5 +8,19 @@ public enum Backend
     OpenGL,
     
     [Alias("metal")]
-    Metal
+    Metal,
+
+    [Alias("auto")]
+    Auto,
+
+    [DisabledBackend]
+    [Alias("vulkan")]
+    Vulkan,
+    
+    [DisabledBackend]
+    [Alias("dx")]
+    DirectX
 }
+
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class DisabledBackendAttribute : Attribute;

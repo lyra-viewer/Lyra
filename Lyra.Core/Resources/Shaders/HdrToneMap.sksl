@@ -1,0 +1,85 @@
+uniform shader image;
+uniform float exposure;
+uniform float whitePoint;
+uniform float mode;
+uniform float3x3 gamut;
+
+uniform float4 encodeGABC;
+uniform float3 encodeDEF;
+
+uniform float3 lumaWeights;
+
+uniform float ceiling;
+
+float encodeChannel(float linear) {
+    float g = encodeGABC.x;
+    float a = encodeGABC.y;
+    float b = encodeGABC.z;
+    float c = encodeGABC.w;
+    float d = encodeDEF.x;
+    float e = encodeDEF.y;
+    float f = encodeDEF.z;
+
+    if (a <= 0.0 || g <= 0.0) {
+        return linear;
+    }
+
+    float joint = c * d + f;
+
+    if (linear < joint) {
+        return c > 0.0 ? (linear - f) / c : 0.0;
+    }
+
+    return (pow(max(linear - e, 0.0), 1.0 / g) - b) / a;
+}
+
+float acesCurve(float x) {
+    return (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14);
+}
+
+float reinhardCurve(float x, float white) {
+    float w2 = white * white;
+    return x * (1.0 + x / w2) / (1.0 + x);
+}
+
+const float highlightKnee = 0.8;
+
+float spendHeadroom(float mapped, float ceiling) {
+    if (ceiling <= 1.0 || mapped <= highlightKnee) {
+        return mapped;
+    }
+
+    float intoHighlights = (mapped - highlightKnee) / (1.0 - highlightKnee);
+
+    return highlightKnee + (ceiling - highlightKnee) * intoHighlights;
+}
+
+half4 main(float2 coord) {
+    half4 src = image.eval(coord);
+    float3 x = max(float3(src.rgb) * exposure, float3(0.0));
+
+    x = max(gamut * x, float3(0.0));
+
+    float3 mapped;
+    if (mode > 1.5) {
+        mapped = x;
+    } else {
+        float luminance = max(dot(x, lumaWeights), 0.0);
+        float curved = (mode > 0.5) ? reinhardCurve(luminance, whitePoint) : acesCurve(luminance);
+        float target = spendHeadroom(curved, ceiling);
+
+        mapped = luminance > 1e-5 ? x * (target / luminance) : float3(0.0);
+
+        float peak = max(mapped.r, max(mapped.g, mapped.b));
+        if (peak > ceiling) {
+            float t = clamp((peak - ceiling) / max(peak - target, 1e-5), 0.0, 1.0);
+            mapped = mix(mapped, float3(target), t);
+        }
+    }
+
+    mapped = clamp(mapped, float3(0.0), float3(ceiling));
+
+    mapped = float3(encodeChannel(mapped.r), encodeChannel(mapped.g), encodeChannel(mapped.b));
+
+    return half4(half3(mapped), src.a);
+}

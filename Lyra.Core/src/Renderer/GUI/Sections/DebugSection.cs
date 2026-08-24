@@ -2,6 +2,7 @@ using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.DuplicateStatusProvider;
 using Lyra.FileLoader.Store;
+using Lyra.Renderer.Display;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Controls.Button;
@@ -54,6 +55,9 @@ public sealed class DebugSection : IUISection
     private readonly HStack _timeCompleteRow;
     private readonly Label _timeCompleteValue;
 
+    private readonly Label _displayValue;
+    private readonly Label _edrValue;
+
     private readonly HStack _dropStatusRow;
     private readonly Label _dropStatusValue;
 
@@ -101,6 +105,9 @@ public sealed class DebugSection : IUISection
         _decoderRow = BuildRow(keyLabels, "Decoder", "", out _decoderValue);
         _timeEstRow = BuildRow(keyLabels, "Time Est (ms)", "", out _timeEstValue);
         _timeCompleteRow = BuildRow(keyLabels, "Time Complete (ms)", "", out _timeCompleteValue);
+        
+        var displayRow = BuildRow(keyLabels, "Display", "-", out _displayValue);
+        var edrRow = BuildRow(keyLabels, "EDR", "-", out _edrValue);
 
         // Drag & drop rows
         _dropStatusRow = BuildRow(keyLabels, "Drop", "", out _dropStatusValue);
@@ -143,6 +150,9 @@ public sealed class DebugSection : IUISection
                 _decoderRow,
                 _timeEstRow,
                 _timeCompleteRow,
+                Spacer(),
+                displayRow,
+                edrRow,
                 Spacer(),
                 _dropStatusRow,
                 dropEnqueuedRow,
@@ -188,6 +198,9 @@ public sealed class DebugSection : IUISection
         }
 
         var app = state.AppStates;
+
+        _displayValue.Text = app.Display.DisplayName;
+        _edrValue.Text = FormatEdr(app.Display, app.BackendSupportsExtendedRange);
 
         if (app.DropAborted)
         {
@@ -249,6 +262,16 @@ public sealed class DebugSection : IUISection
         _recordContentHashValue.Text = record.HasContentHash ? record.ContentHash.ToString("X") : "-";
         _recordPHashValue.Text = record.HasPHash ? record.PHash.ToString("X16") : "-";
         _recordGroupValue.Text = record.HasGroup ? record.GroupId!.Value.ToString() : "-";
+    }
+    
+    internal static string FormatEdr(DisplayCapabilities display, bool backendSupportsExtendedRange)
+    {
+        if (!display.SupportsExtendedRange)
+            return "none (SDR display)";
+
+        var headroom = $"{display.CurrentHeadroom:0.00}x now / {display.PotentialHeadroom:0.##}x max";
+
+        return backendSupportsExtendedRange ? headroom : $"{headroom} - backend cannot present it";
     }
 
     public void SetPointer(float x, float y) => _pointerValue.Text = $"{x:F1}, {y:F1}";

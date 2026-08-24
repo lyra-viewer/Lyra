@@ -156,7 +156,9 @@ public static class SettingsManager
                 version = {CurrentVersion}
 
                 # Renderer used:
-                # "opengl", "metal"
+                # "auto"   - chosen per platform and capability
+                # "opengl" - portable, no EDR support
+                # "metal"  - macOS only, required for extended dynamic range
                 renderer = "{s.Renderer.Alias()}"
 
                 # Window state on application start:

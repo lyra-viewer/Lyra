@@ -1,18 +1,20 @@
-using System.Collections.Concurrent;
-using Lyra.Common;
-using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
+using Lyra.Common.Settings;
 using Lyra.Common.SystemExtensions;
+using Lyra.Common;
 using Lyra.DropStatusProvider;
-using Lyra.FileLoader.Duplicates;
 using Lyra.FileLoader.Duplicates.Perceptual;
+using Lyra.FileLoader.Duplicates;
 using Lyra.FileLoader.Navigation;
-using Lyra.Imaging;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
+using Lyra.Imaging;
+using Lyra.Renderer.Backends;
+using Lyra.Renderer.Display;
 using Lyra.Renderer;
 using Lyra.UI.SupportingTypes;
 using SkiaSharp;
+using System.Collections.Concurrent;
 using static SDL3.SDL;
 
 namespace Lyra.SdlCore;
@@ -22,12 +24,14 @@ public partial class SdlCore : IDisposable
     // -------------------------------------------------------------------------
     //  Window / renderer
     // -------------------------------------------------------------------------
-    
+
     private const string AppId = "com.nineveh.LyraViewer";
 
     private IntPtr _window;
     private SkiaRendererBase _renderer = null!;
     private bool _running = true;
+    
+    private IDisplayCapabilityService _displays = DisplayCapabilityService.None;
 
     private readonly DropProgressTracker _dropProgressTracker = new();
     private readonly DuplicateScanService _duplicateScanService = new(new ImagingThumbnailSource());
@@ -95,7 +99,7 @@ public partial class SdlCore : IDisposable
         }
 
         ColdStartReset();
-        
+
         BundledFonts.Register();
 
         InitializeWindowAndRenderer();
@@ -105,12 +109,12 @@ public partial class SdlCore : IDisposable
 
         LoadStartupArgs(startupArgs);
     }
-    
+
     private void LoadStartupArgs(string[]? startupArgs)
     {
         if (startupArgs is null || startupArgs.Length == 0)
             return;
-        
+
         var paths = startupArgs
             .Where(a => !string.IsNullOrWhiteSpace(a) && (File.Exists(a) || Directory.Exists(a)))
             .ToList();
@@ -135,27 +139,19 @@ public partial class SdlCore : IDisposable
 
         var (w, h) = GetInitialWindowSize();
 
-        var backend = SettingsManager.AppSettings.Renderer;
-        if (backend == Backend.Metal && !OperatingSystem.IsMacOS())
+        var configured = SettingsManager.AppSettings.Renderer;
+        var candidates = RendererSelection.ResolveCandidates(configured, OperatingSystem.IsMacOS());
+
+        if (RendererSelection.DescribeUnavailable(configured, candidates) is { } reason)
         {
-            Logger.Warning("[Renderer] Metal backend is only supported on macOS; falling back to OpenGL.");
-            backend = Backend.OpenGL;
+            var fallback = candidates.Count > 0 ? $" Starting {candidates[0].Alias()} instead." : string.Empty;
+            Logger.Warning($"[Core] {reason}{fallback}");
         }
 
-        switch (backend)
-        {
-            case Backend.OpenGL:
-                _window = CreateWindow("Lyra Viewer (OpenGL)", w, h, flags | WindowFlags.OpenGL);
-                _renderer = new SkiaOpenGlRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropProgressTracker, _viewState, _duplicateScanService.Progress);
-                break;
-            case Backend.Metal:
-                _window = CreateWindow("Lyra Viewer (Metal)", w, h, flags | WindowFlags.Metal);
-                _renderer = new SkiaMetalRenderer(_window, DimensionHelper.GetDrawableSize(_window), _dropProgressTracker, _viewState, _duplicateScanService.Progress);
-                break;
-            default:
-                throw new ArgumentOutOfRangeException();
-        }
+        if (!candidates.Any(candidate => TryInitializeRenderer(candidate, w, h, flags)))
+            throw new InvalidOperationException($"No renderer backend could be initialized (tried: {string.Join(", ", candidates)}).");
 
+        AttachDisplayCapabilities();
         ApplyWindowIcon();
 
         _nextFrameDeadlineNs = GetTicksNS() + TargetFrameNs;
@@ -167,6 +163,81 @@ public partial class SdlCore : IDisposable
 
         if (SettingsManager.AppSettings.WindowStateOnStart == WindowState.Fullscreen)
             SetFullscreen(true);
+    }
+    
+    private void AttachDisplayCapabilities()
+    {
+        _displays = DisplayCapabilityService.Create(_window);
+        _displays.Changed += OnDisplayCapabilitiesChanged;
+        _renderer.SetDisplayCapabilities(_displays);
+    }
+
+    private void OnDisplayCapabilitiesChanged(DisplayCapabilities capabilities)
+    {
+        Logger.Debug($"[Core] {capabilities}");
+
+        if (_headroomReported || !capabilities.HasHeadroomNow)
+            return;
+
+        _headroomReported = true;
+        Logger.Info($"[Core] \"{capabilities.DisplayName}\" is granting {capabilities.CurrentHeadroom:0.##}x SDR white; EDR output is live.");
+    }
+
+    private bool _headroomReported;
+
+    private bool TryInitializeRenderer(Backend backend, int w, int h, WindowFlags flags)
+    {
+        try
+        {
+            _window = CreateWindow($"Lyra Viewer ({backend})", w, h, flags | WindowFlagsFor(backend));
+            if (_window == IntPtr.Zero)
+                throw new InvalidOperationException($"SDL_CreateWindow failed: {GetError()}");
+
+            var drawableSize = DimensionHelper.GetDrawableSize(_window);
+
+            _renderer = backend switch
+            {
+                Backend.Metal => new SkiaMetalRenderer(_window, drawableSize, _dropProgressTracker, _viewState, _duplicateScanService.Progress),
+                Backend.OpenGL => new SkiaOpenGlRenderer(_window, drawableSize, _dropProgressTracker, _viewState, _duplicateScanService.Progress),
+                _ => throw new ArgumentOutOfRangeException(nameof(backend), backend, "No renderer for this backend.")
+            };
+
+            Logger.Info($"[Core] {backend} backend initialized.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[Core] {backend} initialization failed ({ex.Message}).");
+            DiscardFailedRenderer();
+            return false;
+        }
+    }
+
+    private static WindowFlags WindowFlagsFor(Backend backend) => backend switch
+    {
+        Backend.Metal => WindowFlags.Metal,
+        Backend.OpenGL => WindowFlags.OpenGL,
+        _ => throw new ArgumentOutOfRangeException(nameof(backend), backend, "No window flags for this backend.")
+    };
+    
+    private void DiscardFailedRenderer()
+    {
+        try
+        {
+            _renderer?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"[Core] Disposing the failed renderer threw: {ex.Message}");
+        }
+
+        _renderer = null!;
+
+        if (_window == IntPtr.Zero)
+            return;
+
+        DestroyWindow(_window);
+        _window = IntPtr.Zero;
     }
 
     private static (int w, int h) GetInitialWindowSize()
@@ -181,7 +252,7 @@ public partial class SdlCore : IDisposable
 
         return (1280, 800);
     }
-    
+
     private void ApplyWindowIcon()
     {
         try
@@ -199,7 +270,7 @@ public partial class SdlCore : IDisposable
                 Logger.Warning("[Core] App icon could not be decoded; skipping window icon.");
                 return;
             }
-            
+
             var info = new SKImageInfo(decoded.Width, decoded.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
             using var rgba = new SKBitmap(info);
             using (var image = SKImage.FromBitmap(decoded))
@@ -217,7 +288,7 @@ public partial class SdlCore : IDisposable
                 Logger.Warning($"[Core] SDL_CreateSurfaceFrom failed for window icon: {GetError()}");
                 return;
             }
-            
+
             SetWindowIcon(_window, surface);
             DestroySurface(surface);
         }
@@ -237,6 +308,7 @@ public partial class SdlCore : IDisposable
         {
             DrainMainThreadQueue();
             HandleEvents();
+            _displays.Poll();
             RecalculateDisplayModeIfNecessary();
             _renderer.RefreshUI(_composite);
             _renderer.Render();
@@ -290,6 +362,7 @@ public partial class SdlCore : IDisposable
         {
             foreach (var action in _deferredUntilWarm)
                 action();
+            
             _deferredUntilWarm.Clear();
         }
     }
@@ -403,45 +476,45 @@ public partial class SdlCore : IDisposable
         var events = _renderer.UIManager.Events;
 
         // User-driven UI events (menu clicks, tree picks, dropdown changes)
-        events.OpenFileRequested              += OnOpenFileRequested;
-        events.OpenDirectoryRequested         += OnOpenDirectoryRequested;
-        events.QuitRequested                  += ExitApplication;
-        events.AboutRequested                 += OnAboutRequested;
-        events.FullscreenRequested            += ToggleFullscreen;
-        events.FindDuplicatesRequested        += OnFindDuplicatesRequested;
-        events.DuplicatesGoBackRequested      += OnDuplicatesGoBack;
-        events.DuplicatesExactOnlyChanged     += OnDuplicatesExactOnlyChanged;
+        events.OpenFileRequested += OnOpenFileRequested;
+        events.OpenDirectoryRequested += OnOpenDirectoryRequested;
+        events.QuitRequested += ExitApplication;
+        events.AboutRequested += OnAboutRequested;
+        events.FullscreenRequested += ToggleFullscreen;
+        events.FindDuplicatesRequested += OnFindDuplicatesRequested;
+        events.DuplicatesGoBackRequested += OnDuplicatesGoBack;
+        events.DuplicatesExactOnlyChanged += OnDuplicatesExactOnlyChanged;
         events.DuplicatesHashToleranceChanged += OnDuplicatesHashToleranceChanged;
-        events.DirectoryPicked                += OnDirectoryPicked;
-        events.VariantSelected                += OnVariantSelected;
+        events.DirectoryPicked += OnDirectoryPicked;
+        events.VariantSelected += OnVariantSelected;
 
-        _duplicateScanService.Completed       += OnDuplicateScanCompleted;
-        _duplicateScanService.Aborted         += OnDuplicateScanAborted;
+        _duplicateScanService.Completed += OnDuplicateScanCompleted;
+        _duplicateScanService.Aborted += OnDuplicateScanAborted;
 
         // Dropdown changes route into ViewState (single source of truth).
-        events.BackgroundModeChanged          += _viewState.SetBackgroundMode;
-        events.SamplingModeChanged            += _viewState.SetSamplingMode;
-        events.ToneMapModeChanged             += _viewState.SetToneMapMode;
-        events.ExposureStopsChanged           += _viewState.SetExposureStops;
-        events.InitDisplayModeChanged         += _viewState.SetInitDisplayMode;
+        events.BackgroundModeChanged += _viewState.SetBackgroundMode;
+        events.SamplingModeChanged += _viewState.SetSamplingMode;
+        events.ToneMapModeChanged += _viewState.SetToneMapMode;
+        events.ExposureStopsChanged += _viewState.SetExposureStops;
+        events.InitDisplayModeChanged += _viewState.SetInitDisplayMode;
 
         // ViewState changes auto-sync the dropdowns. UIManager.Set* is
         // documented as not re-firing, and ViewState's equality guard
         // is a second line of defense against feedback loops.
-        _viewState.BackgroundModeChanged      += _renderer.UIManager.SetBackgroundMode;
-        _viewState.SamplingModeChanged        += _renderer.UIManager.SetSamplingMode;
-        _viewState.ToneMapModeChanged         += _renderer.UIManager.SetToneMapMode;
-        _viewState.ToneMapModeChanged         += OnToneMapModeChanged;
-        _viewState.ExposureStopsChanged       += _renderer.UIManager.SetExposureStops;
-        _viewState.ExposureStopsChanged       += OnExposureStopsChanged;
-        _viewState.InitDisplayModeChanged     += _renderer.UIManager.SetInitDisplayMode;
+        _viewState.BackgroundModeChanged += _renderer.UIManager.SetBackgroundMode;
+        _viewState.SamplingModeChanged += _renderer.UIManager.SetSamplingMode;
+        _viewState.ToneMapModeChanged += _renderer.UIManager.SetToneMapMode;
+        _viewState.ToneMapModeChanged += OnToneMapModeChanged;
+        _viewState.ExposureStopsChanged += _renderer.UIManager.SetExposureStops;
+        _viewState.ExposureStopsChanged += OnExposureStopsChanged;
+        _viewState.InitDisplayModeChanged += _renderer.UIManager.SetInitDisplayMode;
     }
 
     private void OnCompositeProgress(Composite c)
     {
         DispatchToMain(() => _renderer.UIManager.RefreshCurrent());
     }
-    
+
     private void OnToneMapModeChanged(ToneMapMode mode)
     {
         HdrDecodeSettings.ToneMapMode = mode;
@@ -469,7 +542,7 @@ public partial class SdlCore : IDisposable
 
         _renderer.UIManager.RefreshCurrent();
     }
-    
+
     private void OnAboutRequested()
     {
         if (OperatingSystem.IsMacOS())

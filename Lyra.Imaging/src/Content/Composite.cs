@@ -54,7 +54,19 @@ public sealed class Composite : IDisposable
     public IReadOnlyList<StructureGroup>? Structure;
     public LayerRecord[]? PsdLayers;
     
-    public bool IsHdrDecoded => Content is HdrRasterContent;
+    /// <summary>
+    /// Why the scene-referred half-float form was not kept, or null when it was and for everything
+    /// that was never HDR. Written by a decoder thread, read by the UI thread.
+    /// </summary>
+    public volatile string? HdrBakedReason;
+    
+    public bool IsHdrImage => IsHdrDecoded || HdrBakedReason is not null;
+
+    /// <summary>
+    /// Whether the pixels are still scene-referred, and so whether exposure and curve apply at
+    /// draw time.
+    /// </summary>
+    public bool IsHdrDecoded => Content is HdrRasterContent or RasterLargeContent { HasScenePreview: true };
 
     // Derived sizes for UI/zoom/pan: always prefer Full dims, else fall back to best known dims from content.
     public float LogicalWidth => FullWidth ?? Content?.DecodedWidth ?? 0f;

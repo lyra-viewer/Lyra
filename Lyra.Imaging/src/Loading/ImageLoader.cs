@@ -34,7 +34,19 @@ internal class ImageLoader : IDisposable
     /// <summary>
     /// How much decoded pixel data the cache may hold before neighbors are evicted.
     /// </summary>
-    private const long CacheByteBudget = 1536L * 1024 * 1024;
+    private static readonly long CacheByteBudget = ComputeCacheBudget(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes);
+
+    /// <summary>What the cache may hold on this machine.</summary>
+    internal static long CacheBudgetBytes => CacheByteBudget;
+
+    private const long MinimumCacheBudget = 1536L * 1024 * 1024;
+    private const long MaximumCacheBudget = 8L * 1024 * 1024 * 1024;
+
+    /// <summary>The budget for a machine with <paramref name="availableBytes"/> to work with.</summary>
+    internal static long ComputeCacheBudget(long availableBytes)
+        => availableBytes <= 0
+            ? MinimumCacheBudget
+            : Math.Clamp(availableBytes / 8, MinimumCacheBudget, MaximumCacheBudget);
 
     private readonly ConcurrentDictionary<string, Lazy<ImageJob>> _images = new();
 
@@ -51,6 +63,9 @@ internal class ImageLoader : IDisposable
     public ImageLoader()
     {
         _preloadTaskFactory = new TaskFactory(_preloadScheduler);
+
+        Logger.Info($"[ImageLoader] Decoded-image cache budget: {CacheByteBudget / 1024 / 1024} MB " +
+                    $"(of {GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1024 / 1024} MB available).");
     }
 
     #endregion
@@ -86,9 +101,9 @@ internal class ImageLoader : IDisposable
     }
 
     /// <summary>
-    /// Drops cached images, furthest from the current one first, until the resident set fits the
-    /// budget. The current image is never evicted, however large it is - refusing to show what
-    /// the user asked for would be worse than the memory.
+    /// Drops cached images until the resident set fits the budget, most expensive to keep first.
+    /// The current image is never evicted, however large it is - refusing to show what the user
+    /// asked for would be worse than the memory.
     /// </summary>
     private void EnforceByteBudget(string[] keep)
     {
@@ -103,15 +118,10 @@ internal class ImageLoader : IDisposable
             ? keep.Length / 2
             : Math.Max(0, Array.FindIndex(keep, p => PathComparer.Equals(p, currentPath)));
 
-        var order = keep
-            .Select((path, index) => (path, distance: Math.Abs(index - centre)))
-            .OrderByDescending(e => e.distance)
-            .Select(e => e.path);
-
-        foreach (var path in order)
+        var candidates = new List<EvictionCandidate>();
+        for (var index = 0; index < keep.Length; index++)
         {
-            if (resident <= CacheByteBudget)
-                return;
+            var path = keep[index];
 
             if (!_images.TryGetValue(path, out var lazy) || !lazy.IsValueCreated)
                 continue;
@@ -123,12 +133,33 @@ internal class ImageLoader : IDisposable
             if (bytes <= 0)
                 continue;
 
-            RemoveMatching(key => PathComparer.Equals(key, path), "Budget:");
-            resident -= bytes;
+            candidates.Add(new EvictionCandidate(path, Math.Abs(index - centre), bytes));
+        }
 
-            Logger.Debug($"[ImageLoader] Evicted {Path.GetFileName(path)} ({bytes / 1024 / 1024} MB) to stay in budget.");
+        foreach (var candidate in EvictionOrder(candidates))
+        {
+            if (resident <= CacheByteBudget)
+                return;
+
+            RemoveMatching(key => PathComparer.Equals(key, candidate.Path), "Budget:");
+            resident -= candidate.Bytes;
+
+            Logger.Debug($"[ImageLoader] Evicted {Path.GetFileName(candidate.Path)} " +
+                         $"({candidate.Bytes / 1024 / 1024} MB, {candidate.Distance} away) to stay in budget.");
         }
     }
+
+    /// <summary>One cached image the budget could reclaim, and what reclaiming it would cost.</summary>
+    internal readonly record struct EvictionCandidate(string Path, int Distance, long Bytes);
+
+    /// <summary>
+    /// Orders candidates by what they cost to keep: big and far goes first, small and near last.
+    /// </summary>
+    internal static IReadOnlyList<EvictionCandidate> EvictionOrder(IReadOnlyList<EvictionCandidate> candidates)
+        => candidates
+            .OrderByDescending(c => c.Bytes * (c.Distance + 1L))
+            .ThenByDescending(c => c.Distance)
+            .ToList();
 
     /// <summary>
     /// Re-checks the budget against the window last navigated to. Called when a decode finishes,

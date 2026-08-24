@@ -7,7 +7,9 @@ using Lyra.SdlCore;
 using SkiaSharp;
 using static SDL3.SDL;
 
-namespace Lyra.Renderer;
+using Lyra.Renderer.Drawing;
+
+namespace Lyra.Renderer.Backends;
 
 public sealed class SkiaOpenGlRenderer : SkiaRendererBase
 {
@@ -42,6 +44,8 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
 
         var glInterface = GRGlInterface.Create();
         _grContext = GRContext.CreateGl(glInterface);
+
+        ConfigureResourceCache(_grContext, "SkiaOpenGlRenderer");
     }
 
     protected override bool DisposeSurfaceAfterRender => false;
@@ -56,6 +60,16 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
     {
         _surfaceDirty = true;
     }
+
+    /// <summary>
+    /// No extended range, on any platform. macOS OpenGL has no path to it and is deprecated;
+    /// WGL on Windows reaches neither an HDR color space nor 10-bit; Linux would need the
+    /// compositor's color management, which is Vulkan's route rather than GL's.
+    /// </summary>
+    protected override bool BackendSupportsExtendedRange => false;
+
+    /// 8-bit, and no extended-range path exists in GL on any platform Lyra runs on.
+    protected override SurfaceProfile Surface => SurfaceProfile.DisplayReferred(_surfaceColorSpace);
 
     protected override SKSurface CreateSurface()
     {

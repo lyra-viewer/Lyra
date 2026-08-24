@@ -1,5 +1,6 @@
 using Lyra.DuplicateStatusProvider;
 using Lyra.FileLoader.Enumeration;
+using Lyra.Renderer.Display;
 using Lyra.SdlCore;
 
 namespace Lyra.Renderer;
@@ -33,5 +34,7 @@ public readonly record struct ApplicationStates(
     int ScanDone,
     int ScanTotal,
 
-    string Backend
+    string Backend,
+    DisplayCapabilities Display,
+    bool BackendSupportsExtendedRange
 );

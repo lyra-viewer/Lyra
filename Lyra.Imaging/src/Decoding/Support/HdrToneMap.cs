@@ -78,9 +78,11 @@ internal static class HdrToneMap
             if (g != r || b != r)
                 gray = false;
 
-            dstRow[idx + 0] = ToneMap(r, mode, whitePoint, exposureScale);
-            dstRow[idx + 1] = ToneMap(g, mode, whitePoint, exposureScale);
-            dstRow[idx + 2] = ToneMap(b, mode, whitePoint, exposureScale);
+            ToneMapPixel(r, g, b, mode, whitePoint, exposureScale, out var outR, out var outG, out var outB);
+
+            dstRow[idx + 0] = outR;
+            dstRow[idx + 1] = outG;
+            dstRow[idx + 2] = outB;
             dstRow[idx + 3] = AlphaToByte(a);
         }
 
@@ -193,13 +195,87 @@ internal static class HdrToneMap
         for (var i = 0; i < GammaLutSize; i++)
         {
             var t = i / (float)(GammaLutSize - 1);
-            lut[i] = (byte)Math.Clamp(MathF.Pow(t, 1f / 2.2f) * 255f, 0f, 255f);
+            lut[i] = (byte)Math.Clamp(MathF.Round(SrgbEncode(t) * 255f), 0f, 255f);
         }
 
         return lut;
     }
+    
+    private static float SrgbEncode(float linear)
+        => linear <= 0.0031308f
+            ? linear * 12.92f
+            : (1.055f * MathF.Pow(linear, 1f / 2.4f)) - 0.055f;
 
-    /// <summary>Applies the selected curve then the gamma 2.2 encode. NaN maps to 0 (black).</summary>
+    /// Rec.709 luminance weights - the primaries the tone-mapped bitmap is tagged with.
+    private const float LumaR = 0.2126f;
+    private const float LumaG = 0.7152f;
+    private const float LumaB = 0.0722f;
+
+    /// <summary>
+    /// Curves one pixel, keeping its color: luminance goes through the curve and all three
+    /// channels are scaled by the same factor.
+    /// </summary>
+    private static void ToneMapPixel(float r, float g, float b, ToneMapMode mode, float whitePoint, float exposureScale, out byte outR, out byte outG, out byte outB)
+    {
+        if (mode == ToneMapMode.Clip)
+        {
+            outR = ToneMap(r, mode, whitePoint, exposureScale);
+            outG = ToneMap(g, mode, whitePoint, exposureScale);
+            outB = ToneMap(b, mode, whitePoint, exposureScale);
+            return;
+        }
+
+        var linearR = Sanitize(r) * exposureScale;
+        var linearG = Sanitize(g) * exposureScale;
+        var linearB = Sanitize(b) * exposureScale;
+
+        var luminance = (LumaR * linearR) + (LumaG * linearG) + (LumaB * linearB);
+        if (luminance <= 1e-5f)
+        {
+            outR = outG = outB = 0;
+            return;
+        }
+
+        // Real EXRs hold values that overflow the squared terms in both curves, and inf/inf is
+        // NaN - which as a scale would take the whole pixel to black. Every curve has flattened
+        // well before this point anyway.
+        if (luminance > 1e18f)
+        {
+            outR = outG = outB = GammaLut[GammaLutSize - 1];
+            return;
+        }
+
+        var target = mode == ToneMapMode.ReinhardExtended
+            ? ReinhardExtended(luminance, whitePoint)
+            : Aces(luminance);
+
+        var scale = target / luminance;
+        var mappedR = linearR * scale;
+        var mappedG = linearG * scale;
+        var mappedB = linearB * scale;
+
+        // Spend saturation on whatever will not fit, by pulling toward the neutral of the same
+        // luminance.
+        var peak = MathF.Max(mappedR, MathF.Max(mappedG, mappedB));
+        if (peak > 1f)
+        {
+            var t = Math.Clamp((peak - 1f) / MathF.Max(peak - target, 1e-5f), 0f, 1f);
+            mappedR += (target - mappedR) * t;
+            mappedG += (target - mappedG) * t;
+            mappedB += (target - mappedB) * t;
+        }
+
+        outR = Encode(mappedR);
+        outG = Encode(mappedG);
+        outB = Encode(mappedB);
+    }
+
+    private static float Sanitize(float value) => float.IsNaN(value) ? 0f : MathF.Max(value, 0f);
+
+    private static byte Encode(float mapped)
+        => GammaLut[(int)((Math.Clamp(mapped, 0f, 1f) * (GammaLutSize - 1)) + 0.5f)];
+
+    /// <summary>Applies the selected curve then the sRGB encode. NaN maps to 0 (black).</summary>
     private static byte ToneMap(float value, ToneMapMode mode, float whitePoint, float exposureScale)
     {
         if (float.IsNaN(value))

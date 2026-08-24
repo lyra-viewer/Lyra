@@ -14,7 +14,7 @@ public readonly record struct AppSettings(
 )
 {
     public static readonly AppSettings DefaultAppSettings = new(
-        Renderer: Backend.OpenGL,
+        Renderer: Backend.Auto,
         WindowState.Maximized,
         MidMouseButtonFunction.Pan,
         14,

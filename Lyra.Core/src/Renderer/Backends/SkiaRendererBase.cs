@@ -1,18 +1,21 @@
 using Lyra.Common.Events;
-using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
+using Lyra.Common.Settings;
 using Lyra.Common.SystemExtensions;
+using Lyra.Common;
 using Lyra.DropStatusProvider;
 using Lyra.DuplicateStatusProvider;
 using Lyra.FileLoader.Navigation;
 using Lyra.FileLoader.Store;
 using Lyra.Imaging.Content;
+using Lyra.Renderer.Display;
+using Lyra.Renderer.Drawing;
 using Lyra.Renderer.GUI;
 using Lyra.SdlCore;
 using SkiaSharp;
 using static Lyra.Common.Events.EventManager;
 
-namespace Lyra.Renderer;
+namespace Lyra.Renderer.Backends;
 
 public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 {
@@ -21,6 +24,10 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     protected float DisplayScale { get; private set; }
     protected float ContentScale { get; private set; }
+    
+    protected IDisplayCapabilityService Displays { get; private set; } = DisplayCapabilityService.None;
+    
+    protected virtual bool BackendSupportsExtendedRange => false;
 
     private Composite? _composite;
     private SKPoint _offset = SKPoint.Empty;
@@ -35,6 +42,9 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     public UIManager UIManager { get; private set; }
 
     private readonly string _backend;
+
+    /// One-shot diagnostic: whether a frame carried values above SDR white.
+    private readonly PresentedPeak _presentedPeak = new();
 
     protected SkiaRendererBase(PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, string backend, IScanProgressProvider? scanProgressProvider = null)
     {
@@ -61,6 +71,37 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             PointerScale = DisplayScale / ContentScale
         };
     }
+
+    /// <summary>
+    /// How much GPU memory Skia may keep for cached resources - textures, atlases, scratch
+    /// surfaces - before it starts evicting.
+    /// </summary>
+    private const int ResourceCacheLimitBytes = 512 * 1024 * 1024;
+
+    protected static void ConfigureResourceCache(GRContext context, string backend)
+    {
+        var before = context.GetResourceCacheLimit();
+        context.SetResourceCacheLimit(ResourceCacheLimitBytes);
+
+        Logger.Debug($"[{backend}] GPU resource cache limit {before / 1024 / 1024} MB -> {ResourceCacheLimitBytes / 1024 / 1024} MB.");
+    }
+
+    /// <summary>
+    /// Hands the renderer the service that tracks the current display's EDR capability. Called by
+    /// the core once the window exists, which is necessarily after the renderer is constructed.
+    /// </summary>
+    public void SetDisplayCapabilities(IDisplayCapabilityService displays)
+    {
+        ArgumentNullException.ThrowIfNull(displays);
+        Displays = displays;
+    }
+
+    /// <summary>
+    /// What the window surface is in color terms: its space, and whether it can carry light above
+    /// SDR white. Not a constant - the OpenGL backend reads its color space from the display's
+    /// ICC profile.
+    /// </summary>
+    protected abstract SurfaceProfile Surface { get; }
 
     protected abstract SKSurface CreateSurface();
 
@@ -91,6 +132,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             RenderComposite(canvas);
             UpdateStatusOverlay();
             RenderUI(canvas);
+
+            _presentedPeak.Observe(surface, _backend, _composite?.Content is not null);
 
             AfterRender(surface);
         }
@@ -159,7 +202,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
                 offsetPx: _offset
             );
 
-            _contentDrawer.Draw(c, _composite, destFull, visibleFull, sampling, zoomScale, ContentScale);
+            _contentDrawer.Draw(c, _composite, destFull, visibleFull, sampling, zoomScale, ContentScale, Surface);
         });
     }
 
@@ -283,7 +326,9 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             ScanPhase = scan.Phase,
             ScanDone = scan.Done,
             ScanTotal = scan.Total,
-            Backend = _backend
+            Backend = _backend,
+            Display = Displays.Current,
+            BackendSupportsExtendedRange = BackendSupportsExtendedRange
         };
     }
 

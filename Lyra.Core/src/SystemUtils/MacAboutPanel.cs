@@ -1,24 +1,10 @@
-using System.Runtime.InteropServices;
 using Lyra.Common;
+using Lyra.SystemUtils.MacInterop;
 
 namespace Lyra.SystemUtils;
 
-public static partial class MacAboutPanel
+public static class MacAboutPanel
 {
-    private const string Objc = "/usr/lib/libobjc.A.dylib";
-
-    [LibraryImport(Objc, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial IntPtr objc_getClass(string name);
-
-    [LibraryImport(Objc, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial IntPtr sel_registerName(string name);
-
-    [LibraryImport(Objc)]
-    private static partial IntPtr objc_msgSend(IntPtr receiver, IntPtr selector);
-
-    [LibraryImport(Objc)]
-    private static partial IntPtr objc_msgSend(IntPtr receiver, IntPtr selector, IntPtr arg1);
-
     public static void Show()
     {
         if (!OperatingSystem.IsMacOS())
@@ -26,9 +12,8 @@ public static partial class MacAboutPanel
 
         try
         {
-            var nsApplication = objc_getClass("NSApplication");
-            var sharedApp = objc_msgSend(nsApplication, sel_registerName("sharedApplication"));
-            objc_msgSend(sharedApp, sel_registerName("orderFrontStandardAboutPanelWithOptions:"), IntPtr.Zero);
+            var sharedApp = ObjC.Send(ObjC.Class("NSApplication"), "sharedApplication");
+            ObjC.Send(sharedApp, "orderFrontStandardAboutPanelWithOptions:", IntPtr.Zero);
         }
         catch (Exception ex)
         {

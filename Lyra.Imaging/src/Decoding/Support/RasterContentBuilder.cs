@@ -14,7 +14,7 @@ internal static class RasterContentBuilder
     /// <summary>
     /// Above this, publish a preview and tiles instead of one texture.
     /// </summary>
-    private const long SingleTexturePixelBudget = 64L * 1024 * 1024;
+    private const long SingleTextureByteBudget = 256L * 1024 * 1024;
 
     /// <summary>
     /// Tile edge in pixels. 2048 costs 16 MiB per tile, so the handful covering a screen stays
@@ -42,8 +42,8 @@ internal static class RasterContentBuilder
 
         bitmap.SetImmutable();
 
-        var pixels = (long)bitmap.Width * bitmap.Height;
-        if (pixels <= SingleTexturePixelBudget)
+        var bytes = (long)bitmap.Width * bitmap.Height * Math.Max(1, bitmap.ColorType.GetBytesPerPixel());
+        if (bytes <= SingleTextureByteBudget)
             return new RasterContent(bitmap, SKImage.FromBitmap(bitmap));
 
         try
@@ -72,9 +72,12 @@ internal static class RasterContentBuilder
 
         content.MarkAllTilesReady(tileCount);
 
-        Logger.Info($"[RasterContentBuilder] {width}x{height} is {(long)width * height / 1024 / 1024} MP, " +
-                    $"over the {SingleTexturePixelBudget / 1024 / 1024} MP single-texture budget; " +
-                    "publishing a preview plus tiles so the GPU only holds what is on screen.");
+        var bytes = (long)width * height * Math.Max(1, bitmap.ColorType.GetBytesPerPixel());
+
+        Logger.Info($"[RasterContentBuilder] {width}x{height} is {bytes / 1024 / 1024} MB as " +
+                    $"{bitmap.ColorType}, over the {SingleTextureByteBudget / 1024 / 1024} MB " +
+                    "single-texture budget; publishing a preview plus tiles so the GPU only holds " +
+                    "what is on screen.");
 
         return content;
     }
@@ -99,7 +102,7 @@ internal static class RasterContentBuilder
         return SKImage.FromBitmap(preview);
     }
 
-    private static (int Width, int Height) PreviewSize(int width, int height)
+    internal static (int Width, int Height) PreviewSize(int width, int height)
     {
         var display = DecodeConstraintsProvider.Current;
 

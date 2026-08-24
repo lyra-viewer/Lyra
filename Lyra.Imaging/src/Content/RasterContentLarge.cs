@@ -27,6 +27,22 @@ public sealed class RasterLargeContent : ICompositeContent
     public float FullHeight { get; }
 
     public SKImage? PreviewImage { get; private set; }
+
+    /// <summary>
+    /// Set when <see cref="PreviewImage"/> holds scene-referred half-float light rather than
+    /// display-ready pixels - the measured white point the tone mapper needs.
+    /// </summary>
+    public float? PreviewWhitePoint { get; private set; }
+
+    public bool HasScenePreview => PreviewImage is not null && PreviewWhitePoint is not null;
+
+    /// <summary>
+    /// Set when the tiles hold scene-referred light as well, so the image keeps its headroom and
+    /// controls at every zoom.
+    /// </summary>
+    public float? TileWhitePoint { get; private set; }
+
+    public bool HasSceneTiles => TileSource is not null && TileWhitePoint is not null;
     public SKImage? FullImage { get; private set; }
     public ITileSource? TileSource { get; private set; }
 
@@ -79,6 +95,17 @@ public sealed class RasterLargeContent : ICompositeContent
         }
     }
 
+    /// <summary>
+    /// Replaces the preview with scene-referred half-float light, to be tone-mapped at draw time.
+    /// </summary>
+    public void SetScenePreview(SKImage preview, float whitePoint)
+    {
+        ArgumentNullException.ThrowIfNull(preview);
+
+        SetPreview(preview);
+        PreviewWhitePoint = whitePoint;
+    }
+
     public void SetPreview(SKImage? preview)
     {
         if (PreviewImage != null && PreviewImage.Handle != IntPtr.Zero)
@@ -93,6 +120,15 @@ public sealed class RasterLargeContent : ICompositeContent
             FullImage.Dispose();
 
         FullImage = full ?? throw new ArgumentNullException(nameof(full));
+    }
+
+    /// <summary>
+    /// Marks preview and tiles alike as scene-referred light, to be tone-mapped at draw time.
+    /// </summary>
+    public void MarkSceneReferred(float whitePoint)
+    {
+        PreviewWhitePoint = whitePoint;
+        TileWhitePoint = whitePoint;
     }
 
     public void SetTiles(ITileSource tiles)
