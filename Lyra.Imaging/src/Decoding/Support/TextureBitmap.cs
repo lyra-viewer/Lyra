@@ -11,6 +11,10 @@ namespace Lyra.Imaging.Decoding.Support;
 /// </summary>
 internal static class TextureBitmap
 {
+    private static int HdrFloatCount(in Subresource surface) => checked(surface.Width * surface.Height * 4);
+    
+    public static int BytesPerDecodedPixel(TextureData texture) => texture.IsHdr ? sizeof(float) * 4 : 4;
+
     /// <summary>
     /// Decodes a surface into displayable content. HDR surfaces (float formats, BC6H) stay
     /// scene-referred so the renderer's tone mapping applies to them exactly as it does to EXR;
@@ -24,7 +28,7 @@ internal static class TextureBitmap
     {
         if (texture.IsHdr)
         {
-            var floats = new float[surface.Width * surface.Height * 4];
+            var floats = new float[HdrFloatCount(surface)];
             texture.DecodeHdr(surface, floats);
 
             if (flipVertical)
@@ -86,23 +90,25 @@ internal static class TextureBitmap
 
         if (texture.IsHdr)
         {
-            var floats = new float[surface.Width * surface.Height * 4];
+            var floats = new float[HdrFloatCount(surface)];
             texture.DecodeHdr(surface, floats);
             HdrToneMap.ToBitmap(floats, bitmap, ct, out _);
             return bitmap;
         }
 
-        var tightRowBytes = surface.Width * 4;
+        var tightRowBytes = checked(surface.Width * 4);
+        var tightBytes = checked(tightRowBytes * surface.Height);
+
         if (bitmap.RowBytes == tightRowBytes)
         {
             unsafe
             {
-                texture.Decode(surface, new Span<byte>((void*)bitmap.GetPixels(), tightRowBytes * surface.Height));
+                texture.Decode(surface, new Span<byte>((void*)bitmap.GetPixels(), tightBytes));
             }
         }
         else
         {
-            var tmp = new byte[tightRowBytes * surface.Height];
+            var tmp = new byte[tightBytes];
             texture.Decode(surface, tmp);
             PixelCopy.CopyTightRgba(tmp, bitmap);
         }

@@ -77,8 +77,7 @@ internal static class HdrToneMapShader
         };
 
         var children = new SKRuntimeEffectChildren(effect) { ["image"] = imageShader };
-
-        var shader = effect.ToShader(uniforms, children);
+        using var shader = effect.ToShader(uniforms, children);
 
         return new SKPaint { Shader = shader, IsAntialias = false };
     }

@@ -16,12 +16,11 @@ public sealed class RasterLargeContent : ICompositeContent
 
     public bool IsResolutionIndependent => false;
     
-    public long ByteSize => Bytes(PreviewImage) + Bytes(FullImage) + (TileSource?.ByteSize ?? 0);
+    public long ByteSize => Bytes(PreviewImage) + (TileSource?.ByteSize ?? 0);
 
-    internal static long Bytes(SKImage? image) =>
-        image is null || image.Handle == IntPtr.Zero
-            ? 0
-            : (long)image.Width * image.Height * Math.Max(1, image.ColorType.GetBytesPerPixel());
+    internal static long Bytes(SKImage? image) => image is null || image.Handle == IntPtr.Zero
+        ? 0
+        : (long)image.Width * image.Height * Math.Max(1, image.ColorType.GetBytesPerPixel());
 
     public float FullWidth { get; }
     public float FullHeight { get; }
@@ -43,14 +42,14 @@ public sealed class RasterLargeContent : ICompositeContent
     public float? TileWhitePoint { get; private set; }
 
     public bool HasSceneTiles => TileSource is not null && TileWhitePoint is not null;
-    public SKImage? FullImage { get; private set; }
-    public ITileSource? TileSource { get; private set; }
 
-    public float? DecodedWidth => FullImage?.Width ?? PreviewImage?.Width;
-    public float? DecodedHeight => FullImage?.Height ?? PreviewImage?.Height;
+    public ITileSource? TileSource { get; private set; }
+    
+    public float? DecodedWidth => PreviewImage?.Width;
+
+    public float? DecodedHeight => PreviewImage?.Height;
 
     public bool HasPreview => PreviewImage != null;
-    public bool HasFullImage => FullImage != null;
     public bool HasTiles => TileSource != null;
 
     private int _tilesReady;
@@ -114,14 +113,6 @@ public sealed class RasterLargeContent : ICompositeContent
         PreviewImage = preview;
     }
 
-    public void SetFullImage(SKImage full)
-    {
-        if (FullImage != null && FullImage.Handle != IntPtr.Zero)
-            FullImage.Dispose();
-
-        FullImage = full ?? throw new ArgumentNullException(nameof(full));
-    }
-
     /// <summary>
     /// Marks preview and tiles alike as scene-referred light, to be tone-mapped at draw time.
     /// </summary>
@@ -141,9 +132,6 @@ public sealed class RasterLargeContent : ICompositeContent
     {
         if (PreviewImage != null && PreviewImage.Handle != IntPtr.Zero)
             PreviewImage.Dispose();
-
-        if (FullImage != null && FullImage.Handle != IntPtr.Zero)
-            FullImage.Dispose();
 
         TileSource?.Dispose();
     }

@@ -20,6 +20,7 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
     private SKSurface? _surface;
     private GRBackendRenderTarget? _renderTarget;
     private bool _surfaceDirty = true;
+    private bool _surfaceFailureReported;
 
     private readonly SKColorSpace _surfaceColorSpace;
 
@@ -71,14 +72,14 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
     /// 8-bit, and no extended-range path exists in GL on any platform Lyra runs on.
     protected override SurfaceProfile Surface => SurfaceProfile.DisplayReferred(_surfaceColorSpace);
 
-    protected override SKSurface CreateSurface()
+    protected override SKSurface? CreateSurface()
     {
         if (_surfaceDirty || _surface == null || _renderTarget == null)
         {
             RecreateSurface();
         }
 
-        return _surface!;
+        return _surface;
     }
 
     private void RecreateSurface()
@@ -96,8 +97,19 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
         // If MSAA ever introduced, this will need samples/stencil updates
         _renderTarget = new GRBackendRenderTarget(WindowWidth, WindowHeight, 0, 8, fbInfo);
 
-        _surface = SKSurface.Create(_grContext, _renderTarget, GRSurfaceOrigin.BottomLeft, SKColorType.Rgba8888, _surfaceColorSpace)
-                   ?? throw new InvalidOperationException("SKSurface.Create returned null for OpenGL surface.");
+        _surface = SKSurface.Create(_grContext, _renderTarget, GRSurfaceOrigin.BottomLeft, SKColorType.Rgba8888, _surfaceColorSpace);
+        
+        if (_surface is not null)
+        {
+            _surfaceFailureReported = false;
+            return;
+        }
+
+        if (_surfaceFailureReported)
+            return;
+
+        _surfaceFailureReported = true;
+        Logger.Error("[SkiaOpenGlRenderer] SKSurface.Create returned null for the OpenGL surface; frames are being skipped until it succeeds.");
     }
     
     private static SKColorSpace DetermineSurfaceColorSpace(IntPtr window)

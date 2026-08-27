@@ -14,12 +14,12 @@ public readonly record struct IcnsIconType(string Code, int Width, int Height, i
 
     public static bool TryGet(string code, out IcnsIconType type) => ByCode.TryGetValue(code, out type);
     
-    public static string? MaskCodeFor(int width) => width switch
+    public static string? MaskCodeFor(string iconCode) => iconCode switch
     {
-        16 => "s8mk",
-        32 => "l8mk",
-        48 => "h8mk",
-        128 => "t8mk",
+        "is32" => "s8mk",
+        "il32" => "l8mk",
+        "ih32" => "h8mk",
+        "it32" => "t8mk",
         _ => null
     };
 

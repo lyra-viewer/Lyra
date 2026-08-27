@@ -155,49 +155,72 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
         _autoreleasePool = ObjC.Send(ClassAutoreleasePool, SelNew);
     }
 
-    protected override SKSurface CreateSurface()
+    /// <summary>
+    /// The drawable's texture wrapped as a Skia surface, or null when the layer has no drawable to
+    /// give: it is out of them, or the window is occluded or off-screen. That is a normal, passing
+    /// condition rather than a failure, so it skips the frame instead of throwing - nothing catches
+    /// around the render loop, and a wrongly-fatal frame would close the app on a window drag.
+    /// </summary>
+    protected override SKSurface? CreateSurface()
     {
-        _currentDrawable = ObjC.Send(_metalLayer, SelNextDrawable);
-        if (_currentDrawable == IntPtr.Zero)
-            throw new InvalidOperationException("CAMetalLayer.nextDrawable returned null.");
+        var drawable = ObjC.Send(_metalLayer, SelNextDrawable);
+        if (drawable == IntPtr.Zero)
+        {
+            Logger.Debug("[SkiaMetalRenderer] CAMetalLayer had no drawable available; skipping the frame.");
+            return null;
+        }
 
-        ObjC.SendVoid(_currentDrawable, SelRetain);
+        // Retained only once it is certain to be released: EndFrame owns it from here.
+        ObjC.SendVoid(drawable, SelRetain);
+        _currentDrawable = drawable;
 
-        var texture = ObjC.Send(_currentDrawable, SelTexture);
+        var texture = ObjC.Send(drawable, SelTexture);
         if (texture == IntPtr.Zero)
-            throw new InvalidOperationException("Drawable.texture returned null.");
+        {
+            Logger.Warning("[SkiaMetalRenderer] Drawable had no texture; skipping the frame.");
+            return null;
+        }
 
         var mtlInfo = new GRMtlTextureInfo(texture);
 
         _currentRenderTarget?.Dispose();
         _currentRenderTarget = new GRBackendRenderTarget(WindowWidth, WindowHeight, mtlInfo);
-        
+
         var colorType = _extendedRange ? SKColorType.RgbaF16 : SKColorType.Bgra8888;
         var colorSpace = _extendedRange ? ExtendedLinearDisplayP3 : DisplayP3;
 
-        return SKSurface.Create(_grContext, _currentRenderTarget, GRSurfaceOrigin.TopLeft, colorType, colorSpace)
-               ?? throw new InvalidOperationException("SKSurface.Create returned null for Metal render target.");
+        var surface = SKSurface.Create(_grContext, _currentRenderTarget, GRSurfaceOrigin.TopLeft, colorType, colorSpace);
+        if (surface is null)
+            Logger.Warning("[SkiaMetalRenderer] SKSurface.Create returned null for the Metal render target; skipping the frame.");
+
+        return surface;
     }
 
+    /// <summary>Presents the frame. Only reached when the frame actually drew.</summary>
     protected override void AfterRender(SKSurface surface)
     {
         surface.Flush();
         _grContext.Submit();
 
-        // Present
+        if (_currentDrawable == IntPtr.Zero)
+            return;
+
+        var commandBuffer = ObjC.Send(_queue, SelCommandBuffer);
+        if (commandBuffer == IntPtr.Zero)
+            return;
+
+        // commandBuffer is autoreleased; retain to ensure it survives until after commit.
+        ObjC.SendVoid(commandBuffer, SelRetain);
+
+        ObjC.SendVoid(commandBuffer, SelPresentDrawable, _currentDrawable);
+        ObjC.SendVoid(commandBuffer, SelCommit);
+        ObjC.SendVoid(commandBuffer, SelRelease);
+    }
+    
+    protected override void EndFrame()
+    {
         if (_currentDrawable != IntPtr.Zero)
         {
-            var commandBuffer = ObjC.Send(_queue, SelCommandBuffer);
-            if (commandBuffer != IntPtr.Zero)
-            {
-                // commandBuffer is autoreleased; retain to ensure it survives until after commit.
-                ObjC.SendVoid(commandBuffer, SelRetain);
-
-                ObjC.SendVoid(commandBuffer, SelPresentDrawable, _currentDrawable);
-                ObjC.SendVoid(commandBuffer, SelCommit);
-                ObjC.SendVoid(commandBuffer, SelRelease);
-            }
-
             ObjC.SendVoid(_currentDrawable, SelRelease);
             _currentDrawable = IntPtr.Zero;
         }

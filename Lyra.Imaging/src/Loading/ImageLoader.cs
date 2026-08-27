@@ -112,11 +112,7 @@ internal class ImageLoader : IDisposable
             return;
 
         var current = _currentImage;
-        var currentPath = current?.FileInfo.FullName;
-
-        var centre = currentPath is null
-            ? keep.Length / 2
-            : Math.Max(0, Array.FindIndex(keep, p => PathComparer.Equals(p, currentPath)));
+        var centre = Centre(keep, current?.FileInfo.FullName);
 
         var candidates = new List<EvictionCandidate>();
         for (var index = 0; index < keep.Length; index++)
@@ -147,6 +143,19 @@ internal class ImageLoader : IDisposable
             Logger.Debug($"[ImageLoader] Evicted {Path.GetFileName(candidate.Path)} " +
                          $"({candidate.Bytes / 1024 / 1024} MB, {candidate.Distance} away) to stay in budget.");
         }
+    }
+
+    /// <summary>
+    /// Where in the keep window the current image sits - the point distances are measured from.
+    /// </summary>
+    internal static int Centre(string[] keep, string? currentPath)
+    {
+        if (currentPath is null)
+            return keep.Length / 2;
+
+        var index = Array.FindIndex(keep, path => PathComparer.Equals(path, currentPath));
+
+        return index >= 0 ? index : keep.Length / 2;
     }
 
     /// <summary>One cached image the budget could reclaim, and what reclaiming it would cost.</summary>

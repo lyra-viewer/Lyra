@@ -64,7 +64,7 @@ public static class IcnsReader
 
         for (var i = 0; i < entries.Count; i++)
         {
-            if (IcnsIconType.MaskCodeFor(entries[i].Width) is { } maskCode
+            if (IcnsIconType.MaskCodeFor(entries[i].Type.Code) is { } maskCode
                 && masks.TryGetValue(maskCode, out var mask))
                 entries[i] = entries[i] with { MaskOffset = mask.Offset, MaskLength = mask.Length };
         }

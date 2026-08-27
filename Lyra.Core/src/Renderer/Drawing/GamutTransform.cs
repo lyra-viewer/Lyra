@@ -25,20 +25,18 @@ internal static class GamutTransform
     public static float[] Between(SKColorSpace? source, SKColorSpace? destination)
     {
         if (source is null || destination is null || ReferenceEquals(source, destination))
-            return Identity;
+            return (float[])Identity.Clone();
 
         lock (Gate)
         {
-            if (ReferenceEquals(source, _lastSource) && ReferenceEquals(destination, _lastDestination))
-                return _lastMatrix;
+            if (!ReferenceEquals(source, _lastSource) || !ReferenceEquals(destination, _lastDestination))
+            {
+                _lastMatrix = Build(source, destination);
+                _lastSource = source;
+                _lastDestination = destination;
+            }
 
-            var matrix = Build(source, destination);
-
-            _lastSource = source;
-            _lastDestination = destination;
-            _lastMatrix = matrix;
-
-            return matrix;
+            return (float[])_lastMatrix.Clone();
         }
     }
 

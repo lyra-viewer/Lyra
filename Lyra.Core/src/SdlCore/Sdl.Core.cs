@@ -201,6 +201,8 @@ public partial class SdlCore : IDisposable
                 Backend.OpenGL => new SkiaOpenGlRenderer(_window, drawableSize, _dropProgressTracker, _viewState, _duplicateScanService.Progress),
                 _ => throw new ArgumentOutOfRangeException(nameof(backend), backend, "No renderer for this backend.")
             };
+            
+            _renderer.Attach();
 
             Logger.Info($"[Core] {backend} backend initialized.");
             return true;

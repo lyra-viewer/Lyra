@@ -81,5 +81,5 @@ half4 main(float2 coord) {
 
     mapped = float3(encodeChannel(mapped.r), encodeChannel(mapped.g), encodeChannel(mapped.b));
 
-    return half4(half3(mapped), src.a);
+    return half4(half3(mapped * float(src.a)), src.a);
 }

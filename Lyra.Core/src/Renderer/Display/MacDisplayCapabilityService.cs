@@ -73,13 +73,17 @@ internal sealed class MacDisplayCapabilityService : IDisplayCapabilityService
         sample = DisplayCapabilities.Create(
             displayId,
             _displayName,
-            Headroom(screen, _selPotential),
-            Headroom(screen, _selCurrent),
-            Headroom(screen, _selReference)
+            Headroom(screen, _selPotential, ref _hasPotential),
+            Headroom(screen, _selCurrent, ref _hasCurrent),
+            Headroom(screen, _selReference, ref _hasReference)
         );
 
         return true;
     }
+
+    private bool? _hasPotential;
+    private bool? _hasCurrent;
+    private bool? _hasReference;
 
     /// <summary>
     /// The NSScreen the window is on, or zero when it is on none.
@@ -105,6 +109,10 @@ internal sealed class MacDisplayCapabilityService : IDisplayCapabilityService
 
     /// NaN for a selector this OS does not have; <see cref="DisplayCapabilities.Create"/> turns
     /// that into 1.0.
-    private static double Headroom(IntPtr screen, IntPtr selector)
-        => ObjC.Responds(screen, selector) ? ObjC.SendDouble(screen, selector) : double.NaN;
+    private static double Headroom(IntPtr screen, IntPtr selector, ref bool? responds)
+    {
+        responds ??= ObjC.Responds(screen, selector);
+
+        return responds.Value ? ObjC.SendDouble(screen, selector) : double.NaN;
+    }
 }

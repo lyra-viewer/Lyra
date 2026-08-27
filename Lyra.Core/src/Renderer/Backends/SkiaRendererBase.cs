@@ -62,8 +62,6 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         _dropProgressProvider = dropProgressProvider;
         _scanProgressProvider = scanProgressProvider;
 
-        Subscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
-
         _contentDrawer = new SkiaCompositeContentDrawer();
 
         UIManager = new UIManager(ContentScale)
@@ -87,6 +85,27 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     }
 
     /// <summary>
+    /// Starts listening for window changes. Call once, on a renderer that finished constructing.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not done in the constructor. The event bus is static and holds a strong
+    /// reference, so a renderer that subscribed and then failed to construct - which every backend
+    /// can do, and which the backend fallback exists to survive - would never be handed to anyone
+    /// able to unsubscribe it. It would go on receiving resize events, driving a UI it has no
+    /// surface for, for the life of the process.
+    /// </remarks>
+    public void Attach()
+    {
+        if (_attached)
+            return;
+
+        _attached = true;
+        Subscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
+    }
+
+    private bool _attached;
+
+    /// <summary>
     /// Hands the renderer the service that tracks the current display's EDR capability. Called by
     /// the core once the window exists, which is necessarily after the renderer is constructed.
     /// </summary>
@@ -102,8 +121,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     /// ICC profile.
     /// </summary>
     protected abstract SurfaceProfile Surface { get; }
-
-    protected abstract SKSurface CreateSurface();
+    
+    protected abstract SKSurface? CreateSurface();
 
     protected virtual bool DisposeSurfaceAfterRender => true;
 
@@ -115,6 +134,16 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     {
     }
 
+    /// <summary>
+    /// Releases whatever <see cref="BeforeRender"/> and <see cref="CreateSurface"/> acquired.
+    /// Runs after every frame, including one that produced no surface or threw partway through -
+    /// an autorelease pool or a retained drawable left behind by a failed frame is never
+    /// reclaimed, because the next frame overwrites the field holding it.
+    /// </summary>
+    protected virtual void EndFrame()
+    {
+    }
+
     protected virtual void OnDrawableSizeChangedInternal(int width, int height, float scale)
     {
     }
@@ -123,24 +152,34 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     {
         BeforeRender();
 
-        var surface = CreateSurface();
         try
         {
-            var canvas = surface.Canvas;
+            var surface = CreateSurface();
+            if (surface is null)
+                return;
 
-            RenderBackground(canvas);
-            RenderComposite(canvas);
-            UpdateStatusOverlay();
-            RenderUI(canvas);
+            try
+            {
+                var canvas = surface.Canvas;
 
-            _presentedPeak.Observe(surface, _backend, _composite?.Content is not null);
+                RenderBackground(canvas);
+                RenderComposite(canvas);
+                UpdateStatusOverlay();
+                RenderUI(canvas);
 
-            AfterRender(surface);
+                _presentedPeak.Observe(surface, _backend, _composite?.Content is not null);
+
+                AfterRender(surface);
+            }
+            finally
+            {
+                if (DisposeSurfaceAfterRender)
+                    surface.Dispose();
+            }
         }
         finally
         {
-            if (DisposeSurfaceAfterRender)
-                surface.Dispose();
+            EndFrame();
         }
     }
 
@@ -365,7 +404,12 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     public virtual void Dispose()
     {
-        Unsubscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
+        if (_attached)
+        {
+            _attached = false;
+            Unsubscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
+        }
+
         UIManager.Dispose();
     }
 

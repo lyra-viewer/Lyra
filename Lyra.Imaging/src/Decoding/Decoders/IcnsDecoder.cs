@@ -32,9 +32,7 @@ internal sealed class IcnsDecoder : IImageDecoder
         if (entries.Count == 0)
             return DecodeAsPlainImage(composite, data, path);
 
-        var variants = new List<ImageVariant>(entries.Count);
-        var contents = new List<ICompositeContent>(entries.Count);
-        var decoded = new List<(IcnsEntry Entry, string Encoding)>(entries.Count);
+        var icons = new List<DecodedIcon>(entries.Count);
 
         foreach (var entry in entries)
         {
@@ -59,42 +57,58 @@ internal sealed class IcnsDecoder : IImageDecoder
             var encoding = EncodingName(data, entry);
 
             bitmap.SetImmutable();
-            contents.Add(new RasterContent(bitmap, SKImage.FromBitmap(bitmap)));
-            variants.Add(BuildVariant(entry, bitmap, encoding));
-            decoded.Add((entry, encoding));
+
+            icons.Add(new DecodedIcon(
+                entry,
+                encoding,
+                new RasterContent(bitmap, SKImage.FromBitmap(bitmap)),
+                BuildVariant(entry, bitmap, encoding))
+            );
         }
 
-        if (contents.Count == 0)
+        if (icons.Count == 0)
             throw new InvalidOperationException($"[IcnsDecoder] Every icon failed to decode in: {path}");
+        
+        var ordered = icons
+            .OrderByDescending(icon => (long)icon.Variant.Width * icon.Variant.Height)
+            .ThenByDescending(icon => icon.Entry.Scale)
+            .ThenBy(icon => icon.Entry.Type.Code, StringComparer.Ordinal)
+            .ToList();
 
-        // Largest first, so index 0 is what the viewer opens on.
-        composite.Content = new VariantRasterContent(variants, contents, active: 0);
-        Describe(composite, data, variants, decoded);
+        composite.Content = new VariantRasterContent(
+            [.. ordered.Select(icon => icon.Variant)],
+            [.. ordered.Select(icon => icon.Content)],
+            active: 0
+        );
+
+        Describe(composite, data, ordered);
 
         return Task.CompletedTask;
     }
-    
-    private static void Describe(Composite composite, byte[] data, List<ImageVariant> variants,
-        List<(IcnsEntry Entry, string Encoding)> decoded)
-    {
-        composite.AddFormatSpecific("Icons", decoded.Count.ToString());
-        composite.AddFormatSpecific("Size Range", variants.Count == 1 ? variants[0].Label : $"{variants[^1].Label} to {variants[0].Label}");
 
-        var retina = decoded.Count(d => d.Entry.Scale > 1);
+    /// <summary>One icon that decoded, kept whole so the four parallel lists cannot drift apart.</summary>
+    private sealed record DecodedIcon(IcnsEntry Entry, string Encoding, ICompositeContent Content, ImageVariant Variant);
+
+    private static void Describe(Composite composite, byte[] data, List<DecodedIcon> icons)
+    {
+        composite.AddFormatSpecific("Icons", icons.Count.ToString());
+        composite.AddFormatSpecific("Size Range", icons.Count == 1 ? icons[0].Variant.Label : $"{icons[^1].Variant.Label} to {icons[0].Variant.Label}");
+
+        var retina = icons.Count(icon => icon.Entry.Scale > 1);
         if (retina > 0)
-            composite.AddFormatSpecific("Retina Entries", $"{retina} of {decoded.Count}");
+            composite.AddFormatSpecific("Retina Entries", $"{retina} of {icons.Count}");
 
         // "PNG x6, ARGB x2" - ordered by count so the dominant encoding reads first.
-        var encodings = decoded
-            .GroupBy(d => d.Encoding, StringComparer.Ordinal)
+        var encodings = icons
+            .GroupBy(icon => icon.Encoding, StringComparer.Ordinal)
             .OrderByDescending(g => g.Count())
             .ThenBy(g => g.Key, StringComparer.Ordinal)
             .Select(g => g.Count() == 1 ? g.Key : $"{g.Key} x{g.Count()}");
-        
-        composite.AddFormatSpecific("Encodings", string.Join(", ", encodings));
-        composite.AddFormatSpecific("Types", string.Join(", ", decoded.Select(d => d.Entry.Type.Code).Order(StringComparer.Ordinal)));
 
-        var iconBytes = variants.Sum(v => v.ByteSize);
+        composite.AddFormatSpecific("Encodings", string.Join(", ", encodings));
+        composite.AddFormatSpecific("Types", string.Join(", ", icons.Select(icon => icon.Entry.Type.Code).Order(StringComparer.Ordinal)));
+
+        var iconBytes = icons.Sum(icon => icon.Variant.ByteSize);
         composite.AddFormatSpecific("Icon Data", $"{Formatters.SizeToStr(iconBytes)} of {Formatters.SizeToStr(data.Length)}");
     }
 

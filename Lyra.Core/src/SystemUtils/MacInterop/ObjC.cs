@@ -99,13 +99,23 @@ internal static class ObjC
     /// the one message Lyra sends that needs four arguments.
     public static IntPtr SendTextureDescriptor(IntPtr receiver, string selector, ulong pixelFormat, ulong width, ulong height, bool mipmapped)
         => msg_IntPtr_TextureDescriptor(receiver, Sel(selector), pixelFormat, width, height, mipmapped);
+    
+    private static IntPtr _selRespondsToSelector;
 
     /// <summary>
     /// Whether the receiver implements the selector. AppKit gained the EDR selectors across several
     /// macOS releases, so asking is the difference between a missing value and a crash.
     /// </summary>
     public static bool Responds(IntPtr receiver, IntPtr selector)
-        => receiver != IntPtr.Zero && msg_Bool_IntPtr(receiver, Sel("respondsToSelector:"), selector);
+    {
+        if (receiver == IntPtr.Zero)
+            return false;
+
+        if (_selRespondsToSelector == IntPtr.Zero)
+            _selRespondsToSelector = Sel("respondsToSelector:");
+
+        return msg_Bool_IntPtr(receiver, _selRespondsToSelector, selector);
+    }
 
     public static bool Responds(IntPtr receiver, string selector) => Responds(receiver, Sel(selector));
 }

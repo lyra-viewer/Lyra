@@ -175,10 +175,8 @@ How these native libraries are shipped differs by platform - see [Native Librari
 | Format    | Description                   | Extensions                              | Notes                                                                                                                                                   |
 |-----------|-------------------------------|-----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
 | ICO       | Icon container format         | `.ico`                                  |                                                                                                                                                         |
-| ~ICNS~    | ~Apple icon container format~ | ~`.icns`~                               |                                                                                                                                                         |
+| ICNS      | Apple icon container format   | `.icns`                                 | Every size in the container is decoded and selectable from the sidebar's **Sizes** dropdown. Reads PNG, JPEG 2000, ARGB and the legacy RLE24 plates with their masks. |
 | JPEG 2000 | Wavelet-based image format    | `.jp2` `.jpg2`<br/>`.j2k` `.j2c` `.jpc` | Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP) are intentionally NOT supported. |
-
-> _Note:_ Crossed-out formats are not implemented yet.
 
 ---
 

@@ -35,6 +35,8 @@ internal static class HdrImageBuilder
     /// </summary>
     public static ICompositeContent Build(Span<float> rgba, int width, int height, Composite composite, CancellationToken ct, out bool isGrayscale)
     {
+        var whitePoint = HdrToneMap.MeasureWhitePoint(rgba);
+
         var pixels = (long)width * height;
         if (pixels <= LivePixelBudget)
         {
@@ -42,13 +44,13 @@ internal static class HdrImageBuilder
             if (single is not null)
             {
                 composite.HdrBakedReason = null;
-                return new HdrRasterContent(single, SKImage.FromBitmap(single), HdrToneMap.MeasureWhitePoint(rgba));
+                return new HdrRasterContent(single, SKImage.FromBitmap(single), whitePoint);
             }
 
             Logger.Warning($"[HdrImageBuilder] {width}x{height} does not fit as half-float; falling back to a tone-mapped 8-bit decode (HDR controls will not apply).");
 
             composite.HdrBakedReason = "Half-float allocation failed.";
-            return BuildToneMapped(rgba, width, height, composite, ct, out isGrayscale);
+            return BuildToneMapped(rgba, width, height, composite, whitePoint, ct, out isGrayscale);
         }
         
         var halfFloatBytes = pixels * 8;
@@ -58,12 +60,12 @@ internal static class HdrImageBuilder
             if (tiled is not null)
             {
                 Logger.Info($"[HdrImageBuilder] {width}x{height} is {pixels / 1024 / 1024} MP, over the " +
-                            $"{LivePixelBudget / 1024 / 1024} MP single-texture budget but within the " +
-                            $"{TiledSceneBudget / 1024 / 1024} MB scene-referred tile budget " +
+                            $"{LivePixelBudget / 1024 / 1024} MP live-controls budget but within the " +
+                            $"{TiledSceneBudget / 1024 / 1024} MB scene-referred budget " +
                             $"({halfFloatBytes / 1024 / 1024} MB); keeping the whole image as light.");
 
                 composite.HdrBakedReason = null;
-                return BuildSceneReferredTiles(tiled, composite, HdrToneMap.MeasureWhitePoint(rgba));
+                return RasterContentBuilder.Build(tiled, composite, whitePoint);
             }
         }
         
@@ -75,20 +77,7 @@ internal static class HdrImageBuilder
         composite.HdrBakedReason = $"{halfFloatBytes / 1024 / 1024} MB over the " +
                                    $"{TiledSceneBudget / 1024 / 1024} MB scene budget.";
 
-        return BuildToneMapped(rgba, width, height, composite, ct, out isGrayscale);
-    }
-
-    /// <summary>
-    /// Hands a half-float image to the tiled builder and marks what comes back as scene-referred,
-    /// so preview and tiles alike are tone-mapped at draw time.
-    /// </summary>
-    private static ICompositeContent BuildSceneReferredTiles(SKBitmap halfFloat, Composite composite, float whitePoint)
-    {
-        var content = RasterContentBuilder.Build(halfFloat, composite);
-        if (content is RasterLargeContent large)
-            large.MarkSceneReferred(whitePoint);
-
-        return content;
+        return BuildToneMapped(rgba, width, height, composite, whitePoint, ct, out isGrayscale);
     }
 
     /// <summary>
@@ -144,17 +133,17 @@ internal static class HdrImageBuilder
         }
     }
     
-    private static ICompositeContent BuildToneMapped(Span<float> rgba, int width, int height, Composite composite, CancellationToken ct, out bool isGrayscale)
+    private static ICompositeContent BuildToneMapped(Span<float> rgba, int width, int height, Composite composite, float whitePoint, CancellationToken ct, out bool isGrayscale)
     {
         var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul, SKColorSpace.CreateSrgb());
         var bitmap = new SKBitmap(info);
 
-        HdrToneMap.ToBitmap(rgba, bitmap, ct, out isGrayscale);
+        HdrToneMap.ToBitmap(rgba, bitmap, whitePoint, ct, out isGrayscale);
 
         // Large by definition at this point, so the builder decides between one texture and tiles.
         var content = RasterContentBuilder.Build(bitmap, composite);
         if (content is RasterLargeContent large)
-            AttachScenePreview(large, rgba, width, height, ct);
+            AttachScenePreview(large, rgba, width, height, whitePoint, ct);
 
         return content;
     }
@@ -166,7 +155,7 @@ internal static class HdrImageBuilder
     /// <remarks>
     /// About 130 MB for a 128 MP panorama. On failure the tone-mapped preview stands.
     /// </remarks>
-    private static void AttachScenePreview(RasterLargeContent large, Span<float> rgba, int width, int height, CancellationToken ct)
+    private static void AttachScenePreview(RasterLargeContent large, Span<float> rgba, int width, int height, float whitePoint, CancellationToken ct)
     {
         try
         {
@@ -176,7 +165,7 @@ internal static class HdrImageBuilder
             if (preview is null)
                 return;
 
-            large.SetScenePreview(preview, HdrToneMap.MeasureWhitePoint(rgba));
+            large.SetScenePreview(preview, whitePoint);
 
             Logger.Info($"[HdrImageBuilder] Preview kept scene-referred at {targetWidth}x{targetHeight} " +
                         $"({(long)targetWidth * targetHeight * 8 / 1024 / 1024} MB), so the display's headroom " +

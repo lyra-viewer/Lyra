@@ -35,7 +35,7 @@ internal static class RasterContentBuilder
     /// </summary>
     private const int FallbackDisplayEdge = 2560;
     
-    public static ICompositeContent Build(SKBitmap bitmap, Composite composite)
+    public static ICompositeContent Build(SKBitmap bitmap, Composite composite, float? sceneWhitePoint = null)
     {
         ArgumentNullException.ThrowIfNull(bitmap);
         ArgumentNullException.ThrowIfNull(composite);
@@ -44,20 +44,35 @@ internal static class RasterContentBuilder
 
         var bytes = (long)bitmap.Width * bitmap.Height * Math.Max(1, bitmap.ColorType.GetBytesPerPixel());
         if (bytes <= SingleTextureByteBudget)
-            return new RasterContent(bitmap, SKImage.FromBitmap(bitmap));
+            return Single(bitmap, sceneWhitePoint);
 
         try
         {
-            return BuildLarge(bitmap, composite);
+            var large = BuildLarge(bitmap, composite);
+
+            if (sceneWhitePoint is { } whitePoint)
+                large.MarkSceneReferred(whitePoint);
+
+            return large;
         }
         catch (Exception ex)
         {
             Logger.Warning($"[RasterContentBuilder] Could not build the tiled form ({ex.Message}); falling back to a single texture.");
-            return new RasterContent(bitmap, SKImage.FromBitmap(bitmap));
+            return Single(bitmap, sceneWhitePoint);
         }
     }
 
-    private static ICompositeContent BuildLarge(SKBitmap bitmap, Composite composite)
+    /// <summary>One texture for the whole image, scene-referred when a white point came with it.</summary>
+    private static RasterContent Single(SKBitmap bitmap, float? sceneWhitePoint)
+    {
+        var image = SKImage.FromBitmap(bitmap);
+
+        return sceneWhitePoint is { } whitePoint
+            ? new HdrRasterContent(bitmap, image, whitePoint)
+            : new RasterContent(bitmap, image);
+    }
+
+    private static RasterLargeContent BuildLarge(SKBitmap bitmap, Composite composite)
     {
         var width = bitmap.Width;
         var height = bitmap.Height;
@@ -67,10 +82,18 @@ internal static class RasterContentBuilder
         composite.FullWidth = width;
         composite.FullHeight = height;
 
-        content.SetPreview(CreatePreview(bitmap));
-        content.SetTiles(CreateTiles(bitmap, out var tileCount));
+        try
+        {
+            content.SetPreview(CreatePreview(bitmap));
+            content.SetTiles(CreateTiles(bitmap, out var tileCount));
 
-        content.MarkAllTilesReady(tileCount);
+            content.MarkAllTilesReady(tileCount);
+        }
+        catch
+        {
+            content.SetPreview(null);
+            throw;
+        }
 
         var bytes = (long)width * height * Math.Max(1, bitmap.ColorType.GetBytesPerPixel());
 
@@ -151,8 +174,11 @@ internal static class RasterContentBuilder
             views.Add(view);
             tiles.SetTile(x, y, SKImage.FromBitmap(view));
         }
+        
+        tileCount = views.Count;
 
-        tileCount = tilesX * tilesY;
+        if (tileCount != tilesX * tilesY)
+            Logger.Warning($"[RasterContentBuilder] Only {tileCount} of {tilesX * tilesY} tiles could be extracted; the image will have gaps at full zoom.");
 
         return new SharedPixelTileSource(tiles, bitmap, views);
     }

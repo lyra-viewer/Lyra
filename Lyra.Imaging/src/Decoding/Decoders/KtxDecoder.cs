@@ -39,7 +39,7 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
         composite.Structure = KtxStructure.Describe(bytes, texture);
 
         ct.ThrowIfCancellationRequested();
-        DecoderValidation.RequireSaneDimensions(nameof(KtxDecoder), surface.Width, surface.Height);
+        DecoderValidation.RequireSaneDimensions(nameof(KtxDecoder), surface.Width, surface.Height, TextureBitmap.BytesPerDecodedPixel(texture));
 
         composite.Content = TextureBitmap.DecodeToContent(texture, surface, composite, ct, flipVertical: texture.Origin == TextureOrigin.BottomLeft);
 

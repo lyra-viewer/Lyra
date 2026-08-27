@@ -22,20 +22,25 @@ internal static class HdrToneMap
     /// broadcast happens here.
     /// </summary>
     public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, CancellationToken ct, out bool isGrayscale) =>
-        ToBitmap(rgba, bitmap, HdrDecodeSettings.ToneMapMode, HdrDecodeSettings.ExposureScale, ct, out isGrayscale);
+        Convert(rgba, bitmap, HdrDecodeSettings.ToneMapMode, HdrDecodeSettings.ExposureScale, null, ct, out isGrayscale);
+    
+    public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, float sceneWhitePoint, CancellationToken ct, out bool isGrayscale) =>
+        Convert(rgba, bitmap, HdrDecodeSettings.ToneMapMode, HdrDecodeSettings.ExposureScale, sceneWhitePoint, ct, out isGrayscale);
 
     /// <summary>Overload taking explicit settings, so tests do not depend on the user's.</summary>
     public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, ToneMapMode mode, CancellationToken ct, out bool isGrayscale) =>
-        ToBitmap(rgba, bitmap, mode, 1f, ct, out isGrayscale);
+        Convert(rgba, bitmap, mode, 1f, null, ct, out isGrayscale);
 
-    public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, ToneMapMode mode, float exposureScale, CancellationToken ct, out bool isGrayscale)
+    public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, ToneMapMode mode, float exposureScale, CancellationToken ct, out bool isGrayscale) =>
+        Convert(rgba, bitmap, mode, exposureScale, null, ct, out isGrayscale);
+
+    private static void Convert(Span<float> rgba, SKBitmap bitmap, ToneMapMode mode, float exposureScale, float? sceneWhitePoint, CancellationToken ct, out bool isGrayscale)
     {
         var width = bitmap.Width;
         var height = bitmap.Height;
-
-        // Reinhard needs to know what the brightest thing in the image is before it can map
-        // anything, so it costs one extra read-only pass. The other curves are stateless.
-        var whitePoint = mode == ToneMapMode.ReinhardExtended ? MeasureWhitePoint(rgba) * exposureScale : 1f;
+        var whitePoint = mode == ToneMapMode.ReinhardExtended
+            ? (sceneWhitePoint ?? MeasureWhitePoint(rgba)) * exposureScale
+            : 1f;
 
         unsafe
         {

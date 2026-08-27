@@ -20,16 +20,6 @@ public sealed class ValueSlider : ComponentBase
 
     public event Action<int>? ValueChanged;
 
-    /// <summary>
-    /// Fires once when the user finishes dragging, and only if the value actually moved.
-    /// <see cref="ValueChanged"/> fires continuously during a drag, which is fine for cheap
-    /// listeners and ruinous for anything that re-decodes an image per step.
-    /// </summary>
-    public event Action<int>? ValueCommitted;
-
-    // Value when the current drag started, so a drag that ends where it began stays silent.
-    private int _valueAtDragStart;
-
     private int _value;
     private bool _isDragging;
     
@@ -177,7 +167,6 @@ public sealed class ValueSlider : ComponentBase
     {
         if (!IsEffectivelyEnabled) return;
         _isDragging = true;
-        _valueAtDragStart = _value;
         UpdateValueFromX(point.X);
     }
 
@@ -189,13 +178,7 @@ public sealed class ValueSlider : ComponentBase
 
     protected override void OnPointerUpCore(SKPoint point)
     {
-        if (!_isDragging)
-            return;
-
         _isDragging = false;
-
-        if (_value != _valueAtDragStart)
-            ValueCommitted?.Invoke(_value);
     }
 
     // No OnPointerLeave cancel: the pointer routinely leaves the track while

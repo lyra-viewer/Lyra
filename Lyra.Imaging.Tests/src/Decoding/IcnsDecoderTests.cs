@@ -266,6 +266,41 @@ public class IcnsDecoderTests
         }
     }
 
+    /// <summary>
+    /// Variants are ordered by the size that actually decoded, not by the size the type code
+    /// claims.
+    /// </summary>
+    [Fact]
+    public void Decoder_OrdersByDecodedSize_NotByWhatTheTypeCodeClaims()
+    {
+        var icns = Container(
+            Chunk("ic09", PngBytes(64)),   // claims 512x512, holds 64x64
+            Chunk("ic07", PngBytes(512))   // claims 128x128, holds 512x512
+        );
+
+        var path = Path.Combine(Path.GetTempPath(), $"lyra-icns-{Guid.NewGuid():N}.icns");
+        File.WriteAllBytes(path, icns);
+
+        try
+        {
+            using var composite = new Composite(new FileInfo(path));
+            new IcnsDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
+
+            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+
+            Assert.Equal(["512 x 512", "64 x 64"], set.Variants.Select(v => v.Label));
+            Assert.Equal(512f, composite.Content!.DecodedWidth);
+
+            // The reported range is the real one too.
+            var facts = composite.FormatSpecificSnapshot().ToDictionary(p => p.Key, p => p.Value);
+            Assert.Equal("64 x 64 to 512 x 512", facts["Size Range"]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     // ------------------------------------------------------------------
     //  Builders
     // ------------------------------------------------------------------
