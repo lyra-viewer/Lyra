@@ -48,16 +48,8 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     private static readonly IntPtr SelNew = ObjC.Sel("new");
     private static readonly IntPtr SelDrain = ObjC.Sel("drain");
     private static readonly IntPtr ClassAutoreleasePool = ObjC.Class("NSAutoreleasePool");
-
+    
     private static readonly SKColorSpace DisplayP3 = SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Srgb, SKColorSpaceXyz.DisplayP3);
-
-    /// <summary>
-    /// The extended-range surface's space: the same primaries, no transfer function. The tone-map
-    /// shader reads the transfer off this space and finds the identity, so one code path serves
-    /// both surface kinds.
-    /// </summary>
-    private static readonly SKColorSpace ExtendedLinearDisplayP3 =
-        SKColorSpace.CreateRgb(new SKColorSpaceTransferFn(1f, 1f, 0f, 0f, 0f, 0f, 0f), SKColorSpaceXyz.DisplayP3);
 
     public SkiaMetalRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, IScanProgressProvider scanProgressProvider)
         : base(drawableSize, dropProgressProvider, viewState, "Metal", scanProgressProvider)
@@ -109,19 +101,19 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     protected override bool BackendSupportsExtendedRange => true;
 
     /// <summary>
-    /// An RGBA16Float layer in extended linear Display-P3, carrying the headroom the panel grants.
+    /// An RGBA16Float layer in extended Display-P3, carrying the headroom the panel grants.
     /// </summary>
     protected override SurfaceProfile Surface => _extendedRange
-        ? SurfaceProfile.Extended(ExtendedLinearDisplayP3, HeadroomPolicy.Spendable(Displays.Current))
+        ? SurfaceProfile.Extended(DisplayP3, HeadroomPolicy.Spendable(Displays.Current))
         : SurfaceProfile.DisplayReferred(DisplayP3);
 
     /// <summary>
-    /// Puts the layer into extended range: half-float pixels, an extended linear color space, and
-    /// the flag telling the compositor to honor values above SDR white.
+    /// Puts the layer into extended range: half-float pixels, an extended color space, and the
+    /// flag telling the compositor to honor values above SDR white.
     /// </summary>
     private bool TryConfigureExtendedRange()
     {
-        var extendedSpace = Native.CreateColorSpace("kCGColorSpaceExtendedLinearDisplayP3");
+        var extendedSpace = Native.CreateColorSpace("kCGColorSpaceExtendedDisplayP3");
         if (extendedSpace != IntPtr.Zero && ObjC.Responds(_metalLayer, "setWantsExtendedDynamicRangeContent:"))
         {
             ObjC.SendVoid(_metalLayer, "setPixelFormat:", MTLPixelFormatRGBA16Float);
@@ -129,7 +121,7 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
             ObjC.SendVoid(_metalLayer, "setColorspace:", extendedSpace);
             Native.CGColorSpaceRelease(extendedSpace); // the layer retains it
 
-            Logger.Info("[SkiaMetalRenderer] Layer configured for extended range (RGBA16Float, extended linear Display-P3).");
+            Logger.Info("[SkiaMetalRenderer] Layer configured for extended range (RGBA16Float, extended Display-P3).");
             return true;
         }
 
@@ -185,9 +177,9 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
 
         _currentRenderTarget?.Dispose();
         _currentRenderTarget = new GRBackendRenderTarget(WindowWidth, WindowHeight, mtlInfo);
-
+        
         var colorType = _extendedRange ? SKColorType.RgbaF16 : SKColorType.Bgra8888;
-        var colorSpace = _extendedRange ? ExtendedLinearDisplayP3 : DisplayP3;
+        var colorSpace = DisplayP3;
 
         var surface = SKSurface.Create(_grContext, _currentRenderTarget, GRSurfaceOrigin.TopLeft, colorType, colorSpace);
         if (surface is null)

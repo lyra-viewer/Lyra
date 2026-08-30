@@ -38,7 +38,7 @@ public sealed class VariantsSection : IUISection, IDisposable
 
         _list.Picked += OnPicked;
 
-        _collapsible = new Collapsible("SIZES")
+        _collapsible = new Collapsible("VARIANTS")
             {
                 HorizontalSize = SizeMode.Expand,
                 Present = false

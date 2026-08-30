@@ -45,7 +45,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     /// One-shot diagnostic: whether a frame carried values above SDR white.
     private readonly PresentedPeak _presentedPeak = new();
-
+    
     protected SkiaRendererBase(PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, string backend, IScanProgressProvider? scanProgressProvider = null)
     {
         ArgumentNullException.ThrowIfNull(dropProgressProvider);
@@ -183,6 +183,9 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         }
     }
 
+    /// <summary>
+    /// Draws the interface into the window surface.
+    /// </summary>
     private void RenderUI(SKCanvas canvas)
     {
         canvas.Save();

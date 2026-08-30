@@ -47,6 +47,21 @@ public class FormatHeaderTests
             File.Delete(path);
         }
     }
+    
+    [Fact]
+    public void Ico_ReportsTheDepthOfTheEntryTheFileOpensOn()
+    {
+        var path = MinimalImageBuilder.WriteIco((16, 4), (256, 32));
+
+        try
+        {
+            Assert.Contains(new ExifEntry("Bits Per Sample", "32"), MetadataProcessor.ParseMetadata(path).ToKeyValuePairs());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 
     [Fact]
     public void Tga_ReportsItsPixelDepth()

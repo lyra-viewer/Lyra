@@ -3,11 +3,10 @@ using Lyra.Common;
 using Lyra.Common.Settings;
 using Lyra.DropStatusProvider;
 using Lyra.DuplicateStatusProvider;
+using Lyra.Renderer.Drawing;
 using Lyra.SdlCore;
 using SkiaSharp;
 using static SDL3.SDL;
-
-using Lyra.Renderer.Drawing;
 
 namespace Lyra.Renderer.Backends;
 
@@ -120,8 +119,16 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
         var displayColorSpace = TryGetDisplayIccColorSpace(window);
         if (displayColorSpace is not null)
         {
-            Logger.Debug("[SkiaOpenGlRenderer] Render surface tagged with the display's ICC profile (wide-gamut content preserved).");
-            return displayColorSpace;
+            if (SurfaceProfile.DisplayReferred(displayColorSpace).IsLinearlyEncoded)
+            {
+                Logger.Warning("[SkiaOpenGlRenderer] The display's ICC profile describes a linear curve; falling back to sRGB so text is not drawn heavy.");
+                displayColorSpace.Dispose();
+            }
+            else
+            {
+                Logger.Debug("[SkiaOpenGlRenderer] Render surface tagged with the display's ICC profile (wide-gamut content preserved).");
+                return displayColorSpace;
+            }
         }
 
         Logger.Debug("[SkiaOpenGlRenderer] No display ICC profile published; render surface falls back to sRGB (wide-gamut content folds to sRGB).");

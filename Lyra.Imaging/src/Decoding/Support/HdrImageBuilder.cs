@@ -37,6 +37,8 @@ internal static class HdrImageBuilder
     {
         var whitePoint = HdrToneMap.MeasureWhitePoint(rgba);
 
+        composite.AddFormatSpecific("Dynamic Range", DescribeDynamicRange(whitePoint));
+
         var pixels = (long)width * height;
         if (pixels <= LivePixelBudget)
         {
@@ -78,6 +80,16 @@ internal static class HdrImageBuilder
                                    $"{TiledSceneBudget / 1024 / 1024} MB scene budget.";
 
         return BuildToneMapped(rgba, width, height, composite, whitePoint, ct, out isGrayscale);
+    }
+    
+    private static string DescribeDynamicRange(float whitePoint)
+    {
+        if (whitePoint <= 1.001f)
+            return "Within SDR white";
+
+        var multiplier = whitePoint < 100f ? whitePoint.ToString("0.0") : whitePoint.ToString("0");
+
+        return $"{multiplier}x SDR white ({MathF.Log2(whitePoint):0.0} stops)";
     }
 
     /// <summary>

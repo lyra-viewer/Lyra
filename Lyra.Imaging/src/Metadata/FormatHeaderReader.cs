@@ -60,12 +60,16 @@ internal static class FormatHeaderReader
             var compression = Describe(directory, BmpHeaderDirectory.TagCompression);
             exifInfo.Compression = AssignValue(exifInfo.Compression, compression, Priority.Low);
         }
+        
+        var openingDepth = directories.OfType<IcoDirectory>()
+            .Select(entry => (Pixels: IcoPixels(entry), Depth: Describe(entry, IcoDirectory.TagBitsPerPixel)))
+            .Where(entry => entry.Pixels > 0)
+            .OrderByDescending(entry => entry.Pixels)
+            .Select(entry => entry.Depth)
+            .FirstOrDefault(string.Empty);
 
-        foreach (var directory in directories.OfType<IcoDirectory>())
-        {
-            var bitsPerPixel = Describe(directory, IcoDirectory.TagBitsPerPixel);
-            exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, bitsPerPixel, Priority.Low);
-        }
+        if (openingDepth.Length > 0)
+            exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, openingDepth, Priority.Low);
 
         foreach (var directory in directories.OfType<TgaHeaderDirectory>())
         {
@@ -87,6 +91,14 @@ internal static class FormatHeaderReader
         // a row; PSD has its own path through PsdDecoder and the Lyra.Psd package.
     }
     
+    private static int IcoPixels(Directory entry)
+    {
+        var width = entry.TryGetInt32(IcoDirectory.TagImageWidth, out var w) ? w : 0;
+        var height = entry.TryGetInt32(IcoDirectory.TagImageHeight, out var h) ? h : 0;
+
+        return (width == 0 ? 256 : width) * (height == 0 ? 256 : height);
+    }
+
     private static string DescribeJpegColorType(Directory jpeg) =>
         jpeg.TryGetInt32(JpegDirectory.TagNumberOfComponents, out var components)
             ? components switch

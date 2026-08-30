@@ -20,6 +20,6 @@ public interface IUIEvents
     event Action<ToneMapMode>? ToneMapModeChanged;
     event Action<int>? ExposureStopsChanged;
 
-    /// <summary>A size was picked in the SIZES dropdown; the payload is the variant index.</summary>
+    /// <summary>A rendition was picked in the VARIANTS dropdown; the payload is its index.</summary>
     event Action<int>? VariantSelected;
 }

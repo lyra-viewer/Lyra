@@ -12,7 +12,6 @@ internal class SkiaDecoder : IImageDecoder, IThumbnailDecoder
 {
     public bool CanDecode(ImageFormatType format) => format
         is ImageFormatType.Bmp
-        or ImageFormatType.Ico
         or ImageFormatType.Jfif
         or ImageFormatType.Jpeg
         or ImageFormatType.Png

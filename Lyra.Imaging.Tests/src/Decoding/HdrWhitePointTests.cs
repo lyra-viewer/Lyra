@@ -1,3 +1,5 @@
+using Lyra.Imaging.Content;
+using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Tests.Support;
 using Xunit;
 
@@ -35,6 +37,70 @@ public class HdrWhitePointTests(ITestOutputHelper output)
         // The histogram has 512 bins across 36 stops, so adjacent bins are ~5% apart. Landing
         // within a bin is exact agreement as far as the output can express.
         Assert.InRange(fast, exhaustive * 0.94f, exhaustive * 1.07f);
+    }
+    
+    [Fact]
+    public void TheMeasuredRangeIsReported()
+    {
+        var composite = new Composite(new FileInfo("bright.exr"));
+
+        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 12f), 8, 8, composite, CancellationToken.None, out _);
+
+        var measured = Assert.IsType<HdrRasterContent>(content).WhitePoint;
+        var row = Row(composite, "Dynamic Range");
+
+        Assert.Equal($"{measured:0.0}x SDR white ({MathF.Log2(measured):0.0} stops)", row);
+        Assert.True(measured > 1f, $"the ramp reaches well above white, but measured {measured}.");
+    }
+    
+    [Fact]
+    public void AnImageWithNothingAboveWhite_SaysSoInWords()
+    {
+        var composite = new Composite(new FileInfo("dim.exr"));
+
+        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 0.9f), 8, 8, composite, CancellationToken.None, out _);
+
+        Assert.Equal("Within SDR white", Row(composite, "Dynamic Range"));
+    }
+    
+    [Fact]
+    public void AVeryBrightImageIsStatedWithoutADecimal()
+    {
+        var composite = new Composite(new FileInfo("sun.exr"));
+
+        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 40_000f), 8, 8, composite, CancellationToken.None, out _);
+
+        var row = Row(composite, "Dynamic Range");
+
+        Assert.DoesNotContain(".", row.Split('x')[0]);
+        Assert.DoesNotContain(",", row.Split('x')[0]);
+        Assert.Contains("stops", row);
+    }
+
+    private static string Row(Composite composite, string key)
+    {
+        var rows = composite.FormatSpecificSnapshot();
+
+        Assert.Contains(rows, row => row.Key == key);
+        return rows.First(row => row.Key == key).Value;
+    }
+    
+    private static float[] Ramp(int width, int height, float top)
+    {
+        var rgba = new float[width * height * 4];
+        var pixels = width * height;
+
+        for (var i = 0; i < pixels; i++)
+        {
+            var value = top * (i + 1) / pixels;
+
+            rgba[(i * 4) + 0] = value;
+            rgba[(i * 4) + 1] = value;
+            rgba[(i * 4) + 2] = value;
+            rgba[(i * 4) + 3] = 1f;
+        }
+
+        return rgba;
     }
 
     /// <summary>The 99.9th percentile by an exact sort - the oracle the histogram approximates.</summary>
