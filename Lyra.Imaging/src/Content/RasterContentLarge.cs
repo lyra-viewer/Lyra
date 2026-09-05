@@ -142,6 +142,8 @@ public interface ITileSource : IDisposable
     IEnumerable<RasterTile> GetTiles(SKRect visibleFullRect, SKSize imageSize);
     
     long ByteSize { get; }
+
+    long VisibleByteSize(SKRect visibleFullRect, SKSize imageSize);
 }
 
 public readonly record struct RasterTile(SKImage Image, SKRect DestRect);

@@ -31,9 +31,9 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
         {
             ct.ThrowIfCancellationRequested();
 
-            var bitmap = LoadBitmap(path, composite, ct, tagColorSpace: true);
-
-            composite.ExifInfo ??= MetadataProcessor.ParseMetadata(path);
+            var bitmap = LoadBitmap(path, composite, ct, tagColorSpace: true, out var metadataParsed);
+            if (!metadataParsed)
+                composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
 
             composite.Content = RasterContentBuilder.Build(bitmap, composite);
         }
@@ -55,11 +55,13 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
         ct.ThrowIfCancellationRequested();
 
         // libtiff has no native scaled decode, so decode full then downscale.
-        return ThumbnailScaler.ResizeToThumbnail(LoadBitmap(path, composite: null, ct, tagColorSpace: false), maxDimension);
+        return ThumbnailScaler.ResizeToThumbnail(LoadBitmap(path, composite: null, ct, tagColorSpace: false, out _), maxDimension);
     }
 
-    private static bool TryDecodeNative(string path, Composite? composite, CancellationToken ct, out IntPtr ptr, out int width, out int height, out IntPtr icc, out int iccSize)
+    private static bool TryDecodeNative(string path, Composite? composite, CancellationToken ct, out IntPtr ptr, out int width, out int height, out IntPtr icc, out int iccSize, out bool metadataParsed)
     {
+        metadataParsed = false;
+
         if (composite is not null && TiffNative.MemoryLoadAvailable && NativeFileBuffer.ShouldBuffer(composite.FileInfo.Length))
         {
             using var data = NativeFileBuffer.Read(path, ct, out var readMs, composite.ReportTransferred);
@@ -70,6 +72,8 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
             {
                 composite.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
             }
+            
+            metadataParsed = true;
 
             if (TiffNative.LoadFromMemory(data.Data, data.Length, out ptr, out width, out height, out icc, out iccSize))
                 return ptr != IntPtr.Zero;
@@ -84,9 +88,9 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
                && ptr != IntPtr.Zero;
     }
 
-    private static SKBitmap LoadBitmap(string path, Composite? composite, CancellationToken ct, bool tagColorSpace)
+    private static SKBitmap LoadBitmap(string path, Composite? composite, CancellationToken ct, bool tagColorSpace, out bool metadataParsed)
     {
-        if (!TryDecodeNative(path, composite, ct, out var ptr, out var width, out var height, out var iccPtr, out var iccSize))
+        if (!TryDecodeNative(path, composite, ct, out var ptr, out var width, out var height, out var iccPtr, out var iccSize, out metadataParsed))
         {
             var error = NativeErrors.GetUtf8ZOrAnsiZ(TiffNative.get_last_tiff_error());
             throw new InvalidOperationException($"[TiffDecoder] Failed to decode TIFF: {path}. {error}");

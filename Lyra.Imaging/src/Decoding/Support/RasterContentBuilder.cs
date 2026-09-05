@@ -189,6 +189,8 @@ internal static class RasterContentBuilder
         public long ByteSize => source.ByteCount;
 
         public IEnumerable<RasterTile> GetTiles(SKRect visibleFullRect, SKSize imageSize) => tiles.GetTiles(visibleFullRect, imageSize);
+        
+        public long VisibleByteSize(SKRect visibleFullRect, SKSize imageSize) => tiles.VisibleByteSize(visibleFullRect, imageSize);
 
         public void Dispose()
         {

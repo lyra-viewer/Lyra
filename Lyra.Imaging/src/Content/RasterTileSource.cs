@@ -62,6 +62,15 @@ public sealed class RasterTileSource : ITileSource
         }
     }
 
+    public long VisibleByteSize(SKRect visibleFullRect, SKSize imageSize)
+    {
+        var total = 0L;
+        foreach (var tile in GetTiles(visibleFullRect, imageSize))
+            total += RasterLargeContent.Bytes(tile.Image);
+
+        return total;
+    }
+
     public IEnumerable<RasterTile> GetTiles(SKRect visibleFullRect, SKSize imageSize)
     {
         if (visibleFullRect.IsEmpty)

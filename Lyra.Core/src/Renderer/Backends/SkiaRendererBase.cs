@@ -77,7 +77,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     /// How much GPU memory Skia may keep for cached resources - textures, atlases, scratch
     /// surfaces - before it starts evicting.
     /// </summary>
-    private const int ResourceCacheLimitBytes = 512 * 1024 * 1024;
+    internal const int ResourceCacheLimitBytes = 512 * 1024 * 1024;
 
     protected static void ConfigureResourceCache(GRContext context, string backend)
     {

@@ -1,5 +1,7 @@
+using Lyra.Common;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
+using Lyra.Renderer.Backends;
 using SkiaSharp;
 
 namespace Lyra.Renderer.Drawing;
@@ -160,7 +162,34 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
         if (!useTiles)
             return;
 
+        var fullSize = new SKSize(composite.LogicalWidth, composite.LogicalHeight);
+        var tileBytes = tileSource.VisibleByteSize(visibleFullRect, fullSize);
+
+        if (!TilesFitBudget(tileBytes, sampling.Mipmap != SKMipmapMode.None, TileTextureBudgetBytes))
+            return;
+
         DrawTiles(canvas, composite, rasterLarge, tileSource, visibleFullRect, sampling, surface);
+    }
+
+    /// <summary>
+    /// What the visible tiles may cost as textures before drawing them stops being worth it.
+    /// </summary>
+    private const long TileTextureBudgetBytes = SkiaRendererBase.ResourceCacheLimitBytes * 3L / 4;
+
+    /// <summary>
+    /// Whether the tiles about to be drawn can stay resident in the GPU cache.
+    /// </summary>
+    /// <param name="visibleTileBytes">Base-level texture bytes for the tiles that would be drawn.</param>
+    /// <param name="mipmapped">Whether sampling will build mip chains, which cost a third again.</param>
+    internal static bool TilesFitBudget(long visibleTileBytes, bool mipmapped, long budgetBytes)
+    {
+        if (visibleTileBytes <= 0)
+            return true;
+
+        // A full mip chain is the base level plus 1/4 + 1/16 + ... which converges to a third more.
+        var cost = mipmapped ? visibleTileBytes + visibleTileBytes / 3 : visibleTileBytes;
+
+        return cost <= budgetBytes;
     }
     
     private static void DrawTiles(SKCanvas canvas, Composite composite, RasterLargeContent rasterLarge, ITileSource tileSource, SKRect visibleFullRect, SKSamplingOptions sampling, SurfaceProfile surface)
