@@ -14,6 +14,7 @@ using Lyra.Renderer.GUI;
 using Lyra.SdlCore;
 using SkiaSharp;
 using static Lyra.Common.Events.EventManager;
+using Lyra.Renderer.GUI.Presenters;
 
 namespace Lyra.Renderer.Backends;
 
@@ -38,6 +39,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     private readonly ICompositeContentDrawer _contentDrawer;
     private readonly IDropProgressProvider _dropProgressProvider;
     private readonly IScanProgressProvider? _scanProgressProvider;
+
+    private readonly LoadProgressPresenter _loadProgress = new();
 
     public UIManager UIManager { get; private set; }
 
@@ -280,6 +283,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     private void UpdateStatusOverlay()
     {
         var textColor = _viewState.BackgroundMode == BackgroundMode.White ? SKColors.Black : SKColors.White;
+        
+        UIManager.SetLoadProgress(_loadProgress.Update(LoadSnapshot.Of(_composite)), textColor);
 
         if (_scanProgressProvider?.GetScanStatus() is { Active: true } scan)
         {

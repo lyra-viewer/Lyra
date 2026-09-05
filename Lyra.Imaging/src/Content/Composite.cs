@@ -32,7 +32,27 @@ public sealed class Composite : IDisposable
     private Stopwatch? _loadStopwatch;
     private int _readySignaled;
     private int _completeSignaled;
-    public double LoadTimeEstimated;
+
+    public double DecodeTimeEstimated;
+    public long TransferBytesTotal;
+
+    private long _transferBytesDone;
+    private long _transferBytesLive;
+    private long _transferMicroseconds;
+    private int _transferReads;
+    
+    public long TransferBytesRead => Volatile.Read(ref _transferBytesDone) + Volatile.Read(ref _transferBytesLive);
+    public bool TransferMeasured => Volatile.Read(ref _transferReads) > 0;
+    
+    public double ElapsedMs => _loadStopwatch?.Elapsed.TotalMilliseconds ?? 0;
+
+    public double? TransferTimeMs => TransferMeasured
+        ? Volatile.Read(ref _transferMicroseconds) / 1000.0
+        : null;
+    
+    public double? DecodeTimeMs => LoadTimeComplete is { } total && TransferTimeMs is { } transfer
+        ? Math.Max(0, total - transfer)
+        : null;
 
     public event Action<Composite>? Completed;
     public event Action<Composite>? ProgressChanged;
@@ -92,12 +112,31 @@ public sealed class Composite : IDisposable
         }
     }
 
+    /// <summary>
+    /// Reports how far the read currently in flight has got, for a progress bar to follow. Called
+    /// from a decoder thread.
+    /// </summary>
+    internal void ReportTransferred(long bytesSoFar) => Volatile.Write(ref _transferBytesLive, bytesSoFar);
+    
+    internal void CompleteTransfer(long bytes, double ms)
+    {
+        Interlocked.Add(ref _transferBytesDone, bytes);
+        Volatile.Write(ref _transferBytesLive, 0);
+        Interlocked.Add(ref _transferMicroseconds, (long)(ms * 1000));
+        Interlocked.Increment(ref _transferReads);
+    }
+
     internal void BeginLoadTiming()
     {
         _loadStopwatch = Stopwatch.StartNew();
         _readySignaled = 0;
         LoadTimeReady = null;
         LoadTimeComplete = null;
+
+        Volatile.Write(ref _transferBytesDone, 0);
+        Volatile.Write(ref _transferBytesLive, 0);
+        Volatile.Write(ref _transferMicroseconds, 0);
+        Volatile.Write(ref _transferReads, 0);
     }
 
     internal void SignalReady()

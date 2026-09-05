@@ -22,7 +22,8 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
 
         ct.ThrowIfCancellationRequested();
 
-        var bytes = File.ReadAllBytes(path);
+        var bytes = DecoderIO.ReadAllBytes(path, ct, out var readMs, composite.ReportTransferred);
+        composite.CompleteTransfer(bytes.Length, readMs);
 
         // Basis Universal (ETC1S / UASTC) can't go through the managed reader; the native transcoder
         // decodes the base image straight to RGBA.
@@ -50,7 +51,7 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
     {
         ct.ThrowIfCancellationRequested();
 
-        var bytes = File.ReadAllBytes(path);
+        var bytes = DecoderIO.ReadAllBytes(path, ct, out _);
         if (BasisTranscoder.IsBasis(bytes))
         {
             return ThumbnailScaler.ResizeToThumbnail(BasisTranscoder.Decode(bytes), maxDimension);

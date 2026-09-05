@@ -9,9 +9,12 @@ internal sealed class HdrDecoder : FloatRgbaDecoderBase
 {
     public override bool CanDecode(ImageFormatType format) => format == ImageFormatType.Hdr;
 
-    protected override FloatImageBuffer LoadPixels(Composite composite)
+    protected override FloatImageBuffer LoadPixels(Composite composite, CancellationToken ct)
     {
-        var image = RadianceHdrReader.Decode(File.ReadAllBytes(composite.FileInfo.FullName));
+        var data = DecoderIO.ReadAllBytes(composite.FileInfo.FullName, ct, out var readMs, composite.ReportTransferred);
+        composite.CompleteTransfer(data.Length, readMs);
+
+        var image = RadianceHdrReader.Decode(data);
         return FloatImageBuffer.FromManaged(image.Pixels, image.Width, image.Height);
     }
 }

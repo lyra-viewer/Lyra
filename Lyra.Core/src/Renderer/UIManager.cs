@@ -8,6 +8,8 @@ using Lyra.UI.SupportingTypes;
 using Lyra.UI.Theme;
 using SkiaSharp;
 
+using Lyra.Renderer.GUI.Presenters;
+
 namespace Lyra.Renderer;
 
 // ============================================================================
@@ -115,6 +117,12 @@ public class UIManager : IDisposable
     public void SetStatusOverlay(string? text, SKColor textColor)
     {
         _statusLayer.SetStatus(text, textColor);
+        Invalidate();
+    }
+    
+    public void SetLoadProgress(LoadProgress progress, SKColor color)
+    {
+        _statusLayer.SetProgress(progress.Visible, progress.Value, progress.Indeterminate, color);
         Invalidate();
     }
     

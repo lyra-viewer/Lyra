@@ -281,7 +281,9 @@ internal class ImageLoader : IDisposable
         var fileSize = composite.FileInfo.Length;
 
         composite.ImageFormatType = ImageFormat.GetImageFormat(extension);
-        composite.LoadTimeEstimated = LoadTimeEstimator.EstimateLoadTime(extension, fileSize);
+        
+        composite.DecodeTimeEstimated = DecodeTimeEstimator.EstimateDecodeTime(extension, fileSize);
+        composite.TransferBytesTotal = fileSize;
 
         composite.Completed += OnCompleted;
 
@@ -340,8 +342,11 @@ internal class ImageLoader : IDisposable
 
         void OnCompleted(Composite c)
         {
-            if (c.LoadTimeComplete is double time)
-                LoadTimeEstimator.RecordLoadTime(extension, fileSize, time);
+            if (c.DecodeTimeMs is { } time)
+                DecodeTimeEstimator.RecordDecodeTime(extension, fileSize, time);
+
+            if (c.TransferTimeMs is { } transfer)
+                SourceThroughputEstimator.RecordTransfer(c.FileInfo.FullName, c.TransferBytesRead, transfer);
 
             c.Completed -= OnCompleted;
         }

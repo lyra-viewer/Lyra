@@ -28,6 +28,8 @@ public static class ImageStore
     }
     
     public static long ResidentBytes() => ImageLoader.ResidentBytes();
+    
+    public static long CacheBudgetBytes => ImageLoader.CacheBudgetBytes;
 
     public static void Cleanup(string[] keep)
     {
@@ -41,7 +43,7 @@ public static class ImageStore
 
     public static void SaveAndDispose()
     {
-        LoadTimeEstimator.SaveTimeDataToFile();
+        DecodeTimeEstimator.SaveTimeDataToFile();
         ImageLoader.Dispose();
     }
 }

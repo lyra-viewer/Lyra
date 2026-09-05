@@ -127,7 +127,7 @@ public class MainLayer : IUIEvents, IDisposable
             new SectionEntry(_formatSection, SectionPlacement.Sidebar, _formatSection.Collapsible),
             new SectionEntry(_structureSection, SectionPlacement.Sidebar, _structureSection.Collapsible),
             new SectionEntry(_layersSection, SectionPlacement.Sidebar, _layersSection.Collapsible),
-            new SectionEntry(_debugSection, SectionPlacement.Sidebar),
+            new SectionEntry(_debugSection, SectionPlacement.Sidebar, _debugSection.Collapsible),
             new SectionEntry(_helpSection, SectionPlacement.LeftPane),
         ];
         

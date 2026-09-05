@@ -20,7 +20,8 @@ internal class J2KDecoder : IImageDecoder
         composite.DecoderName = GetType().Name;
         Logger.Debug($"[J2KDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
 
-        var data = File.ReadAllBytes(path);
+        var data = DecoderIO.ReadAllBytes(path, ct, out var readMs, composite.ReportTransferred);
+        composite.CompleteTransfer(data.Length, readMs);
 
         // OpenJPEG hands back pixels only; JP2 keeps EXIF and XMP in top-level uuid boxes.
         var metadata = IsoBoxMetadata.ReadJp2(data);

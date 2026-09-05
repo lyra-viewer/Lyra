@@ -23,7 +23,8 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
         {
             ct.ThrowIfCancellationRequested();
 
-            using var heifContext = new HeifContext(path);
+            using var stream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer);
+            using var heifContext = new HeifContext(stream, leaveOpen: true);
             using var imageHandle = heifContext.GetPrimaryImageHandle();
 
             PopulateFormatSpecific(composite, heifContext, imageHandle, path);
@@ -31,7 +32,7 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
             // Decode as 8-bit RGBA interleaved.
             using var decodedImage = imageHandle.Decode(HeifColorspace.Rgb, HeifChroma.InterleavedRgba32);
 
-            composite.ExifInfo = ParseMetadata(imageHandle, path);
+            composite.ExifInfo = ParseMetadata(imageHandle, stream, path);
             composite.AppliedOrientation = composite.ExifInfo.ContainerRotation;
 
             var bitmap = DecodedImageToBitmap(decodedImage, ct, ResolveColorSpace(imageHandle));
@@ -80,9 +81,10 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
         }
     }
     
-    private static ExifInfo ParseMetadata(HeifImageHandle handle, string path)
+    private static ExifInfo ParseMetadata(HeifImageHandle handle, Stream container, string path)
     {
-        var fromFile = MetadataProcessor.ParseMetadata(path);
+        container.Position = 0;
+        var fromFile = MetadataProcessor.ParseMetadata(container, path);
         if (fromFile.IsValid() && fromFile.HasData())
             return fromFile;
 

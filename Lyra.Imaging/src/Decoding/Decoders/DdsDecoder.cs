@@ -28,7 +28,8 @@ internal sealed class DdsDecoder : IImageDecoder, IThumbnailDecoder
 
         ct.ThrowIfCancellationRequested();
 
-        var bytes = File.ReadAllBytes(path);
+        var bytes = DecoderIO.ReadAllBytes(path, ct, out var readMs, composite.ReportTransferred);
+        composite.CompleteTransfer(bytes.Length, readMs);
         var texture = DdsReader.Read(bytes);
         var surface = texture.Subresources[0]; // mip 0, face 0, layer 0
 
@@ -64,7 +65,7 @@ internal sealed class DdsDecoder : IImageDecoder, IThumbnailDecoder
     {
         ct.ThrowIfCancellationRequested();
 
-        var texture = DdsReader.Read(File.ReadAllBytes(path));
+        var texture = DdsReader.Read(DecoderIO.ReadAllBytes(path, ct, out _));
         var surface = SelectThumbnailSurface(texture, maxDimension);
 
         ct.ThrowIfCancellationRequested();

@@ -23,13 +23,14 @@ internal class SkiaDecoder : IImageDecoder, IThumbnailDecoder
         composite.DecoderName = GetType().Name;
         Logger.Debug($"[SkiaDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
 
-        composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
-
         try
         {
             ct.ThrowIfCancellationRequested();
 
-            using var stream = DecoderIO.OpenSequentialRead(path);
+            using var stream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer);
+
+            composite.ExifInfo = MetadataProcessor.ParseMetadata(stream, path);
+            stream.Position = 0;
 
             using var codec = SKCodec.Create(stream);
             if (codec == null)
@@ -50,7 +51,7 @@ internal class SkiaDecoder : IImageDecoder, IThumbnailDecoder
             // Tries to repair if the image is truncated JPEG
             if (result == SKCodecResult.InvalidInput)
             {
-                var repaired = TryDecodeJpegWithEoiRepair(path, bitmap);
+                var repaired = TryDecodeJpegWithEoiRepair(composite, bitmap, ct);
                 if (repaired.HasValue)
                 {
                     result = repaired.Value;
@@ -69,9 +70,9 @@ internal class SkiaDecoder : IImageDecoder, IThumbnailDecoder
             }
 
             ct.ThrowIfCancellationRequested();
-            
+
             var upright = OrientationTransform.Apply(bitmap, codec.EncodedOrigin);
-            
+
             if (!ReferenceEquals(upright, bitmap))
                 composite.AppliedOrientation = (ExifOrientation)codec.EncodedOrigin;
 
@@ -93,9 +94,10 @@ internal class SkiaDecoder : IImageDecoder, IThumbnailDecoder
         return Task.CompletedTask;
     }
 
-    private static SKCodecResult? TryDecodeJpegWithEoiRepair(string path, SKBitmap bitmap)
+    private static SKCodecResult? TryDecodeJpegWithEoiRepair(Composite composite, SKBitmap bitmap, CancellationToken ct)
     {
-        var bytes = File.ReadAllBytes(path);
+        var bytes = DecoderIO.ReadAllBytes(composite.FileInfo.FullName, ct, out var readMs, composite.ReportTransferred);
+        composite.CompleteTransfer(bytes.Length, readMs);
 
         // JPEG SOI marker (FF D8).
         if (bytes.Length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8)

@@ -20,7 +20,8 @@ internal sealed class IcnsDecoder : IImageDecoder
         composite.DecoderName = GetType().Name;
         Logger.Debug($"[IcnsDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
 
-        var data = File.ReadAllBytes(path);
+        var data = DecoderIO.ReadAllBytes(path, ct, out var readMs, composite.ReportTransferred);
+        composite.CompleteTransfer(data.Length, readMs);
 
         ct.ThrowIfCancellationRequested();
 

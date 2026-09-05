@@ -1,6 +1,7 @@
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Decoding.Support;
 using SkiaSharp;
 using Svg.Skia;
 using static System.Threading.Thread;
@@ -22,7 +23,10 @@ public class SvgDecoder : IImageDecoder, IThumbnailDecoder
             ct.ThrowIfCancellationRequested();
 
             var svg = new SKSvg();
-            svg.Load(path);
+            using (var stream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer))
+            {
+                svg.Load(stream);
+            }
 
             ct.ThrowIfCancellationRequested();
 

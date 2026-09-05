@@ -1,6 +1,7 @@
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Metadata;
 using Lyra.ManagedCodecs.Raster;
 using Lyra.ManagedCodecs.Raster.Ico;
@@ -19,9 +20,10 @@ internal sealed class IcoDecoder : IImageDecoder, IThumbnailDecoder
         composite.DecoderName = GetType().Name;
         Logger.Debug($"[IcoDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
 
-        composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
 
-        var data = File.ReadAllBytes(path);
+        var data = DecoderIO.ReadAllBytes(path, ct, out var readMs, composite.ReportTransferred);
+        composite.CompleteTransfer(data.Length, readMs);
+        composite.ExifInfo = ReadMetadata(data, path);
 
         ct.ThrowIfCancellationRequested();
 
@@ -89,7 +91,7 @@ internal sealed class IcoDecoder : IImageDecoder, IThumbnailDecoder
     {
         ct.ThrowIfCancellationRequested();
 
-        var data = File.ReadAllBytes(path);
+        var data = DecoderIO.ReadAllBytes(path, ct, out _);
         var entries = IcoReader.ReadEntries(data);
 
         if (entries.Count == 0)
@@ -198,5 +200,11 @@ internal sealed class IcoDecoder : IImageDecoder, IThumbnailDecoder
         }
 
         return bitmap;
+    }
+
+    private static ExifInfo ReadMetadata(byte[] data, string path)
+    {
+        using var stream = new MemoryStream(data, writable: false);
+        return MetadataProcessor.ParseMetadata(stream, path);
     }
 }

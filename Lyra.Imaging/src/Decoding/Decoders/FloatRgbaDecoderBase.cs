@@ -14,7 +14,7 @@ internal abstract class FloatRgbaDecoderBase : IImageDecoder
     /// Loads RGBA float pixels for <paramref name="composite"/>'s file. Implementations throw on
     /// failure; the returned buffer is owned by this base and released via its <c>Dispose</c>.
     /// </summary>
-    protected abstract FloatImageBuffer LoadPixels(Composite composite);
+    protected abstract FloatImageBuffer LoadPixels(Composite composite, CancellationToken ct);
 
     public Task DecodeAsync(Composite composite, CancellationToken ct)
     {
@@ -24,7 +24,7 @@ internal abstract class FloatRgbaDecoderBase : IImageDecoder
 
         ct.ThrowIfCancellationRequested();
 
-        using var pixels = LoadPixels(composite);
+        using var pixels = LoadPixels(composite, ct);
 
         ct.ThrowIfCancellationRequested();
 

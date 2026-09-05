@@ -26,11 +26,14 @@ internal sealed class TgaDecoder : IImageDecoder, IThumbnailDecoder
         composite.DecoderName = GetType().Name;
         Logger.Debug($"[TgaDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
 
-        composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
 
         ct.ThrowIfCancellationRequested();
 
-        var bytes = File.ReadAllBytes(path);
+        var bytes = DecoderIO.ReadAllBytes(path, ct, out var readMs, composite.ReportTransferred);
+        
+        composite.CompleteTransfer(bytes.Length, readMs);
+        composite.ExifInfo = ReadMetadata(bytes, path);
+        
         if (!TryDecodeManaged(bytes, path, out var decoded))
         {
             return Fallback.DecodeAsync(composite, ct);
@@ -61,7 +64,7 @@ internal sealed class TgaDecoder : IImageDecoder, IThumbnailDecoder
     {
         ct.ThrowIfCancellationRequested();
 
-        var bytes = File.ReadAllBytes(path);
+        var bytes = DecoderIO.ReadAllBytes(path, ct, out _);
         if (!TryDecodeManaged(bytes, path, out var decoded))
         {
             return Fallback.DecodeThumbnail(path, maxDimension, ct);
@@ -107,5 +110,11 @@ internal sealed class TgaDecoder : IImageDecoder, IThumbnailDecoder
         PixelCopy.CopyTightRgba(decoded.Pixels.AsSpan(0, decoded.Width * decoded.Height * 4), bitmap);
 
         return bitmap;
+    }
+
+    private static ExifInfo ReadMetadata(byte[] data, string path)
+    {
+        using var stream = new MemoryStream(data, writable: false);
+        return MetadataProcessor.ParseMetadata(stream, path);
     }
 }
