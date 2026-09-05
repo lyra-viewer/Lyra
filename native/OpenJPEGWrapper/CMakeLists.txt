@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(OpenJpegWrapper LANGUAGES C CXX)
 
-add_library(j2k_native SHARED j2k_native.cpp)
+add_library(j2k_native SHARED j2k_native.cpp j2k_native.h)
 
 set_target_properties(j2k_native PROPERTIES
   CXX_STANDARD 11

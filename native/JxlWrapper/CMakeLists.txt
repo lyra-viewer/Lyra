@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(JxlWrapper LANGUAGES C CXX)
 
-add_library(jxl_native SHARED jxl_native.cpp)
+add_library(jxl_native SHARED jxl_native.cpp jxl_native.h)
 
 set_target_properties(jxl_native PROPERTIES
         CXX_STANDARD 17

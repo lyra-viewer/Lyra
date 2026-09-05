@@ -9,7 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Link OpenEXR
 find_package(OpenEXR REQUIRED)
 
-add_library(exr_native SHARED exr_native.cpp)
+add_library(exr_native SHARED exr_native.cpp exr_native.h)
 target_link_libraries(exr_native PRIVATE OpenEXR::OpenEXR)
 
 if(APPLE)
