@@ -2,17 +2,20 @@ namespace Lyra.Common;
 
 public static class Formatters
 {
-    public static string SizeToStr(long bytes)
+    private const long KB = 1024;
+    private const long MB = KB * 1024;
+    
+    public static string SizeToStr(long? bytes)
     {
-        const long kB = 1024;
-        const long MB = kB * 1024;
+        if (bytes is not { } value) 
+            return "n/a";
 
-        return bytes switch
+        return value switch
         {
-            >= 100 * MB => $"{bytes / MB} MB",
-            >= 2 * MB => $"{Math.Round(bytes / (double)MB, 1)} MB",
-            >= kB => $"{bytes / kB} kB",
-            _ => $"{bytes} bytes"
+            >= 100 * MB => $"{value / MB} MB",
+            >= 2 * MB   => $"{value / (double)MB:0.#} MB",
+            >= KB       => $"{value / KB} kB",
+            _           => $"{value} bytes"
         };
     }
 
@@ -20,6 +23,6 @@ public static class Formatters
     {
         null => "n/a",
         < 10 => ms.Value.ToString("0.00"),
-        _ => ms.Value.ToString("0")
+        _    => ms.Value.ToString("0")
     };
 }

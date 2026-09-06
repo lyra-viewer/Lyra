@@ -223,6 +223,9 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     {
         if (_composite?.Content == null)
             return;
+        
+        if (_displayMode == DisplayMode.Undefined)
+            return;
 
         var sampling = _viewState.SamplingMode switch
         {
