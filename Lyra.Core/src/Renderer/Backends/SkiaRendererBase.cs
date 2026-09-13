@@ -33,7 +33,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     private Composite? _composite;
     private SKPoint _offset = SKPoint.Empty;
     private DisplayMode _displayMode = DisplayMode.Undefined;
-    private int _zoomPercentage = 100;
+    private float _zoomPercentage = 100f;
 
     private readonly ViewState _viewState;
     private readonly ICompositeContentDrawer _contentDrawer;
@@ -409,7 +409,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
     public void SetDisplayMode(DisplayMode displayMode) => _displayMode = displayMode;
 
-    public void SetZoom(int zoomPercentage) => _zoomPercentage = zoomPercentage;
+    public void SetZoom(float zoomPercentage) => _zoomPercentage = zoomPercentage;
     
     public bool IsCompositeResolutionIndependent => _composite?.Content?.IsResolutionIndependent == true;
 
@@ -424,7 +424,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         UIManager.Dispose();
     }
 
-    private static SKRect ComputeVisibleFullRect(float imageW, float imageH, int windowPxW, int windowPxH, float displayScale, int zoomPercentage, SKPoint offsetPx)
+    private static SKRect ComputeVisibleFullRect(float imageW, float imageH, int windowPxW, int windowPxH, float displayScale, float zoomPercentage, SKPoint offsetPx)
     {
         var zoom = zoomPercentage / 100f;
 

@@ -14,7 +14,7 @@ public readonly record struct ApplicationStates(
 
     bool InDuplicatesMode,
 
-    int Zoom,
+    float Zoom,
     DisplayMode DisplayMode,
     string SamplingMode,
     

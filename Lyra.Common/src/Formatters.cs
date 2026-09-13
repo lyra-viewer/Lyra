@@ -18,6 +18,10 @@ public static class Formatters
             _           => $"{value} bytes"
         };
     }
+    
+    public static string ZoomToStr(float zoomPercentage) => MathF.Abs(zoomPercentage) <= 10f
+        ? $"{zoomPercentage:0.0}%"
+        : $"{zoomPercentage:0}%";
 
     public static string MsToStr(double? ms) => ms switch
     {

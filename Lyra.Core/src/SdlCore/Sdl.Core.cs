@@ -65,7 +65,7 @@ public partial class SdlCore : IDisposable
     // -------------------------------------------------------------------------
 
     private Composite? _composite;
-    private int _zoomPercentage = 100;
+    private float _zoomPercentage = 100f;
     private DisplayMode _displayMode = DisplayMode.Undefined;
 
     private const int PreloadDepth = 3;

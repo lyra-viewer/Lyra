@@ -158,7 +158,7 @@ public sealed class InfoSection : IUISection
             _rotationLabel.Text = rotation.Description();
 
         // Displaying row
-        _zoomLabel.Text = $"{app.Zoom}%";
+        _zoomLabel.Text = Formatters.ZoomToStr(app.Zoom);
         _displayModeLabel.Text = app.DisplayMode.Description();
         _samplingModeLabel.Text = app.SamplingMode;
 
