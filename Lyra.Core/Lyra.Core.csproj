@@ -12,12 +12,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SDL3-CS" Version="3.4.14.1" />
+    <PackageReference Include="SDL3-CS" Version="3.4.16" />
     <PackageReference Include="SDL3-CS.Native" Version="3.4.2" />
-    <PackageReference Include="SkiaSharp" Version="4.151.1" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.151.1" />
-    <PackageReference Include="Svg.Skia" Version="5.2.0" />
-    <PackageReference Include="System.IO.Hashing" Version="10.0.10" />
+    <PackageReference Include="SkiaSharp" Version="4.152.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.152.0" />
+    <PackageReference Include="Svg.Skia" Version="5.2.3" />
+    <PackageReference Include="System.IO.Hashing" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,6 +39,9 @@
     <EmbeddedResource Include="Resources\OFL.txt">
       <LogicalName>LyraViewer.Fonts.OFL.txt</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Shaders\HdrToneMap.sksl">
+      <LogicalName>LyraViewer.Shaders.HdrToneMap.sksl</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <PropertyGroup>
@@ -58,5 +61,10 @@
     </ItemGroup>
     <Copy SourceFiles="@(_LyraNativeWrapperFiles)" DestinationFolder="$(OutDir)lib\$(NativeLibFolder)\" SkipUnchangedFiles="true" Condition="'@(_LyraNativeWrapperFiles)' != ''" />
   </Target>
+
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Lyra.Core.Tests" />
+  </ItemGroup>
 
 </Project>

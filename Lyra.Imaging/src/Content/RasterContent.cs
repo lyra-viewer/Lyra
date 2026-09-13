@@ -2,7 +2,7 @@ using SkiaSharp;
 
 namespace Lyra.Imaging.Content;
 
-public sealed class RasterContent : ICompositeContent
+public class RasterContent : ICompositeContent
 {
     public RasterContent(SKImage image)
     {
@@ -15,7 +15,7 @@ public sealed class RasterContent : ICompositeContent
         _backingBitmap = backingBitmap ?? throw new ArgumentNullException(nameof(backingBitmap));
     }
 
-    public CompositeContentKind Kind => CompositeContentKind.Raster;
+    public bool IsResolutionIndependent => false;
 
     public SKImage Image { get; }
     
@@ -23,6 +23,8 @@ public sealed class RasterContent : ICompositeContent
     
     public float? DecodedWidth => Image.Width;
     public float? DecodedHeight => Image.Height;
+
+    public long ByteSize => (long)Image.Width * Image.Height * Math.Max(1, Image.ColorType.GetBytesPerPixel());
 
     public void Dispose()
     {

@@ -11,15 +11,23 @@ public static class BundledFonts
     private const string RegularResource = "LyraViewer.Fonts.JetBrainsMono-Regular.ttf";
     private const string BoldResource = "LyraViewer.Fonts.JetBrainsMono-Bold.ttf";
 
+    private static readonly Lock RegisterLock = new();
     private static bool _registered;
 
     public static void Register()
     {
-        if (_registered)
-            return;
+        lock (RegisterLock)
+        {
+            if (_registered)
+                return;
 
-        _registered = true;
+            RegisterFaces();
+            _registered = true;
+        }
+    }
 
+    private static void RegisterFaces()
+    {
         var regular = Load(RegularResource);
         if (regular is null)
         {

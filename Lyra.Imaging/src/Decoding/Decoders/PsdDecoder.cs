@@ -1,70 +1,44 @@
 using Lyra.Common;
-using Lyra.Common.SystemExtensions;
-using Lyra.Imaging.ConstraintsProvider;
+using Lyra.Imaging.Content.Tiling;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Decoding.Structure;
+using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Metadata;
-using Lyra.Psd;
+using SkiaSharp;
 using Lyra.Psd.Core.Decode.Composite;
 using Lyra.Psd.Core.SectionData;
-using SkiaSharp;
-using static System.Threading.Thread;
-using Lyra.Imaging.Decoding.Support;
-using Lyra.Imaging.Decoding.Structure;
+using Lyra.Psd;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-internal class PsdDecoder : IImageDecoder
+internal class PsdDecoder : DecoderBase
 {
-    private const float PreviewSizeMultiplier = 2.0f;
-    private const long LargePsdThresholdBytes = 256L * 1024 * 1024;
-    private const long TileMaxBytes = 64L * 1024 * 1024;
+    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Psd or ImageFormatType.Psb;
 
-    private readonly TileDecodeScheduler _tileDecodeScheduler = new();
-
-    public bool CanDecode(ImageFormatType format) => format is ImageFormatType.Psd or ImageFormatType.Psb;
-
-    public Task DecodeAsync(Composite composite, CancellationToken ct)
+    protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        var path = composite.FileInfo.FullName;
-        composite.DecoderName = GetType().Name;
-        Logger.Debug($"[PsdDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
-        
-        composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
+        var header = ReadAndProcessHeader(path, composite);
+        var isLarge = (long)header.Width * header.Height * 4L >= DecodePolicy.SingleTextureCeilingBytes;
 
-        ct.ThrowIfCancellationRequested();
-
-        try
-        {
-            var header = ReadAndProcessHeader(path, composite);
-            var isLarge = (long)header.Width * header.Height * 4L >= LargePsdThresholdBytes;
-
-            if (!isLarge)
-                DecodeSmallPsd(path, composite, ct);
-            else
-                DecodeLargePsd(path, header, composite, ct);
-
-            return Task.CompletedTask;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception e)
-        {
-            Logger.Warning($"[PsdDecoder] Image could not be loaded: {path}\n{e.Message}");
-            throw;
-        }
+        if (!isLarge)
+            DecodeSmallPsd(composite, ct);
+        else
+            DecodeLargePsd(path, header, composite, ct);
     }
 
     private static FileHeader ReadAndProcessHeader(string path, Composite composite)
     {
         try
         {
-            using var stream = DecoderIO.OpenRandomAccessRead(path);
+            using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), composite.ReportTransferred, composite.CompleteTransfer);
+            composite.ExifInfo = MetadataProcessor.ParseMetadata(stream, path);
+            stream.Position = 0;
+
             var header = PsdDocument.ReadHeader(stream);
 
             composite.FullWidth = header.Width;
             composite.FullHeight = header.Height;
+            composite.ReportPixelCount(header.Width, header.Height);
             composite.AddFormatSpecific("Color Mode", $"{header.ColorMode}");
             composite.AddFormatSpecific("Channels", $"{header.NumberOfChannels}");
             composite.AddFormatSpecific("Depth per Channel", $"{header.Depth}-bit");
@@ -78,9 +52,9 @@ internal class PsdDecoder : IImageDecoder
         }
     }
 
-    private static void DecodeSmallPsd(string path, Composite composite, CancellationToken ct)
+    private static void DecodeSmallPsd(Composite composite, CancellationToken ct)
     {
-        using var stream = DecoderIO.OpenRandomAccessRead(path);
+        using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(composite.FileInfo.FullName), composite.ReportTransferred, composite.CompleteTransfer);
         var psd = PsdDocument.ReadDocument(stream);
         composite.PsdLayers = psd.DecodeLayerRecords(stream);
         composite.Structure = PsdStructure.Describe(psd);
@@ -91,7 +65,7 @@ internal class PsdDecoder : IImageDecoder
         ProcessMetadata(psd.PsdMetadata, composite);
         composite.Content = new RasterContent(ToImage(surface));
     }
-    
+
     #region Large PSD (preview + tiled decode)
 
     private void DecodeLargePsd(string path, FileHeader header, Composite composite, CancellationToken ct)
@@ -101,7 +75,7 @@ internal class PsdDecoder : IImageDecoder
 
         ct.ThrowIfCancellationRequested();
 
-        using var stream = DecoderIO.OpenRandomAccessRead(path);
+        using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), composite.ReportTransferred, composite.CompleteTransfer);
         var psd = PsdDocument.ReadDocument(stream);
         composite.PsdLayers = psd.DecodeLayerRecords(stream);
         composite.Structure = PsdStructure.Describe(psd);
@@ -115,7 +89,7 @@ internal class PsdDecoder : IImageDecoder
         ct.ThrowIfCancellationRequested();
         stream.Position = 0;
 
-        var tiled = psd.CreateTiledComposite(stream, maxBytesPerTile: TileMaxBytes, tileEdgeHint: null, outputFormat: null);
+        var tiled = psd.CreateTiledComposite(stream, maxBytesPerTile: DecodePolicy.MaxTileDecodeBytes, tileEdgeHint: null, outputFormat: null);
         var tileSource = SetupTileSource(rasterLarge, tiled);
 
         ScheduleTileDecode(path, psd, tiled, tileSource, rasterLarge, composite, ct);
@@ -123,9 +97,7 @@ internal class PsdDecoder : IImageDecoder
 
     private static void DecodePreview(PsdDocument psd, Stream stream, RasterLargeContent rasterLarge, CancellationToken ct)
     {
-        var constraints = DecodeConstraintsProvider.Current;
-        var maxWidth = (int)(constraints.LogicalWidth * PreviewSizeMultiplier);
-        var maxHeight = (int)(constraints.LogicalHeight * PreviewSizeMultiplier);
+        var (maxWidth, maxHeight) = RasterContentBuilder.PreviewBounds();
 
         Logger.Debug($"[PsdDecoder] Preview size: {maxWidth}x{maxHeight}");
 
@@ -165,10 +137,10 @@ internal class PsdDecoder : IImageDecoder
             {
                 ct.ThrowIfCancellationRequested();
 
-                using var tileStream = DecoderIO.OpenSequentialRead(path);
+                using var tileStream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer);
                 tileStream.Position = 0;
 
-                var bandOrder = _tileDecodeScheduler.BuildBandOrder(tiled.TilesX, tiled.TilesY, tiled.TileWidth, tiled.TileHeight);
+                var bandOrder = TileDecodeScheduler.BuildBandOrder(tiled.TilesX, tiled.TilesY);
 
                 Logger.Debug($"[PsdDecoder] Tiled: {tiled.TilesX}x{tiled.TilesY}, tile={tiled.TileWidth}x{tiled.TileHeight}");
                 Logger.Debug($"[PsdDecoder] Compression: {psd.ImageData.CompressionType}");
@@ -183,9 +155,7 @@ internal class PsdDecoder : IImageDecoder
                     onTileReady: (x, y) => OnTileReady(x, y, tiled, tileSource, rasterLarge, ct),
                     ct);
             }
-            catch (OperationCanceledException)
-            {
-            }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
                 Logger.Warning($"[PsdDecoder] Tile decode failed: {path}\n{ex}");

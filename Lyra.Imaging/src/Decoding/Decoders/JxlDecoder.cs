@@ -1,28 +1,22 @@
 using Lyra.Common;
-using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Metadata;
 using SkiaSharp;
-using static System.Threading.Thread;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-internal class JxlDecoder : IImageDecoder
+internal class JxlDecoder : DecoderBase
 {
     private static readonly SKColorSpace SdrColorSpace =
         SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Srgb, SKColorSpaceXyz.DisplayP3);
 
-    public bool CanDecode(ImageFormatType format) => format == ImageFormatType.Jxl;
+    public override bool CanDecode(ImageFormatType format) => format == ImageFormatType.Jxl;
 
-    public Task DecodeAsync(Composite composite, CancellationToken ct)
+    protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        var path = composite.FileInfo.FullName;
-        composite.DecoderName = GetType().Name;
-        Logger.Debug($"[JxlDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
-
-        var data = File.ReadAllBytes(path);
+        var data = composite.ReadAllBytes(ct);
 
         var metadata = IsoBoxMetadata.ReadJxl(data);
         if (!metadata.IsEmpty)
@@ -58,6 +52,8 @@ internal class JxlDecoder : IImageDecoder
 
                     DecoderValidation.RequireSaneDimensions("JxlDecoder", width, height);
 
+                    composite.ReportPixelCount(width, height);
+
                     ct.ThrowIfCancellationRequested();
 
                     composite.AddFormatSpecific("Bit Depth", $"{bitsPerSample}-bit");
@@ -67,20 +63,9 @@ internal class JxlDecoder : IImageDecoder
 
                     composite.Content = isHdr != 0
                         ? BuildHdr((byte*)nativePixels, width, height, composite, ct)
-                        : BuildSdr((byte*)nativePixels, width, height, ct);
+                        : BuildSdr((byte*)nativePixels, width, height, composite, ct);
                 }
             }
-
-            return Task.CompletedTask;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning($"[JxlDecoder] Failed to load {path}: {ex.Message}");
-            throw;
         }
         finally
         {
@@ -89,77 +74,27 @@ internal class JxlDecoder : IImageDecoder
         }
     }
 
-    private static unsafe RasterContent BuildHdr(byte* src, int width, int height, Composite composite, CancellationToken ct)
+    private static unsafe ICompositeContent BuildHdr(byte* src, int width, int height, Composite composite, CancellationToken ct)
     {
         var rgba = new Span<float>(src, checked(width * height * 4));
-
-        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-        var bitmap = new SKBitmap(info);
-
-        HdrToneMap.ToBitmap(rgba, bitmap, ct, out var isGrayscale);
+        var content = HdrImageBuilder.Build(rgba, width, height, composite, ct, out var isGrayscale);
         composite.AddFormatSpecific("GrayScale", isGrayscale.ToString());
 
         ct.ThrowIfCancellationRequested();
 
-        bitmap.SetImmutable();
-        return new RasterContent(bitmap, SKImage.FromBitmap(bitmap));
+        return content;
     }
 
-    private static unsafe RasterContent BuildSdr(byte* src, int width, int height, CancellationToken ct)
+    private static unsafe ICompositeContent BuildSdr(byte* src, int width, int height, Composite composite, CancellationToken ct)
     {
-        // Native hands back tightly packed, straight-alpha RGBA8. Premultiply
-        // into the bitmap, matching the proven raster path used by J2KDecoder.
-        var srcStride = width * 4;
-
+        // Native hands back tightly packed, straight-alpha RGBA8.
         var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul, SdrColorSpace);
         var bitmap = new SKBitmap(info);
-        bitmap.Erase(SKColors.Transparent);
 
-        var dst = (byte*)bitmap.GetPixels();
-        var dstStride = bitmap.Info.RowBytes;
+        PixelCopy.CopyPremultiplyingRgba((IntPtr)src, width * 4, bitmap, ct, out var isGrayscale);
 
-        for (var y = 0; y < height; y++)
-        {
-            if ((y & 0x3F) == 0)
-                ct.ThrowIfCancellationRequested();
+        composite.AddFormatSpecific("GrayScale", isGrayscale.ToString());
 
-            var srcRow = src + (nint)y * srcStride;
-            var dstRow = dst + (nint)y * dstStride;
-
-            for (var x = 0; x < width; x++)
-            {
-                var i = x * 4;
-
-                var r = srcRow[i + 0];
-                var g = srcRow[i + 1];
-                var b = srcRow[i + 2];
-                var a = srcRow[i + 3];
-
-                if (a == 0)
-                {
-                    dstRow[i + 0] = 0;
-                    dstRow[i + 1] = 0;
-                    dstRow[i + 2] = 0;
-                    dstRow[i + 3] = 0;
-                }
-                else if (a == 255)
-                {
-                    dstRow[i + 0] = r;
-                    dstRow[i + 1] = g;
-                    dstRow[i + 2] = b;
-                    dstRow[i + 3] = 255;
-                }
-                else
-                {
-                    dstRow[i + 0] = (byte)((r * a + 127) / 255);
-                    dstRow[i + 1] = (byte)((g * a + 127) / 255);
-                    dstRow[i + 2] = (byte)((b * a + 127) / 255);
-                    dstRow[i + 3] = a;
-                }
-            }
-        }
-
-        bitmap.SetImmutable();
-        return new RasterContent(bitmap, SKImage.FromBitmap(bitmap));
+        return RasterContentBuilder.Build(bitmap, composite);
     }
 }

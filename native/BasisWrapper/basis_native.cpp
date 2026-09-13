@@ -1,17 +1,13 @@
+#include "basis_native.h"
+
 #include "basis_universal/transcoder/basisu_transcoder.h"
 
 #include <cstdarg>
 #include <cstdint>
-#include <cstdlib>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
-
-#ifdef _WIN32
-#define BASIS_API __declspec(dllexport)
-#else
-#define BASIS_API __attribute__((visibility("default")))
-#endif
 
 #ifdef __clang__
 #define THREAD_LOCAL __thread
@@ -24,9 +20,11 @@ static THREAD_LOCAL char last_basis_error[1024] = "";
 static void set_error(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    vsnprintf(last_basis_error, sizeof(last_basis_error), fmt, args);
+    std::vsnprintf(last_basis_error, sizeof(last_basis_error), fmt, args);
     va_end(args);
 }
+
+static void clear_error() { last_basis_error[0] = '\0'; }
 
 // The transcoder's lookup tables are global and must be built exactly once before any transcode.
 static void ensure_init() {
@@ -36,22 +34,22 @@ static void ensure_init() {
 
 extern "C" {
 
-BASIS_API const char *get_last_basis_error() { return last_basis_error; }
+BASIS_API const char *get_last_basis_error(void) { return last_basis_error; }
 
-// Transcodes one image (mip level / array layer / cubemap face) of a KTX2 Basis file into a tightly
-// packed 8-bit RGBA buffer, top-left origin. Handles both ETC1S (BasisLZ) and UASTC internally, plus
-// Zstd-supercompressed UASTC. Returns false and sets get_last_basis_error() on failure; on success
-// the caller owns *out_pixels and must release it with basis_free_pixels().
-BASIS_API bool basis_decode_ktx2_rgba(
-    const uint8_t *data, int size, int level, int layer, int face,
-    uint8_t **out_pixels, int *out_width, int *out_height) {
+BASIS_API bool basis_decode_ktx2_rgba(const uint8_t *data, int size, int level, int layer, int face,
+                                      uint8_t **out_pixels, int *out_width, int *out_height) {
     *out_pixels = nullptr;
     *out_width = 0;
     *out_height = 0;
-    last_basis_error[0] = '\0';
+    clear_error();
 
     if (!data || size <= 0) {
         set_error("Invalid KTX2 buffer (size %d)", size);
+        return false;
+    }
+
+    if (level < 0 || layer < 0 || face < 0) {
+        set_error("Invalid image selector: level %d, layer %d, face %d", level, layer, face);
         return false;
     }
 
@@ -87,22 +85,25 @@ BASIS_API bool basis_decode_ktx2_rgba(
         return false;
     }
 
-    uint8_t *pixels = (uint8_t *) malloc((size_t) pixel_count * 4);
+    if (pixel_count > (uint64_t) UINT32_MAX) {
+        set_error("Image has too many pixels to transcode: %ux%u", w, h);
+        return false;
+    }
+
+    uint8_t *pixels = (uint8_t *) std::malloc((size_t) pixel_count * 4);
     if (!pixels) {
         set_error("Failed to allocate %llu bytes", (unsigned long long) (pixel_count * 4));
         return false;
     }
 
     // cTFRGBA32: 32bpp RGBA in raster order, R first byte. Pixel-unit pitch/rows for an RGBA target.
-    bool ok = transcoder.transcode_image_level(
-        (uint32_t) level, (uint32_t) layer, (uint32_t) face,
-        pixels, (uint32_t) pixel_count,
-        basist::transcoder_texture_format::cTFRGBA32,
-        0, w, h);
+    bool ok = transcoder.transcode_image_level((uint32_t) level, (uint32_t) layer, (uint32_t) face, pixels,
+                                               (uint32_t) pixel_count, basist::transcoder_texture_format::cTFRGBA32, 0,
+                                               w, h);
 
     if (!ok) {
         set_error("transcode_image_level failed for level %d, layer %d, face %d", level, layer, face);
-        free(pixels);
+        std::free(pixels);
         return false;
     }
 
@@ -114,6 +115,7 @@ BASIS_API bool basis_decode_ktx2_rgba(
 
 BASIS_API void basis_free_pixels(uint8_t *ptr) {
     if (ptr)
-        free(ptr);
+        std::free(ptr);
 }
-}
+
+} // extern "C"

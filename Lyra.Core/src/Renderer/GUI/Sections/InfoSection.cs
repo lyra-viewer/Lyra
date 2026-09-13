@@ -139,9 +139,9 @@ public sealed class InfoSection : IUISection
         {
             _dirNavLabel.Present = false;
         }
-
+        
         _fileNameLabel.Text = fileInfo.Name;
-        _fileSizeLabel.Text = Formatters.SizeToStr(fileInfo.Length);
+        _fileSizeLabel.Text = Formatters.SizeToStr(composite.FileSizeBytes);
 
         // Image row
         _formatLabel.Text = composite.ImageFormatType.Description();
@@ -158,7 +158,7 @@ public sealed class InfoSection : IUISection
             _rotationLabel.Text = rotation.Description();
 
         // Displaying row
-        _zoomLabel.Text = $"{app.Zoom}%";
+        _zoomLabel.Text = Formatters.ZoomToStr(app.Zoom);
         _displayModeLabel.Text = app.DisplayMode.Description();
         _samplingModeLabel.Text = app.SamplingMode;
 

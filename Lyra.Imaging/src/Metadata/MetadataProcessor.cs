@@ -14,6 +14,9 @@ namespace Lyra.Imaging.Metadata;
 /// what a person wrote, and <see cref="MetadataValues"/> holds the normalization they all rely on.
 /// This class owns the entry points, the order those passes run in, and the final reconciliation
 /// between them.
+///
+/// MetadataExtractor supplies the directories for every format but one: a BigTIFF goes to
+/// <see cref="BigTiffMetadataReader"/>, which produces the same directories from 64-bit offsets.
 /// </summary>
 internal static class MetadataProcessor
 {
@@ -21,7 +24,9 @@ internal static class MetadataProcessor
     {
         try
         {
-            return ProcessMetadata(ImageMetadataReader.ReadMetadata(path));
+            return ProcessMetadata(BigTiffMetadataReader.IsBigTiff(path)
+                ? BigTiffMetadataReader.Read(path)
+                : ImageMetadataReader.ReadMetadata(path));
         }
         catch (Exception e)
         {
@@ -35,7 +40,9 @@ internal static class MetadataProcessor
     {
         try
         {
-            return ProcessMetadata(ImageMetadataReader.ReadMetadata(stream));
+            return ProcessMetadata(BigTiffMetadataReader.IsBigTiff(stream)
+                ? BigTiffMetadataReader.Read(stream)
+                : ImageMetadataReader.ReadMetadata(stream));
         }
         catch (Exception e)
         {

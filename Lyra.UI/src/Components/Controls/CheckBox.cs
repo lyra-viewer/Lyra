@@ -44,7 +44,7 @@ public class CheckBox : ComponentBase
 
     private SvgImage CurrentIcon => _checked ? _checkedIcon : _blankIcon;
 
-    public CheckBox(string text, float iconSize = 20f)
+    public CheckBox(string text, float iconSize = 18f)
     {
         MinHeight = 24f;
 

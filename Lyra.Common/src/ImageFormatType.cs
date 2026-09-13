@@ -28,11 +28,10 @@ public enum ImageFormatType
     [FileExtension([".ico"])]
     [Description("Windows Icon")]
     Ico,
-
-    [DisabledType]
+    
     [FileExtension([".icns"])]
     [Description("macOS Icon")]
-    Icns, // TODO
+    Icns,
 
     [FileExtension([".jif", ".jfif"])]
     [Description("JPEG File Interchange Format")]

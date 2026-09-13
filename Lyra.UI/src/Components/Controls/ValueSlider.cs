@@ -26,15 +26,17 @@ public sealed class ValueSlider : ComponentBase
     private readonly SKTypeface _endTypeface;
     private readonly SKFont _endFont;
     private readonly SKFontMetrics _endMetrics;
-    private readonly float _endLabelWidth;
+    private float _endLabelWidth;
 
     private readonly SKTypeface _valueTypeface;
     private readonly SKFont _valueFont;
     private readonly SKFontMetrics _valueMetrics;
     private readonly float _valueLabelHeight;
+    
+    private const int MaxNotches = 64;
 
-    public int Min { get; }
-    public int Max { get; }
+    public int Min { get; private set; }
+    public int Max { get; private set; }
 
     public int Value
     {
@@ -49,6 +51,27 @@ public sealed class ValueSlider : ComponentBase
         }
     }
     
+    public void SetRange(int min, int max)
+    {
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(min, max);
+
+        if (min == Min && max == Max)
+            return;
+
+        Min = min;
+        Max = max;
+        MeasureEndLabels();
+
+        Value = Math.Clamp(_value, min, max);
+        Invalidate();
+    }
+
+    private void MeasureEndLabels()
+    {
+        using var p = new SKPaint();
+        _endLabelWidth = Math.Max(_endFont.MeasureText(Min.ToString(), p), _endFont.MeasureText(Max.ToString(), p));
+    }
+
     public ValueSlider(int min, int max, int initialValue)
     {
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(min, max);
@@ -61,8 +84,7 @@ public sealed class ValueSlider : ComponentBase
         _endTypeface = SKTypeface.FromFamilyName(Fonts.MonospaceFamily, SKFontStyle.Normal);
         _endFont = new SKFont(_endTypeface, EndLabelFontSize);
         _endFont.GetFontMetrics(out _endMetrics);
-        using var p = new SKPaint();
-        _endLabelWidth = Math.Max(_endFont.MeasureText(min.ToString(), p), _endFont.MeasureText(max.ToString(), p));
+        MeasureEndLabels();
 
         _valueTypeface = SKTypeface.FromFamilyName(Fonts.MonospaceFamily, SKFontStyle.Normal);
         _valueFont = new SKFont(_valueTypeface, ValueLabelFontSize);
@@ -117,10 +139,10 @@ public sealed class ValueSlider : ComponentBase
         paint.Color = Palette.Muted;
         canvas.DrawLine(track.Left, track.Y, track.ThumbX, track.Y, paint);
 
-        // Notches
         paint.IsStroke = false;
         var steps = Max - Min;
-        for (var i = 0; i <= steps; i++)
+
+        for (var i = 0; i <= steps && steps <= MaxNotches; i++)
         {
             var t = (float)i / steps;
             var nx = track.Left + t * (track.Right - track.Left);

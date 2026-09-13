@@ -1,0 +1,144 @@
+using Lyra.UI.Components.Controls.Button;
+using Lyra.UI.Components.Primitives;
+using Lyra.UI.SupportingTypes;
+using SkiaSharp;
+
+namespace Lyra.UI.Components.Controls;
+
+public class RadioButton : ComponentBase
+{
+    private const float ContentPadH = 6f;
+    private const float ContentPadV = 2f;
+
+    private readonly Label _label;
+    private readonly SvgImage _selectedIcon;
+    private readonly SvgImage _emptyIcon;
+
+    /// <summary>Raised only when the user selects this button while it was not selected.</summary>
+    public event Action? Selected;
+
+    private bool _isSelected;
+    private bool _isHovered;
+    private bool _isPressed;
+
+    public float IconTextGap { get; set; } = 6f;
+    public float CornerRadius { get; set; } = 0f;
+
+    /// <summary>Current state. Setting this does not raise <see cref="Selected"/>.</summary>
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => Set(ref _isSelected, value);
+    }
+
+    public string Text
+    {
+        get => _label.Text;
+        set => _label.Text = value;
+    }
+
+    private SvgImage CurrentIcon => _isSelected ? _selectedIcon : _emptyIcon;
+
+    public RadioButton(string text, float iconSize = 18f)
+    {
+        MinHeight = 24f;
+
+        _selectedIcon = new SvgImage(ResourceLoader.GetSvg("radio_button_checked"), iconSize, iconSize);
+        _emptyIcon = new SvgImage(ResourceLoader.GetSvg("radio_button_unchecked"), iconSize, iconSize);
+
+        _label = new Label(text)
+        {
+            Transient = true,
+            VerticalAlign = VAlign.Center,
+            Padding = new Padding(2)
+        };
+    }
+
+    protected override SKSize MeasureContent(SKSize availableSize)
+    {
+        var iconSize = _emptyIcon.Measure(availableSize);
+        _selectedIcon.Measure(availableSize);
+        var labelSize = _label.Measure(availableSize);
+
+        var width = iconSize.Width + IconTextGap + labelSize.Width;
+        var height = Math.Max(iconSize.Height, labelSize.Height);
+
+        return new SKSize(width + (ContentPadH * 2), height + (ContentPadV * 2));
+    }
+
+    protected override void ArrangeContent(SKRect contentBounds)
+    {
+        var inner = new SKRect(
+            contentBounds.Left + ContentPadH,
+            contentBounds.Top + ContentPadV,
+            contentBounds.Right - ContentPadH,
+            contentBounds.Bottom - ContentPadV
+        );
+
+        var iconW = _emptyIcon.DesiredSize.Width;
+        var iconH = _emptyIcon.DesiredSize.Height;
+        var iconTop = inner.MidY - (iconH / 2f);
+        var iconRect = new SKRect(inner.Left, iconTop, inner.Left + iconW, iconTop + iconH);
+
+        _selectedIcon.Arrange(iconRect);
+        _emptyIcon.Arrange(iconRect);
+
+        var labelLeft = inner.Left + iconW + IconTextGap;
+        _label.Arrange(new SKRect(labelLeft, inner.Top, inner.Right, inner.Bottom));
+    }
+
+    protected override void RenderContent(SKCanvas canvas, SKRect contentBounds)
+    {
+        ButtonDrawer.DrawBackground(canvas, contentBounds, ButtonVariant.Ghost, CornerRadius, _isHovered, _isPressed);
+        CurrentIcon.Render(canvas);
+        _label.Render(canvas);
+    }
+
+    protected override void OnPointerDownCore(SKPoint point)
+    {
+        if (!IsEffectivelyEnabled)
+            return;
+
+        _isPressed = true;
+    }
+
+    protected override void OnPointerUpCore(SKPoint point)
+    {
+        if (!IsEffectivelyEnabled)
+            return;
+
+        var wasPressed = _isPressed;
+        _isPressed = false;
+
+        if (!wasPressed || !_isHovered || _isSelected)
+            return;
+
+        IsSelected = true;
+        Selected?.Invoke();
+    }
+
+    protected override void OnPointerEnterCore()
+    {
+        if (!IsEffectivelyEnabled)
+            return;
+
+        _isHovered = true;
+    }
+
+    protected override void OnPointerLeaveCore()
+    {
+        _isHovered = false;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _label.Dispose();
+            _selectedIcon.Dispose();
+            _emptyIcon.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+}

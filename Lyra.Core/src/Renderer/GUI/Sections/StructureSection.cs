@@ -99,7 +99,7 @@ public sealed class StructureSection : IUISection
 
     private Collapsible BuildGroupPanel(StructureGroup group)
     {
-        var titleColumn = new VStack { HorizontalSize = SizeMode.Expand };
+        var titleColumn = new VStack { HorizontalSize = SizeMode.Expand, Transient = true };
         titleColumn.AddComponent(new Label(group.Name) { Color = Palette.Foreground, Bold = false });
 
         if (!string.IsNullOrEmpty(group.Description))

@@ -14,9 +14,8 @@ public partial class SdlCore
     private bool _isFullscreen;
     private bool _isPanning;
 
-    private const float ZoomFactor = 1.05f;
-    private const int MinZoom = 1;
-    private const int MaxZoom = 10000;
+    private const float MinZoom = DimensionHelper.MinZoom;
+    private const float MaxZoom = DimensionHelper.MaxZoom;
 
     private void InitializeInput()
     {
@@ -205,7 +204,7 @@ public partial class SdlCore
 
     private void ToggleSampling()
     {
-        if (_renderer.IsCompositeVector)
+        if (_renderer.IsCompositeResolutionIndependent)
             return;
 
         _viewState.ToggleSampling();
@@ -233,14 +232,14 @@ public partial class SdlCore
 
         if (_displayMode is DisplayMode.Free or DisplayMode.Undefined)
             _displayMode = DimensionHelper.GetDisplayMode(_window, _composite, _viewState.InitDisplayMode, out _zoomPercentage);
-        else if (_zoomPercentage == 100)
+        else if (DimensionHelper.IsActualSize(_zoomPercentage))
         {
             UpdateFitToScreen();
         }
         else
         {
             _displayMode = DisplayMode.OriginalImageSize;
-            _zoomPercentage = 100;
+            _zoomPercentage = DimensionHelper.ActualSize;
         }
 
         _renderer.SetDisplayMode(_displayMode);
@@ -252,64 +251,53 @@ public partial class SdlCore
         _renderer.SetOffset(_panHelper.CurrentOffset);
     }
 
-    private void ZoomIn() => ApplyZoom(GetNextZoom(_zoomPercentage, +1));
+    private void ZoomIn() => ApplyZoom(DimensionHelper.GetNextZoom(_zoomPercentage, +1));
 
-    private void ZoomOut() => ApplyZoom(GetNextZoom(_zoomPercentage, -1));
+    private void ZoomOut() => ApplyZoom(DimensionHelper.GetNextZoom(_zoomPercentage, -1));
 
     private void ZoomAtPoint(float mouseX, float mouseY, float direction)
     {
         if (_composite == null || _composite.IsEmpty || _panHelper == null)
             return;
 
-        var newZoom = GetNextZoom(_zoomPercentage, direction);
-        if (newZoom == _zoomPercentage)
+        var newZoom = DimensionHelper.GetNextZoom(_zoomPercentage, direction);
+        if (Math.Abs(newZoom - _zoomPercentage) < float.Epsilon)
             return;
 
         var scale = DimensionHelper.GetPixelDensity(_window);
         ZoomAnchored(newZoom, new SKPoint(mouseX * scale, mouseY * scale));
     }
 
-    private static int GetNextZoom(int currentZoom, float direction)
-    {
-        // direction > 0 → zoom in
-        // direction < 0 → zoom out
-
-        var candidate = direction > 0
-            ? (int)MathF.Round(currentZoom * ZoomFactor, MidpointRounding.AwayFromZero)
-            : (int)MathF.Round(currentZoom / ZoomFactor, MidpointRounding.AwayFromZero);
-
-        candidate = Math.Clamp(candidate, MinZoom, MaxZoom);
-
-        // Force monotonic progress (prevents rounding stalls)
-        if (direction > 0 && candidate <= currentZoom)
-            candidate = Math.Min(MaxZoom, currentZoom + 1);
-
-        if (direction < 0 && candidate >= currentZoom)
-            candidate = Math.Max(MinZoom, currentZoom - 1);
-
-        return candidate;
-    }
-
-    private void ApplyZoom(int newZoom)
+    private void ApplyZoom(float newZoom)
     {
         if (_composite == null || _composite.IsEmpty || _panHelper == null)
             return;
 
         newZoom = Math.Clamp(newZoom, MinZoom, MaxZoom);
-        if (newZoom == _zoomPercentage)
+        if (Math.Abs(newZoom - _zoomPercentage) < float.Epsilon)
             return;
         
         var drawable = DimensionHelper.GetDrawableSize(_window);
         ZoomAnchored(newZoom, new SKPoint(drawable.PixelWidth / 2f, drawable.PixelHeight / 2f));
     }
     
-    private void ZoomAnchored(int newZoom, SKPoint anchorPixels)
+    private void ZoomAnchored(float newZoom, SKPoint anchorPixels)
     {
+        var fitZoom = DimensionHelper.GetZoomToFitScreen(_window, _composite!.LogicalWidth, _composite.LogicalHeight);
+        var fits = DimensionHelper.ReachesZoomToFit(_zoomPercentage, newZoom, fitZoom);
+
+        if (fits)
+            newZoom = fitZoom;
+
         _panHelper!.UpdateZoom(_zoomPercentage);
         var newOffset = _panHelper.GetOffsetForZoomAtCursor(anchorPixels, newZoom);
 
         _zoomPercentage = newZoom;
-        _displayMode = _zoomPercentage == 100 ? DisplayMode.OriginalImageSize : DisplayMode.Free;
+        _displayMode = DimensionHelper.IsActualSize(_zoomPercentage)
+            ? DisplayMode.OriginalImageSize
+            : fits
+                ? DisplayMode.FitToScreen
+                : DisplayMode.Free;
 
         _renderer.SetDisplayMode(_displayMode);
         _renderer.SetZoom(_zoomPercentage);
@@ -326,7 +314,7 @@ public partial class SdlCore
             return;
 
         _zoomPercentage = DimensionHelper.GetZoomToFitScreen(_window, _composite.LogicalWidth, _composite.LogicalHeight);
-        _displayMode = _zoomPercentage == 100 ? DisplayMode.OriginalImageSize : DisplayMode.FitToScreen;
+        _displayMode = DimensionHelper.IsActualSize(_zoomPercentage) ? DisplayMode.OriginalImageSize : DisplayMode.FitToScreen;
         _renderer.SetDisplayMode(_displayMode);
         _renderer.SetZoom(_zoomPercentage);
     }

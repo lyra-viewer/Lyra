@@ -3,7 +3,7 @@ using static Lyra.Common.Events.EventManager;
 
 namespace Lyra.Imaging.ConstraintsProvider;
 
-public static class DecodeConstraintsProvider
+internal static class DecodeConstraintsProvider
 {
     public sealed record DisplaySnapshot(int LogicalWidth, int LogicalHeight, uint? DisplayId);
 

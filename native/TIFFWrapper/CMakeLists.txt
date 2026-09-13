@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(TiffWrapper LANGUAGES C CXX)
 
-add_library(tiff_native SHARED tiff_native.cpp)
+add_library(tiff_native SHARED tiff_native.cpp tiff_native.h)
 
 set_target_properties(tiff_native PROPERTIES
   CXX_STANDARD 11

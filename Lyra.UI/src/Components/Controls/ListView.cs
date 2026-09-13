@@ -58,6 +58,36 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
     public Func<T, bool>? CanPick { get; set; }
 
     // --------------------------------------------------------
+    //  Virtualization
+    // --------------------------------------------------------
+
+    /// <summary>
+    /// Builds components only for the rows that overlap the viewport, instead of one per item.
+    /// </summary>
+    public bool Virtualized { get; set; }
+
+    /// <summary>Index of the first item <see cref="_rows"/> holds. Always 0 when not virtualized.</summary>
+    private int _windowStart;
+
+    /// <summary>Uniform row height, measured from a probe row. Negative until measured.</summary>
+    private float _rowHeight = -1;
+
+    /// <summary>Width the probe was measured at; a change in width invalidates the height.</summary>
+    private float _measuredWidth = -1;
+
+    /// <summary>Desired width of the probe row, reported as this control's own.</summary>
+    private float _rowWidth;
+
+    /// <summary>Rows to build beyond each edge of the viewport, so a scroll does not tear.</summary>
+    private const int Overscan = 2;
+
+    /// <summary>Height of one row plus the gap after it.</summary>
+    private float RowPitch => _rowHeight + RowSpacing;
+
+    /// <summary>Total height of every item, whether it has a component.</summary>
+    private float VirtualContentSize => _items.Count == 0 ? 0 : _items.Count * RowPitch - RowSpacing;
+
+    // --------------------------------------------------------
     //  Scroll settings
     // --------------------------------------------------------
 
@@ -127,7 +157,7 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
         throw new NotSupportedException("ListView children are managed by the data model. Use UpdateData instead.");
 
     // --------------------------------------------------------
-    //  Public API — data management
+    //  Public API - data management
     // --------------------------------------------------------
 
     /// Replaces the entire list with new items. The list is copied.
@@ -139,6 +169,7 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
         _items = [.. items];
         _pickedItem = default;
         _pickedIndex = -1;
+        MarkRowHeightDirty();
         MarkRowsDirty();
     }
 
@@ -185,13 +216,13 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
                 continue;
 
             SetPicked(i);
+            EnsureVisible(i);
             return true;
         }
 
         return false;
     }
 
-    /// Clears the current pick.
     public void ClearPick()
     {
         _pickedItem = default;
@@ -199,13 +230,19 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
         MarkRowsDirty();
     }
 
-    /// Marks rows for rebuild.
     public void InvalidateRows() => MarkRowsDirty();
 
     private void MarkRowsDirty()
     {
         _rowsDirty = true;
         Invalidate();
+    }
+
+    /// <summary>Forces the probe row to be measured again. Call when the items change.</summary>
+    private void MarkRowHeightDirty()
+    {
+        _rowHeight = -1;
+        _measuredWidth = -1;
     }
 
     private void SetPicked(int index)
@@ -224,30 +261,150 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
 
     private void RebuildRows()
     {
+        ClearRows();
+
+        for (var i = 0; i < _items.Count; i++)
+            AppendRow(i);
+
+        _windowStart = 0;
+        _rowsDirty = false;
+    }
+
+    private void ClearRows()
+    {
         foreach (var (_, component) in _rows)
             component.Dispose();
 
         _rows.Clear();
         _childrenView.Clear();
+    }
 
-        for (var i = 0; i < _items.Count; i++)
+    /// <summary>Builds the component for item <paramref name="index"/> and appends it.</summary>
+    private IComponent AppendRow(int index)
+    {
+        var item = _items[index];
+        var component = _rowFactory(item, index == _pickedIndex);
+
+        component.Transient = true;
+        component.Parent = this;
+        component.Context = Context;
+
+        if (component.VerticalSize != SizeMode.Fixed)
+            component.VerticalSize = SizeMode.Shrink;
+
+        _rows.Add((item, component));
+        _childrenView.Add(component);
+
+        return component;
+    }
+
+    /// <summary>
+    /// Measures one row to learn the height every row is assumed to have.
+    /// </summary>
+    private void EnsureRowHeight(float width)
+    {
+        if (_rowHeight >= 0 && Math.Abs(_measuredWidth - width) < 0.5f)
+            return;
+
+        if (_items.Count == 0)
         {
-            var item = _items[i];
-            var isPicked = i == _pickedIndex;
-            var component = _rowFactory(item, isPicked);
+            _rowHeight = 0;
+            _rowWidth = 0;
+            _measuredWidth = width;
+            return;
+        }
 
-            component.Transient = true;
-            component.Parent = this;
-            component.Context = Context;
+        var probe = _rowFactory(_items[0], false);
+        probe.Transient = true;
+        probe.Parent = this;
+        probe.Context = Context;
 
-            if (component.VerticalSize != SizeMode.Fixed)
-                component.VerticalSize = SizeMode.Shrink;
+        if (probe.VerticalSize != SizeMode.Fixed)
+            probe.VerticalSize = SizeMode.Shrink;
 
-            _rows.Add((item, component));
-            _childrenView.Add(component);
+        probe.Measure(new SKSize(width, float.MaxValue));
+
+        _rowHeight = probe.DesiredSize.Height;
+        _rowWidth = probe.DesiredSize.Width;
+        _measuredWidth = width;
+
+        probe.Dispose();
+    }
+
+    /// <summary>
+    /// Rebuilds <see cref="_rows"/> so it covers the rows on screen, and measures and resolves
+    /// them. Called from arrange, where the viewport is finally known.
+    /// </summary>
+    private void EnsureWindow(SKRect contentBounds)
+    {
+        EnsureRowHeight(contentBounds.Width);
+
+        var pitch = RowPitch;
+
+        var first = pitch <= 0 ? 0 : (int)(ScrollOffset / pitch) - Overscan;
+        var last = pitch <= 0
+            ? _items.Count - 1
+            : (int)((ScrollOffset + contentBounds.Height) / pitch) + Overscan;
+
+        first = Math.Max(0, first);
+        last = Math.Min(_items.Count - 1, last);
+
+        var count = Math.Max(0, last - first + 1);
+
+        // Nothing moved and nothing changed: the rows already standing are the right ones.
+        if (!_rowsDirty && _windowStart == first && _rows.Count == count)
+            return;
+
+        ClearRows();
+        _windowStart = first;
+
+        for (var i = first; i <= last; i++)
+        {
+            var component = AppendRow(i);
+            component.Measure(new SKSize(contentBounds.Width, float.MaxValue));
+            component.Resolve();
         }
 
         _rowsDirty = false;
+    }
+
+    /// <summary>Scrolls so that item <paramref name="index"/> is inside the viewport.</summary>
+    public void EnsureVisible(int index)
+    {
+        if (index < 0 || index >= _items.Count || ViewportSize <= 0)
+            return;
+
+        if (!Virtualized)
+        {
+            // Unvirtualized rows know where they are only after an arrange; use what they report.
+            if (index >= _rows.Count)
+                return;
+
+            var bounds = _rows[index].Component.ArrangedBounds;
+            var top = bounds.Top - ContentTop + ScrollOffset;
+
+            ScrollIntoView(top, bounds.Height);
+            return;
+        }
+
+        var pitch = RowPitch;
+        if (pitch <= 0)
+            return;
+
+        ScrollIntoView(index * pitch, _rowHeight);
+    }
+
+    /// <summary>Top of the content area in absolute coordinates, for translating arranged rows.</summary>
+    private float ContentTop { get; set; }
+
+    private void ScrollIntoView(float top, float height)
+    {
+        var bottom = top + height;
+
+        if (top < ScrollOffset)
+            ScrollTo(top);
+        else if (bottom > ScrollOffset + ViewportSize)
+            ScrollTo(bottom - ViewportSize);
     }
 
     // --------------------------------------------------------
@@ -256,6 +413,17 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
 
     protected override SKSize MeasureContent(SKSize availableSize)
     {
+        // Virtualized: the total is arithmetic on the item count, so it costs the same for ten
+        // rows as for ten thousand. The rows themselves are built during arrange, where the
+        // viewport that decides which ones are needed is known.
+        if (Virtualized)
+        {
+            EnsureRowHeight(availableSize.Width);
+            ContentSize = VirtualContentSize;
+
+            return new SKSize(_rowWidth, ContentSize);
+        }
+
         if (_rowsDirty)
             RebuildRows();
 
@@ -301,9 +469,13 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
     protected override void ArrangeContent(SKRect contentBounds)
     {
         ViewportSize = contentBounds.Height;
+        ContentTop = contentBounds.Top;
         ScrollOffset = Math.Clamp(ScrollOffset, 0, ((IScrollable)this).MaxScroll);
 
-        var yOffset = 0f;
+        if (Virtualized)
+            EnsureWindow(contentBounds);
+        
+        var yOffset = Virtualized ? _windowStart * RowPitch : 0f;
         var first = true;
 
         foreach (var (_, component) in _rows)
@@ -313,7 +485,7 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
 
             first = false;
 
-            var rowHeight = component.DesiredSize.Height;
+            var rowHeight = Virtualized ? _rowHeight : component.DesiredSize.Height;
 
             var contentWidth = component.HorizontalSize == SizeMode.Expand
                 ? contentBounds.Width
@@ -332,7 +504,8 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
                 contentBounds.Left + crossOffset,
                 contentBounds.Top + yOffset - ScrollOffset,
                 contentBounds.Left + crossOffset + contentWidth,
-                contentBounds.Top + yOffset - ScrollOffset + rowHeight));
+                contentBounds.Top + yOffset - ScrollOffset + rowHeight)
+            );
 
             yOffset += rowHeight;
         }
@@ -359,8 +532,7 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
                 component.ArrangedBounds.Top > contentBounds.Bottom)
                 continue;
 
-            // Pick highlight — full width.
-            if (i == _pickedIndex)
+            if (_windowStart + i == _pickedIndex)
             {
                 var highlightRect = new SKRect(
                     contentBounds.Left, component.ArrangedBounds.Top,
@@ -420,7 +592,7 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
             if (CanPick != null && !CanPick(item))
                 break;
 
-            SetPicked(i);
+            SetPicked(_windowStart + i);
             Picked?.Invoke(item);
             break;
         }

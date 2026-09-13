@@ -1,35 +1,27 @@
 using Lyra.Common;
-using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.ManagedCodecs.Texture;
 using Lyra.ManagedCodecs.Texture.Ktx;
 using SkiaSharp;
-using static System.Threading.Thread;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
+internal sealed class KtxDecoder : DecoderBase, IThumbnailDecoder
 {
-    public bool CanDecode(ImageFormatType format) => format is ImageFormatType.Ktx;
+    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Ktx;
 
-    public Task DecodeAsync(Composite composite, CancellationToken ct)
+    protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        var path = composite.FileInfo.FullName;
-        composite.DecoderName = nameof(KtxDecoder);
-        Logger.Debug($"[KtxDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
-
-        ct.ThrowIfCancellationRequested();
-
-        var bytes = File.ReadAllBytes(path);
+        var bytes = composite.ReadAllBytes(ct);
 
         // Basis Universal (ETC1S / UASTC) can't go through the managed reader; the native transcoder
         // decodes the base image straight to RGBA.
         if (BasisTranscoder.IsBasis(bytes))
         {
             DecodeBasis(composite, bytes);
-            return Task.CompletedTask;
+            return;
         }
 
         var texture = ReadTexture(bytes);
@@ -39,21 +31,16 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
         composite.Structure = KtxStructure.Describe(bytes, texture);
 
         ct.ThrowIfCancellationRequested();
-        DecoderValidation.RequireSaneDimensions(nameof(KtxDecoder), surface.Width, surface.Height);
+        DecoderValidation.RequireSaneDimensions(nameof(KtxDecoder), surface.Width, surface.Height, TextureBitmap.BytesPerDecodedPixel(texture));
 
-        var bitmap = DecodeToBitmap(texture, surface, ct);
-        bitmap.SetImmutable();
-        var image = SKImage.FromBitmap(bitmap);
-
-        composite.Content = new RasterContent(bitmap, image);
-        return Task.CompletedTask;
+        composite.Content = TextureBitmap.DecodeToContent(texture, surface, composite, ct, flipVertical: texture.Origin == TextureOrigin.BottomLeft);
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
-        var bytes = File.ReadAllBytes(path);
+        var bytes = DecoderIO.ReadAllBytes(path, ct, out _);
         if (BasisTranscoder.IsBasis(bytes))
         {
             return ThumbnailScaler.ResizeToThumbnail(BasisTranscoder.Decode(bytes), maxDimension);
@@ -76,9 +63,7 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
         composite.AddFormatSpecific("Format", BasisTranscoder.CodecName(bytes));
         composite.AddFormatSpecific("Has Alpha", HasTranslucentPixels(bitmap) ? "Yes" : "No");
 
-        bitmap.SetImmutable();
-        var image = SKImage.FromBitmap(bitmap);
-        composite.Content = new RasterContent(bitmap, image);
+        composite.Content = RasterContentBuilder.Build(bitmap, composite);
     }
 
     /// <summary>Dispatches to the KTX 1.x or KTX 2.0 reader by the file's leading identifier bytes.</summary>
@@ -132,31 +117,10 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
         // Decoders emit top-left RGBA; flip a bottom-up (OpenGL-convention) source into place.
         if (texture.Origin == TextureOrigin.BottomLeft)
         {
-            FlipVertical(bitmap);
+            TextureBitmap.FlipBitmapRows(bitmap);
         }
 
         return bitmap;
-    }
-
-    private static unsafe void FlipVertical(SKBitmap bitmap)
-    {
-        var height = bitmap.Height;
-        var rowBytes = bitmap.RowBytes;
-        var pixels = (byte*)bitmap.GetPixels();
-
-        var row = new byte[rowBytes];
-        fixed (byte* tmp = row)
-        {
-            for (var y = 0; y < height / 2; y++)
-            {
-                var top = pixels + (long)y * rowBytes;
-                var bottom = pixels + (long)(height - 1 - y) * rowBytes;
-
-                Buffer.MemoryCopy(top, tmp, rowBytes, rowBytes);
-                Buffer.MemoryCopy(bottom, top, rowBytes, rowBytes);
-                Buffer.MemoryCopy(tmp, bottom, rowBytes, rowBytes);
-            }
-        }
     }
 
     private static unsafe bool HasTranslucentPixels(SKBitmap bitmap)

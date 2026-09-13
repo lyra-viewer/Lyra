@@ -1,4 +1,4 @@
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Tiling;
 using SkiaSharp;
 using Xunit;
 
@@ -24,7 +24,7 @@ public class RasterTileSourceDisposeTests
         source.SetTile(1, 1, tile); // must not throw
 
         Assert.Equal(IntPtr.Zero, tile.Handle); // ownership taken: dropped tile was disposed
-        Assert.Empty(source.GetTiles(SKRect.Create(0, 0, 256, 256), new SKSize(256, 256)));
+        Assert.Empty(source.GetTiles(SKRect.Create(0, 0, 256, 256), new SKSize(256, 256), 1f));
     }
 
     [Fact]

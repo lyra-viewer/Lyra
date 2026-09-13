@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using Lyra.Common;
+using Lyra.Common.Estimation;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Tiling;
 
 namespace Lyra.Imaging.Loading;
 
@@ -31,7 +33,31 @@ internal class ImageLoader : IDisposable
 
     #region Fields
 
+    /// <summary>
+    /// How much decoded pixel data the cache may hold before neighbors are evicted.
+    /// </summary>
+    private static readonly long CacheByteBudget = ComputeCacheBudget(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes);
+
+    /// <summary>What the cache may hold on this machine.</summary>
+    internal static long CacheBudgetBytes => CacheByteBudget;
+
+    private const long MinimumCacheBudget = 1536L * 1024 * 1024;
+    private const long MaximumCacheBudget = 8L * 1024 * 1024 * 1024;
+
+    /// <summary>The budget for a machine with <paramref name="availableBytes"/> to work with.</summary>
+    internal static long ComputeCacheBudget(long availableBytes)
+        => availableBytes <= 0
+            ? MinimumCacheBudget
+            : Math.Clamp(availableBytes / 8, MinimumCacheBudget, MaximumCacheBudget);
+
     private readonly ConcurrentDictionary<string, Lazy<ImageJob>> _images = new();
+
+    /// <summary>
+    /// The most recent keep window, so the budget can be re-enforced when decode completes.
+    /// Checking only at Cleanup time is not enough: that runs before the new image is decoded, and
+    /// the decodes it triggers land afterward, so the peak falls between two checks.
+    /// </summary>
+    private volatile string[] _lastKeepWindow = [];
     private readonly PreloadTaskScheduler _preloadScheduler = new(2);
     private readonly TaskFactory _preloadTaskFactory;
     private volatile Composite? _currentImage;
@@ -39,6 +65,9 @@ internal class ImageLoader : IDisposable
     public ImageLoader()
     {
         _preloadTaskFactory = new TaskFactory(_preloadScheduler);
+
+        Logger.Info($"[ImageLoader] Decoded-image cache budget: {CacheByteBudget / 1024 / 1024} MB " +
+                    $"(of {GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1024 / 1024} MB available).");
     }
 
     #endregion
@@ -48,9 +77,7 @@ internal class ImageLoader : IDisposable
     /// <summary>Returns a stable Composite immediately. Starts async load if needed (non-blocking).</summary>
     public Composite GetImage(string path)
     {
-        var lazy = _images.GetOrAdd(
-            path,
-            p => CreateLazyJob(p, isPreload: false));
+        var lazy = _images.GetOrAdd(path, p => CreateLazyJob(p, isPreload: false));
 
         ImageJob job;
         try
@@ -75,11 +102,125 @@ internal class ImageLoader : IDisposable
             TryPreload(path);
     }
 
+    /// <summary>
+    /// Drops cached images until the resident set fits the budget, most expensive to keep first.
+    /// The current image is never evicted, however large it is - refusing to show what the user
+    /// asked for would be worse than the memory.
+    /// </summary>
+    private void EnforceByteBudget(string[] keep)
+    {
+        var resident = ResidentBytes();
+        if (resident <= CacheByteBudget)
+            return;
+
+        var current = _currentImage;
+        var centre = Centre(keep, current?.FileInfo.FullName);
+
+        var candidates = new List<EvictionCandidate>();
+        for (var index = 0; index < keep.Length; index++)
+        {
+            var path = keep[index];
+
+            if (!_images.TryGetValue(path, out var lazy) || !lazy.IsValueCreated)
+                continue;
+
+            if (ReferenceEquals(lazy.Value.Composite, current))
+                continue;
+
+            var bytes = SafeByteSize(lazy.Value.Composite);
+            if (bytes <= 0)
+                continue;
+
+            candidates.Add(new EvictionCandidate(path, Math.Abs(index - centre), bytes));
+        }
+
+        foreach (var candidate in EvictionOrder(candidates))
+        {
+            if (resident <= CacheByteBudget)
+                return;
+
+            RemoveMatching(key => PathComparer.Equals(key, candidate.Path), "Budget:");
+            resident -= candidate.Bytes;
+
+            Logger.Debug($"[ImageLoader] Evicted {Path.GetFileName(candidate.Path)} " +
+                         $"({candidate.Bytes / 1024 / 1024} MB, {candidate.Distance} away) to stay in budget.");
+        }
+    }
+
+    /// <summary>
+    /// Where in the keep window the current image sits - the point distances are measured from.
+    /// </summary>
+    internal static int Centre(string[] keep, string? currentPath)
+    {
+        if (currentPath is null)
+            return keep.Length / 2;
+
+        var index = Array.FindIndex(keep, path => PathComparer.Equals(path, currentPath));
+
+        return index >= 0 ? index : keep.Length / 2;
+    }
+
+    /// <summary>One cached image the budget could reclaim, and what reclaiming it would cost.</summary>
+    internal readonly record struct EvictionCandidate(string Path, int Distance, long Bytes);
+
+    /// <summary>
+    /// Orders candidates by what they cost to keep: big and far goes first, small and near last.
+    /// </summary>
+    internal static IReadOnlyList<EvictionCandidate> EvictionOrder(IReadOnlyList<EvictionCandidate> candidates)
+        => candidates
+            .OrderByDescending(c => c.Bytes * (c.Distance + 1L))
+            .ThenByDescending(c => c.Distance)
+            .ToList();
+
+    /// <summary>
+    /// Re-checks the budget against the window last navigated to. Called when a decode finishes,
+    /// which is the moment residency actually grows.
+    /// </summary>
+    private void EnforceByteBudgetAfterDecode() => EnforceByteBudget(_lastKeepWindow);
+
+    /// <summary>Decoded bytes currently held by the cache. Exposed for profiling.</summary>
+    public long ResidentBytes()
+    {
+        var total = 0L;
+
+        foreach (var lazy in _images.Values)
+        {
+            if (!lazy.IsValueCreated)
+                continue;
+
+            total += SafeByteSize(lazy.Value.Composite);
+        }
+
+        return total;
+    }
+
+    /// <summary>
+    /// A composite's footprint, tolerating one being disposed on another thread mid-measurement -
+    /// this runs while decodes and evictions are in flight, and a torn read here must not take
+    /// down navigation.
+    /// </summary>
+    private static long SafeByteSize(Composite composite)
+    {
+        try
+        {
+            return composite.Content?.ByteSize ?? 0;
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+    }
+
     /// <summary>Remove everything not in 'keep' array. Cancels in-flight work and disposes completed images not current.</summary>
     public void Cleanup(string[] keep)
     {
         var keepSet = new HashSet<string>(keep);
         RemoveMatching(key => !keepSet.Contains(key), "Cleanup:");
+
+        // The window says which neighbors are worth keeping; the budget says how many of them
+        // actually fit.
+        _lastKeepWindow = keep;
+        EnforceByteBudget(keep);
     }
 
     public void Purge(string path)
@@ -122,9 +263,7 @@ internal class ImageLoader : IDisposable
         if (ImageFormat.IsPreloadDisabled(Path.GetExtension(path)))
             return;
 
-        var lazy = _images.GetOrAdd(
-            path,
-            p => CreateLazyJob(p, isPreload: true));
+        var lazy = _images.GetOrAdd(path, p => CreateLazyJob(p, isPreload: true));
 
         // Touching Value starts the preload (exactly once for the stored Lazy).
         try
@@ -141,12 +280,15 @@ internal class ImageLoader : IDisposable
     private async Task LoadImageAsync(Composite composite, CancellationToken ct)
     {
         var extension = composite.FileInfo.Extension;
-        var fileSize = composite.FileInfo.Length;
+        var fileSize = composite.FileSizeBytes;
 
         composite.ImageFormatType = ImageFormat.GetImageFormat(extension);
-        composite.LoadTimeEstimated = LoadTimeEstimator.EstimateLoadTime(extension, fileSize);
+
+        ApplyEstimate(composite, extension, fileSize, pixels: null);
+        composite.Timing.TransferBytesTotal = fileSize ?? 0;
 
         composite.Completed += OnCompleted;
+        composite.PixelCountReported += OnPixelCountReported;
 
         try
         {
@@ -169,8 +311,16 @@ internal class ImageLoader : IDisposable
             var largeContent = composite.Content as RasterLargeContent;
             if (largeContent is not null)
                 largeContent.TilesProgressChanged += _ => composite.SignalProgress();
+            
+            if (composite.Content is VariantRasterContent variants)
+                variants.VariantReady += _ => composite.SignalProgress();
+            
+            if (largeContent?.TileSource is LazyTileSource lazyTiles)
+                lazyTiles.TileReady += _ => composite.SignalProgress();
 
             composite.SignalReady();
+            
+            EnforceByteBudgetAfterDecode();
 
             // Promote to Complete if:
             // - decoder finished everything synchronously (still Loading), or
@@ -198,14 +348,45 @@ internal class ImageLoader : IDisposable
         }
 
         return;
+        
+        void OnPixelCountReported(Composite c)
+        {
+            ApplyEstimate(c, extension, fileSize, c.PixelCount);
+            c.SignalProgress();
+        }
 
         void OnCompleted(Composite c)
         {
-            if (c.LoadTimeComplete is double time)
-                LoadTimeEstimator.RecordLoadTime(extension, fileSize, time);
+            if (fileSize is { } bytes && c.Timing.Learnable is { } learnable)
+                DecodeTimeEstimator.RecordDecodeTime(extension, bytes, PixelsOf(c), learnable.Ms, learnable.IncludesTransfer);
 
+            if (c.Timing.TransferMs is { } transfer)
+                SourceThroughputEstimator.RecordTransfer(c.FileInfo.FullName, c.Timing.TransferBytesRead, transfer);
+
+            c.PixelCountReported -= OnPixelCountReported;
             c.Completed -= OnCompleted;
         }
+    }
+    
+    private static void ApplyEstimate(Composite composite, string extension, long? fileSize, long? pixels)
+    {
+        var estimate = fileSize is { } bytes
+            ? DecodeTimeEstimator.EstimateDecodeTime(extension, bytes, pixels)
+            : LoadEstimate.None;
+
+        composite.Timing.DecodeEstimateMs = estimate.Ms;
+        composite.Timing.EstimateIncludesTransfer = estimate.IncludesTransfer;
+    }
+
+    private static long? PixelsOf(Composite composite)
+    {
+        if (composite.PixelCount is { } reported)
+            return reported;
+
+        var width = (long)composite.LogicalWidth;
+        var height = (long)composite.LogicalHeight;
+
+        return width > 0 && height > 0 ? width * height : null;
     }
 
     #endregion
@@ -306,7 +487,8 @@ internal class ImageLoader : IDisposable
             state,
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+            TaskScheduler.Default
+        );
     }
 
     private static void OnJobFinished(Task task, object? stateObj)

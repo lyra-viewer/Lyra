@@ -4,14 +4,14 @@ using static Lyra.SdlCore.DimensionHelper;
 
 namespace Lyra.SdlCore;
 
-public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
+public class PanHelper(IntPtr window, Composite composite, float zoomPercentage)
 {
-    private int _zoomPercentage = zoomPercentage;
+    private float _zoomPercentage = zoomPercentage;
     private SKPoint _lastMousePosition;
 
     public SKPoint CurrentOffset { get; set; } = SKPoint.Empty;
 
-    public void UpdateZoom(int zoomPercentage)
+    public void UpdateZoom(float zoomPercentage)
     {
         _zoomPercentage = zoomPercentage;
     }
@@ -59,7 +59,7 @@ public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
         );
     }
 
-    public SKPoint GetOffsetForZoomAtCursor(SKPoint mouse, int newZoom)
+    public SKPoint GetOffsetForZoomAtCursor(SKPoint mouse, float newZoom)
     {
         if (composite.IsEmpty)
             return CurrentOffset;
@@ -95,7 +95,7 @@ public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
         );
     }
 
-    private (int scaledWidth, int scaledHeight, PixelSize bounds) GetZoomedContentAndBounds()
+    private (float scaledWidth, float scaledHeight, PixelSize bounds) GetZoomedContentAndBounds()
     {
         var drawableSize = GetDrawableSize(window);
 
@@ -106,8 +106,8 @@ public class PanHelper(IntPtr window, Composite composite, int zoomPercentage)
             return (0, 0, drawableSize);
 
         var zoomScale = _zoomPercentage / 100f;
-        var scaledWidth = (int)(width * zoomScale);
-        var scaledHeight = (int)(height * zoomScale);
+        var scaledWidth = width * zoomScale;
+        var scaledHeight = height * zoomScale;
 
         return (scaledWidth, scaledHeight, drawableSize);
     }

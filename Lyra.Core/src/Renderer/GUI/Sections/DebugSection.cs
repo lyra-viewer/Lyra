@@ -1,7 +1,11 @@
 using Lyra.Common;
+using Lyra.Common.Estimation;
 using Lyra.Common.SystemExtensions;
 using Lyra.DuplicateStatusProvider;
 using Lyra.FileLoader.Store;
+using Lyra.Imaging;
+using Lyra.Imaging.Content;
+using Lyra.Renderer.Display;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Controls.Button;
@@ -54,6 +58,22 @@ public sealed class DebugSection : IUISection
     private readonly HStack _timeCompleteRow;
     private readonly Label _timeCompleteValue;
 
+    private readonly HStack _timeTransferRow;
+    private readonly Label _timeTransferValue;
+
+    private readonly HStack _timeDecodeRow;
+    private readonly Label _timeDecodeValue;
+
+    private readonly HStack _sourceRow;
+    private readonly Label _sourceValue;
+
+    private readonly HStack _transferEstRow;
+    private readonly Label _transferEstValue;
+
+    private readonly Label _displayValue;
+    private readonly Label _edrValue;
+    private readonly Label _cacheValue;
+
     private readonly HStack _dropStatusRow;
     private readonly Label _dropStatusValue;
 
@@ -99,8 +119,16 @@ public sealed class DebugSection : IUISection
         // Composite state rows
         _stateRow = BuildRow(keyLabels, "State", "", out _stateValue);
         _decoderRow = BuildRow(keyLabels, "Decoder", "", out _decoderValue);
-        _timeEstRow = BuildRow(keyLabels, "Time Est (ms)", "", out _timeEstValue);
+        _timeEstRow = BuildRow(keyLabels, "Decode Est (ms)", "", out _timeEstValue);
+        _timeDecodeRow = BuildRow(keyLabels, "Time Decode (ms)", "", out _timeDecodeValue);
+        _timeTransferRow = BuildRow(keyLabels, "Time Transfer (ms)", "", out _timeTransferValue);
         _timeCompleteRow = BuildRow(keyLabels, "Time Complete (ms)", "", out _timeCompleteValue);
+        _sourceRow = BuildRow(keyLabels, "Source", "", out _sourceValue);
+        _transferEstRow = BuildRow(keyLabels, "Transfer Est (ms)", "", out _transferEstValue);
+        
+        var displayRow = BuildRow(keyLabels, "Display", "-", out _displayValue);
+        var edrRow = BuildRow(keyLabels, "EDR", "-", out _edrValue);
+        var cacheRow = BuildRow(keyLabels, "Cache", "-", out _cacheValue);
 
         // Drag & drop rows
         _dropStatusRow = BuildRow(keyLabels, "Drop", "", out _dropStatusValue);
@@ -130,11 +158,13 @@ public sealed class DebugSection : IUISection
 
         foreach (var label in keyLabels)
             label.Width(maxKeyWidth);
-
-        _collapsible = new Collapsible("DEBUG")
-            .ExpandH()
-            .Expanded(false)
-            .Children(
+        
+        var rows = new VScrollContainer
+        {
+            HorizontalSize = SizeMode.Expand,
+            VerticalSize = SizeMode.Flexible,
+            Padding = new Padding(0, 4, 0, 0)
+        }.Children(
                 pointerRow,
                 hitRow,
                 actionRow,
@@ -142,7 +172,15 @@ public sealed class DebugSection : IUISection
                 _stateRow,
                 _decoderRow,
                 _timeEstRow,
+                _timeDecodeRow,
+                _timeTransferRow,
                 _timeCompleteRow,
+                _sourceRow,
+                _transferEstRow,
+                Spacer(),
+                displayRow,
+                edrRow,
+                cacheRow,
                 Spacer(),
                 _dropStatusRow,
                 dropEnqueuedRow,
@@ -160,6 +198,11 @@ public sealed class DebugSection : IUISection
                 _recordPHashRow,
                 _recordGroupRow
             );
+
+        _collapsible = new Collapsible("DEBUG")
+            .ExpandH()
+            .Expanded(false)
+            .Child(rows);
     }
 
     public void Refresh(UIState state)
@@ -170,6 +213,10 @@ public sealed class DebugSection : IUISection
             _decoderRow.Present = false;
             _timeEstRow.Present = false;
             _timeCompleteRow.Present = false;
+            _timeTransferRow.Present = false;
+            _timeDecodeRow.Present = false;
+            _sourceRow.Present = false;
+            _transferEstRow.Present = false;
             // Drop rows stay present - they track activity even before
             // the first composite is loaded.
         }
@@ -183,11 +230,30 @@ public sealed class DebugSection : IUISection
             var composite = state.Composite;
             _stateValue.Text = composite.State.Description();
             _decoderValue.Text = composite.DecoderName ?? "-";
-            _timeEstValue.Text = Formatters.MsToStr(composite.LoadTimeEstimated);
-            _timeCompleteValue.Text = Formatters.MsToStr(composite.LoadTimeComplete);
+            _timeEstValue.Text = Formatters.MsToStr(composite.Timing.DecodeEstimateMs);
+            _timeCompleteValue.Text = Formatters.MsToStr(composite.Timing.CompleteMs);
+
+            _timeTransferRow.Present = composite.Timing.TransferMeasured;
+            _timeDecodeRow.Present = composite.Timing.TransferMeasured;
+
+            if (composite.Timing.TransferMeasured)
+            {
+                _timeTransferValue.Text = FormatTransfer(composite);
+                _timeDecodeValue.Text = Formatters.MsToStr(composite.Timing.DecodeMs);
+            }
+
+            _sourceRow.Present = true;
+            _transferEstRow.Present = true;
+            var path = composite.FileInfo.FullName;
+            _sourceValue.Text = StorageSource.RootFor(path);
+            _transferEstValue.Text = FormatTransferEstimate(SourceThroughputEstimator.EstimateTransfer(path), composite.Timing.TransferBytesTotal);
         }
 
         var app = state.AppStates;
+
+        _displayValue.Text = app.Display.DisplayName;
+        _edrValue.Text = FormatEdr(app.Display, app.BackendSupportsExtendedRange);
+        _cacheValue.Text = FormatCache(ImageStore.ResidentBytes(), ImageStore.CacheBudgetBytes);
 
         if (app.DropAborted)
         {
@@ -249,6 +315,48 @@ public sealed class DebugSection : IUISection
         _recordContentHashValue.Text = record.HasContentHash ? record.ContentHash.ToString("X") : "-";
         _recordPHashValue.Text = record.HasPHash ? record.PHash.ToString("X16") : "-";
         _recordGroupValue.Text = record.HasGroup ? record.GroupId!.Value.ToString() : "-";
+    }
+    
+    internal static string FormatTransferEstimate(TransferEstimate? estimate, long bytes)
+    {
+        if (estimate is not { } source)
+            return "learning";
+
+        var rate = Formatters.SizeToStr((long)(source.BytesPerMs * 1000));
+        return $"{Formatters.MsToStr(source.MsFor(bytes))} ({rate}/s +{Formatters.MsToStr(source.LatencyMs)}ms)";
+    }
+    
+    internal static string FormatTransfer(Composite composite)
+    {
+        var ms = composite.Timing.TransferMs;
+        var bytes = composite.Timing.TransferBytesRead;
+        var text = Formatters.MsToStr(ms);
+
+        // Below a millisecond the rate is division noise, not a measurement worth printing.
+        if (ms is not > 1 || bytes <= 0)
+            return text;
+
+        var bytesPerSecond = (long)(bytes / (ms.Value / 1000.0));
+        return $"{text} ({Formatters.SizeToStr(bytesPerSecond)}/s)";
+    }
+    
+    internal static string FormatCache(long resident, long budget)
+    {
+        const long mb = 1024 * 1024;
+
+        return budget > 0
+            ? $"{resident / mb} / {budget / mb} MB ({100.0 * resident / budget:0}%)"
+            : $"{resident / mb} MB";
+    }
+
+    internal static string FormatEdr(DisplayCapabilities display, bool backendSupportsExtendedRange)
+    {
+        if (!display.SupportsExtendedRange)
+            return "none (SDR display)";
+
+        var headroom = $"{display.CurrentHeadroom:0.00}x now / {display.PotentialHeadroom:0.##}x max";
+
+        return backendSupportsExtendedRange ? headroom : $"{headroom} - backend cannot present it";
     }
 
     public void SetPointer(float x, float y) => _pointerValue.Text = $"{x:F1}, {y:F1}";

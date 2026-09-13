@@ -55,6 +55,40 @@ internal static class MinimalImageBuilder
 
         return Write(bytes, ".tga");
     }
+    
+    public static string WriteIco(params (int Size, ushort Bits)[] entries)
+    {
+        const int directory = 6;
+        const int entrySize = 16;
+        const int payload = 8;
+
+        var bytes = new byte[directory + (entrySize * entries.Length) + (payload * entries.Length)];
+        var span = bytes.AsSpan();
+
+        BinaryPrimitives.WriteUInt16LittleEndian(span[2..], 1); // 1 = icon, 2 = cursor
+        BinaryPrimitives.WriteUInt16LittleEndian(span[4..], (ushort)entries.Length);
+
+        var offset = directory + (entrySize * entries.Length);
+
+        for (var i = 0; i < entries.Length; i++)
+        {
+            var entry = span[(directory + (i * entrySize))..];
+
+            // The dimension fields are one byte each, so 256 - the largest icon Windows defines -
+            // is written as zero.
+            entry[0] = (byte)(entries[i].Size == 256 ? 0 : entries[i].Size);
+            entry[1] = entry[0];
+
+            BinaryPrimitives.WriteUInt16LittleEndian(entry[4..], 1); // colour planes
+            BinaryPrimitives.WriteUInt16LittleEndian(entry[6..], entries[i].Bits);
+            BinaryPrimitives.WriteUInt32LittleEndian(entry[8..], payload);
+            BinaryPrimitives.WriteUInt32LittleEndian(entry[12..], (uint)offset);
+
+            offset += payload;
+        }
+
+        return Write(bytes, ".ico");
+    }
 
     private static string Write(byte[] bytes, string extension)
     {

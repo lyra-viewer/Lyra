@@ -25,6 +25,12 @@ public static class EnumExtensions
                ?? value.ToDisplayString();
     }
 
+    public static bool HasAttribute<TAttribute>(this Enum value) where TAttribute : Attribute
+        => value
+            .GetType()
+            .GetField(value.ToString())?
+            .GetCustomAttribute<TAttribute>() is not null;
+
     public static string ToDisplayString(this Enum value)
     {
         return System.Text.RegularExpressions.Regex

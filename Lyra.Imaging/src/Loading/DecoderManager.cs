@@ -16,6 +16,8 @@ internal static class DecoderManager
         new HeifDecoder(),
         new ExrDecoder(),
         new HdrDecoder(),
+        new IcnsDecoder(),
+        new IcoDecoder(),
         new PsdDecoder(),
         new SvgDecoder(),
         new J2KDecoder(),

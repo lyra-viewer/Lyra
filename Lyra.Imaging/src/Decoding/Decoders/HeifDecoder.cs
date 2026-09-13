@@ -1,63 +1,44 @@
 using LibHeifSharp;
 using Lyra.Common;
-using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Metadata;
 using SkiaSharp;
-using static System.Threading.Thread;
 using Lyra.Imaging.Decoding.Support;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
+internal class HeifDecoder : DecoderBase, IThumbnailDecoder
 {
-    public bool CanDecode(ImageFormatType format) => format == ImageFormatType.Heif;
+    public override bool CanDecode(ImageFormatType format) => format == ImageFormatType.Heif;
 
-    public Task DecodeAsync(Composite composite, CancellationToken ct)
+    protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        var path = composite.FileInfo.FullName;
-        composite.DecoderName = GetType().Name;
-        Logger.Debug($"[HeifDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
-
         try
         {
-            ct.ThrowIfCancellationRequested();
-
-            using var heifContext = new HeifContext(path);
+            using var stream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer);
+            using var heifContext = new HeifContext(stream, leaveOpen: true);
             using var imageHandle = heifContext.GetPrimaryImageHandle();
 
             PopulateFormatSpecific(composite, heifContext, imageHandle, path);
 
+            composite.ReportPixelCount(imageHandle.Width, imageHandle.Height);
+
             // Decode as 8-bit RGBA interleaved.
             using var decodedImage = imageHandle.Decode(HeifColorspace.Rgb, HeifChroma.InterleavedRgba32);
 
-            composite.ExifInfo = ParseMetadata(imageHandle, path);
+            composite.ExifInfo = ParseMetadata(imageHandle, stream, path);
             composite.AppliedOrientation = composite.ExifInfo.ContainerRotation;
 
             var bitmap = DecodedImageToBitmap(decodedImage, ct, ResolveColorSpace(imageHandle));
 
             ct.ThrowIfCancellationRequested();
 
-            bitmap.SetImmutable();
-            var skImage = SKImage.FromBitmap(bitmap);
-            composite.Content = new RasterContent(bitmap, skImage);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
+            composite.Content = RasterContentBuilder.Build(bitmap, composite);
         }
         catch (HeifException e)
         {
-            // Expected for some HEIF variants (e.g. 'unci'); keep as warning-only.
             Logger.Warning($"[HeifDecoder] Unsupported HEIF feature for file: {path}\n{e.Message}");
         }
-        catch (Exception e)
-        {
-            Logger.Warning($"[HeifDecoder] Image could not be loaded: {path}\n{e.Message}");
-            throw;
-        }
-
-        return Task.CompletedTask;
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)
@@ -82,9 +63,10 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
         }
     }
     
-    private static ExifInfo ParseMetadata(HeifImageHandle handle, string path)
+    private static ExifInfo ParseMetadata(HeifImageHandle handle, Stream container, string path)
     {
-        var fromFile = MetadataProcessor.ParseMetadata(path);
+        container.Position = 0;
+        var fromFile = MetadataProcessor.ParseMetadata(container, path);
         if (fromFile.IsValid() && fromFile.HasData())
             return fromFile;
 

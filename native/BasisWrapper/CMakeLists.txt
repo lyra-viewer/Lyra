@@ -4,6 +4,7 @@ project(BasisWrapper LANGUAGES CXX)
 # The shim plus the vendored Binomial transcoder (transcoder/ only; the encoder is not needed).
 add_library(basis_native SHARED
   basis_native.cpp
+  basis_native.h
   basis_universal/transcoder/basisu_transcoder.cpp
 )
 

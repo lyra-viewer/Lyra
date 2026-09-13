@@ -8,6 +8,8 @@ using Lyra.UI.SupportingTypes;
 using Lyra.UI.Theme;
 using SkiaSharp;
 
+using Lyra.Renderer.GUI.Presenters;
+
 namespace Lyra.Renderer;
 
 // ============================================================================
@@ -118,6 +120,12 @@ public class UIManager : IDisposable
         Invalidate();
     }
     
+    public void SetLoadProgress(LoadProgress progress, SKColor color)
+    {
+        _statusLayer.SetProgress(progress.Visible, progress.Value, progress.Indeterminate, color);
+        Invalidate();
+    }
+    
     // --------------------------------------------------------
     //  State refresh
     // --------------------------------------------------------
@@ -176,6 +184,23 @@ public class UIManager : IDisposable
     public void SetSamplingMode(SamplingMode mode)
     {
         _mainLayer.SetSamplingMode(mode);
+        Invalidate();
+    }
+
+    /// <summary>
+    /// Updates the tone-map dropdown's selected value. Does not fire
+    /// <see cref="IUIEvents.ToneMapModeChanged"/>.
+    /// </summary>
+    public void SetToneMapMode(ToneMapMode mode)
+    {
+        _mainLayer.SetToneMapMode(mode);
+        Invalidate();
+    }
+
+    /// <summary>Updates the exposure slider. Does not fire <see cref="IUIEvents.ExposureStopsChanged"/>.</summary>
+    public void SetExposureStops(int stops)
+    {
+        _mainLayer.SetExposureStops(stops);
         Invalidate();
     }
 

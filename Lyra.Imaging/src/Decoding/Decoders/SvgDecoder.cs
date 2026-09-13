@@ -1,55 +1,40 @@
 using Lyra.Common;
-using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Decoding.Support;
 using SkiaSharp;
 using Svg.Skia;
-using static System.Threading.Thread;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-public class SvgDecoder : IImageDecoder, IThumbnailDecoder
+internal sealed class SvgDecoder : DecoderBase, IThumbnailDecoder
 {
-    public bool CanDecode(ImageFormatType format) => format is ImageFormatType.Svg;
+    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Svg;
 
-    public Task DecodeAsync(Composite composite, CancellationToken ct)
+    protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        var path = composite.FileInfo.FullName;
-        composite.DecoderName = GetType().Name;
-        Logger.Debug($"[SvgDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
+        ct.ThrowIfCancellationRequested();
 
-        try
+        var svg = new SKSvg();
+        using (var stream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer))
         {
-            ct.ThrowIfCancellationRequested();
-
-            var svg = new SKSvg();
-            svg.Load(path);
-
-            ct.ThrowIfCancellationRequested();
-
-            var picture = svg.Picture;
-            if (picture == null)
-            {
-                Logger.Warning($"[SvgDecoder] SVG picture is null: {path}");
-                return Task.CompletedTask;
-            }
-
-            var originalBounds = picture.CullRect;
-            if (originalBounds.IsEmpty || originalBounds.Width < 1 || originalBounds.Height < 1)
-                Logger.Debug($"[SvgDecoder] Detected empty or invalid CullRect: {path}");
-
-            composite.Content = new VectorContent(picture);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning($"[SvgDecoder] Failed to load {path}: {ex.Message}");
-            throw;
+            svg.Load(stream);
         }
 
-        return Task.CompletedTask;
+        ct.ThrowIfCancellationRequested();
+
+        var picture = svg.Picture;
+        if (picture == null)
+        {
+            Logger.Warning($"[SvgDecoder] SVG picture is null: {path}");
+            return;
+        }
+
+        var originalBounds = picture.CullRect;
+        if (originalBounds.IsEmpty || originalBounds.Width < 1 || originalBounds.Height < 1)
+            Logger.Debug($"[SvgDecoder] Detected empty or invalid CullRect: {path}");
+
+        composite.Content = new VectorContent(picture);
+    
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)

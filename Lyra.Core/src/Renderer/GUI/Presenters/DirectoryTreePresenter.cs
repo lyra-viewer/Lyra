@@ -1,3 +1,4 @@
+using Lyra.Common;
 using Lyra.FileLoader.Navigation;
 using Lyra.UI.Components.Controls.TreeView;
 
@@ -126,8 +127,8 @@ public sealed class DirectoryTreePresenter
             relativeEntries.Add(entry with { Path = rel });
             _directoryMap[rel] = entry.Path;
         }
-
-        relativeEntries.Sort((a, b) => string.Compare(a.Path, b.Path, StringComparison.Ordinal));
+        
+        relativeEntries.Sort((a, b) => PathComparer.Compare(a.Path, b.Path));
 
         var roots = PathTreeBuilder.Build(relativeEntries, e => e.Path);
 
@@ -146,6 +147,8 @@ public sealed class DirectoryTreePresenter
                     CollapsedDisplayName = parentName + " / " + childName
                 };
             });
+
+        PathTreeBuilder.SortSiblings(roots, e => e.Path, PathComparer.CommonPathComparer);
 
         treeView.UpdateData(roots);
     }
