@@ -88,7 +88,8 @@ cannot be parallelised, so performance over a NAS or remote share will always be
 ## Key Features
 
 - Fast, robust, minimalist, intuitive
-- Native, not Electron
+- Native, not Electron - runs on macOS, Windows and Linux from one codebase
+- Non-blocking loading - the UI never freezes on a decode; images arrive progressively while neighbors preload
 - Runs offline, no telemetry, no update pings, no cloud, no AI features, no nag screens
 - Read-only by design - never writes, moves or deletes a file
 - Keyboard-driven, with the full key map on screen at a keystroke
@@ -101,7 +102,7 @@ cannot be parallelised, so performance over a NAS or remote share will always be
 - Adjustable background, sampling options
 - Color-managed from decode to screen (embedded ICC, NCLX primaries)
 - P3 wide-gamut support
-- HDR kept scene-referred and tone-mapped as it is drawn - three curves, exposure in stops
+- HDR kept scene-referred and tone-mapped as it is drawn - ACES filmic, extended Reinhard or clip, with exposure in stops
 - EDR output on macOS - highlights drawn above SDR white on a display with headroom
 - PSD / PSB streaming and tiled decoding
 - TIFF in depth - BigTIFF, multi-page documents, 1 to 64-bit samples, signed, unsigned or float

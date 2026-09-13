@@ -11,7 +11,10 @@ internal static class StreamingGrayPreview
     /// <summary>Reads a band of full-width rows, or returns false.</summary>
     internal delegate bool BandReader(uint firstRow, uint rowCount, out IntPtr pixels, out uint stride);
     
-    private const int MaxSamplesPerAxis = 4;
+    /// <summary>
+    /// How many source pixels each preview pixel is averaged from, per axis, at most.
+    /// </summary>
+    internal const int MaxSamplesPerAxis = 4;
 
     /// <summary>
     /// Streams <paramref name="width"/> x <paramref name="height"/> into a preview no larger than
@@ -36,8 +39,8 @@ internal static class StreamingGrayPreview
         var previewWidth = Math.Max(1, (int)(width * scale));
         var previewHeight = Math.Max(1, (int)(height * scale));
         
-        var strideY = Math.Max(1, height / previewHeight / MaxSamplesPerAxis);
-        var strideX = Math.Max(1, width / previewWidth / MaxSamplesPerAxis);
+        var strideY = StrideFor(height, previewHeight);
+        var strideX = StrideFor(width, previewWidth);
         
         var rowSums = new long[(long)previewWidth * channels];
         var rowCounts = new int[previewWidth];
@@ -87,6 +90,14 @@ internal static class StreamingGrayPreview
             bitmap.Dispose();
             throw;
         }
+    }
+
+    internal static int StrideFor(int source, int preview)
+    {
+        if (preview <= 0 || source <= preview)
+            return 1;
+
+        return Math.Max(1, (int)Math.Ceiling((double)source / preview / MaxSamplesPerAxis));
     }
 
     private static unsafe void Accumulate(

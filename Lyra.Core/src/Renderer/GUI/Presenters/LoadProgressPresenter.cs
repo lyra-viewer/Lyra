@@ -5,7 +5,7 @@ namespace Lyra.Renderer.GUI.Presenters;
 
 public readonly record struct LoadProgress(bool Visible, float Value, bool Indeterminate);
 
-public readonly record struct LoadSnapshot(object? Identity, bool Active, double ElapsedMs, double DecodeEstimateMs, long BytesTotal, long BytesRead, TransferEstimate? Source)
+public readonly record struct LoadSnapshot(object? Identity, bool Active, double ElapsedMs, double DecodeEstimateMs, bool EstimateIncludesTransfer, long BytesTotal, long BytesRead, TransferEstimate? Source)
 {
     public static LoadSnapshot Of(Composite? composite)
     {
@@ -17,6 +17,7 @@ public readonly record struct LoadSnapshot(object? Identity, bool Active, double
             Active: true,
             composite.Timing.ElapsedMs,
             composite.Timing.DecodeEstimateMs,
+            composite.Timing.EstimateIncludesTransfer,
             composite.Timing.TransferBytesTotal,
             composite.Timing.TransferBytesRead,
             SourceThroughputEstimator.EstimateTransfer(composite.FileInfo.FullName)
@@ -111,8 +112,8 @@ public sealed class LoadProgressPresenter
     {
         if (s.DecodeEstimateMs <= 0 || s.BytesTotal <= 0 || s.Source is not { } source)
             return null;
-
-        var transferMs = source.MsFor(s.BytesTotal);
+        
+        var transferMs = s.EstimateIncludesTransfer ? 0 : source.MsFor(s.BytesTotal);
         var totalMs = transferMs + s.DecodeEstimateMs;
         if (totalMs <= 0)
             return null;

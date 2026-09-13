@@ -102,9 +102,11 @@ public partial class SdlCore : IDisposable
 
         BundledFonts.Register();
 
+        // BEFORE THE WINDOW, NOT AFTER!
+        ImageStore.Initialize();
+
         InitializeWindowAndRenderer();
         InitializeInput();
-        ImageStore.Initialize();
         HdrDecodeSettings.InitializeFromSettings();
 
         LoadStartupArgs(startupArgs);

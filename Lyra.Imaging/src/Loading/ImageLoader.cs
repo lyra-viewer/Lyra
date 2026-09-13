@@ -284,7 +284,7 @@ internal class ImageLoader : IDisposable
 
         composite.ImageFormatType = ImageFormat.GetImageFormat(extension);
 
-        composite.Timing.DecodeEstimateMs = fileSize is { } bytes ? DecodeTimeEstimator.EstimateDecodeTime(extension, bytes) : 0;
+        ApplyEstimate(composite, extension, fileSize, pixels: null);
         composite.Timing.TransferBytesTotal = fileSize ?? 0;
 
         composite.Completed += OnCompleted;
@@ -351,17 +351,14 @@ internal class ImageLoader : IDisposable
         
         void OnPixelCountReported(Composite c)
         {
-            if (fileSize is not { } bytes)
-                return;
-
-            c.Timing.DecodeEstimateMs = DecodeTimeEstimator.EstimateDecodeTime(extension, bytes, c.PixelCount);
+            ApplyEstimate(c, extension, fileSize, c.PixelCount);
             c.SignalProgress();
         }
 
         void OnCompleted(Composite c)
         {
-            if (fileSize is { } bytes && c.Timing.DecodeMs is { } time)
-                DecodeTimeEstimator.RecordDecodeTime(extension, bytes, PixelsOf(c), time);
+            if (fileSize is { } bytes && c.Timing.Learnable is { } learnable)
+                DecodeTimeEstimator.RecordDecodeTime(extension, bytes, PixelsOf(c), learnable.Ms, learnable.IncludesTransfer);
 
             if (c.Timing.TransferMs is { } transfer)
                 SourceThroughputEstimator.RecordTransfer(c.FileInfo.FullName, c.Timing.TransferBytesRead, transfer);
@@ -369,6 +366,16 @@ internal class ImageLoader : IDisposable
             c.PixelCountReported -= OnPixelCountReported;
             c.Completed -= OnCompleted;
         }
+    }
+    
+    private static void ApplyEstimate(Composite composite, string extension, long? fileSize, long? pixels)
+    {
+        var estimate = fileSize is { } bytes
+            ? DecodeTimeEstimator.EstimateDecodeTime(extension, bytes, pixels)
+            : LoadEstimate.None;
+
+        composite.Timing.DecodeEstimateMs = estimate.Ms;
+        composite.Timing.EstimateIncludesTransfer = estimate.IncludesTransfer;
     }
 
     private static long? PixelsOf(Composite composite)

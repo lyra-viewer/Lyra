@@ -288,7 +288,29 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
 
     private const long StreamedTileBudgetBytes = 64L * 1024 * 1024;
 
-    private const uint PreviewBandRows = 256;
+    /// <summary>Used when the directory's own layout gives nothing better to align to.</summary>
+    private const uint DefaultPreviewBandRows = 256;
+
+    /// <summary> What one band of the streaming pass may cost.</summary>
+    private const long PreviewBandBudgetBytes = 192L * 1024 * 1024;
+
+    /// <summary>How many rows the streaming pass asks for at a time.</summary>
+    internal static uint PreviewBandRowsFor(TiffNative.DirectoryInfo info)
+    {
+        var bytesPerRow = Math.Max(1L, (long)info.Width * Math.Max((byte)1, info.RegionSamples));
+        var budgetRows = (uint)Math.Clamp(PreviewBandBudgetBytes / bytesPerRow, 1, uint.MaxValue);
+
+        var unit = info.IsTiled != 0 ? info.TileHeight : info.RowsPerStrip;
+
+        // A layout unit that covers the whole sheet, or none at all, says nothing about alignment.
+        if (unit == 0 || unit > info.Height)
+            return Math.Min(DefaultPreviewBandRows, budgetRows);
+
+        if (unit >= budgetRows)
+            return budgetRows;
+
+        return unit * (budgetRows / unit);
+    }
 
     private static bool WantsStreaming(TiffNative.DirectoryInfo info) => (long)info.Width * info.Height * info.RegionSamples > StreamingThresholdBytes;
 
@@ -322,12 +344,13 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
 
             var colour = IsColour(info);
             var premultiplied = info.RegionPremultiplied != 0;
+            var bandRows = PreviewBandRowsFor(info);
 
             var preview = StreamingGrayPreview.Build(
                 width, height, maxEdge * 2, maxHeight * 2,
                 (uint first, uint rows, out IntPtr pixels, out uint stride) => TiffNative.LoadRegion(path, directory, colour, 0, first, info.Width, rows, out pixels, out stride),
                 TiffNative.free_tiff_pixels,
-                PreviewBandRows,
+                bandRows,
                 colour ? 4 : 1,
                 ct,
                 premultiplied
@@ -343,7 +366,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
 
             var tiles = new LazyTileSource(
                 tilesX, tilesY, StreamedTileEdge, StreamedTileEdge, 
-                new RegionTileProvider(path, directory, width, height, colour, premultiplied),
+                new RegionTileProvider(path, directory, width, height, colour, premultiplied, bandRows),
                 StreamedTileBudgetBytes,
                 bytesPerPixel: colour ? 4 : 1,
                 maxLevel: maxLevel
@@ -379,7 +402,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
     /// <summary>
     /// Decodes one tile straight out of the file.
     /// </summary>
-    private sealed class RegionTileProvider(string path, int directory, int width, int height, bool colour, bool premultiplied)
+    private sealed class RegionTileProvider(string path, int directory, int width, int height, bool colour, bool premultiplied, uint bandRows)
         : ITileProvider
     {
         private int Channels => colour ? 4 : 1;
@@ -444,7 +467,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
                 (int)width, (int)height, StreamedTileEdge, StreamedTileEdge,
                 (uint first, uint rows, out IntPtr pixels, out uint stride) => TiffNative.LoadRegion(path, directory, colour, x, y + first, width, rows, out pixels, out stride),
                 TiffNative.free_tiff_pixels,
-                PreviewBandRows,
+                bandRows,
                 Channels,
                 ct,
                 premultiplied

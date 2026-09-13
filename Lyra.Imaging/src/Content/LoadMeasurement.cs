@@ -12,6 +12,8 @@ public sealed class LoadMeasurement
     private int _transferReads;
     
     public double DecodeEstimateMs { get; internal set; }
+    
+    public bool EstimateIncludesTransfer { get; internal set; }
 
     public long TransferBytesTotal { get; internal set; }
 
@@ -32,6 +34,15 @@ public sealed class LoadMeasurement
     public double? DecodeMs => CompleteMs is { } total && TransferMs is { } transfer
         ? Math.Max(0, total - transfer)
         : null;
+
+    /// <summary>
+    /// The duration worth learning from, and whether it includes the read.
+    /// </summary>
+    public (double Ms, bool IncludesTransfer)? Learnable => DecodeMs is { } decode
+        ? (decode, false)
+        : CompleteMs is { } total
+            ? (total, true)
+            : null;
 
     internal void Begin()
     {

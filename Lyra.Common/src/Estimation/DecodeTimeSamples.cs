@@ -16,11 +16,14 @@ namespace Lyra.Common.Estimation;
 /// </summary>
 public sealed class DecodeTimeSamples
 {
-    private const int SchemaVersion = 3;
+    private const int SchemaVersion = 4;
 
     private const string VersionKey = "version";
 
-    private const int UnsavedChangesThreshold = 5;
+    /// <summary>
+    /// How many loads may go unsaved before the history is written out.
+    /// </summary>
+    private const int UnsavedChangesThreshold = 3;
 
     /// <summary>In-memory history per bucket (rolling).</summary>
     private const int MaxSamplesPerBucket = 20;
@@ -43,12 +46,20 @@ public sealed class DecodeTimeSamples
 
     private const string BytesTableKey = "bytes";
     private const string PixelsTableKey = "pixels";
-
+    private const string LoadBytesTableKey = "load-bytes";
+    private const string LoadPixelsTableKey = "load-pixels";
+    
     private enum Metric
     {
         Bytes,
-        Pixels
+        Pixels,
+        LoadBytes,
+        LoadPixels
     }
+
+    private static Metric ByteMetric(bool includesTransfer) => includesTransfer ? Metric.LoadBytes : Metric.Bytes;
+
+    private static Metric PixelMetric(bool includesTransfer) => includesTransfer ? Metric.LoadPixels : Metric.Pixels;
 
     private readonly string _filePath;
 
@@ -64,15 +75,15 @@ public sealed class DecodeTimeSamples
         Load();
     }
     
-    public void Record(string extension, long sizeInBytes, long? pixels, double ms)
+    public void Record(string extension, long sizeInBytes, long? pixels, double ms, bool includesTransfer = false)
     {
         if (ms <= 0 || !TryGetFormat(extension, out var format))
             return;
 
-        RecordSample(format, Metric.Bytes, Bucket(sizeInBytes, BytesPerBucketUnit), sizeInBytes, ms);
+        RecordSample(format, ByteMetric(includesTransfer), Bucket(sizeInBytes, BytesPerBucketUnit), sizeInBytes, ms);
 
         if (pixels is > 0)
-            RecordSample(format, Metric.Pixels, Bucket(pixels.Value, PixelsPerBucketUnit), pixels.Value, ms);
+            RecordSample(format, PixelMetric(includesTransfer), Bucket(pixels.Value, PixelsPerBucketUnit), pixels.Value, ms);
 
         if (Interlocked.Increment(ref _unsavedChanges) >= UnsavedChangesThreshold)
         {
@@ -99,33 +110,54 @@ public sealed class DecodeTimeSamples
     /// since they predict far better than compressed bytes do; otherwise the byte-keyed history
     /// carries the estimate until a decoder reads the header and comes back with the real size.
     /// </summary>
-    public double Estimate(string extension, long sizeInBytes, long? pixels = null)
+    public LoadEstimate Estimate(string extension, long sizeInBytes, long? pixels = null)
     {
         if (!TryGetFormat(extension, out var format))
-            return 0;
+            return LoadEstimate.None;
 
-        if (pixels is > 0 && EstimateFor(format, Metric.Pixels, pixels.Value, PixelsPerBucketUnit) is var byPixels and > 0)
-            return byPixels;
+        var decode = Best(format, includesTransfer: false, sizeInBytes, pixels);
+        var whole = Best(format, includesTransfer: true, sizeInBytes, pixels);
 
-        return EstimateFor(format, Metric.Bytes, sizeInBytes, BytesPerBucketUnit);
+        if (!whole.Estimate.IsKnown)
+            return decode.Estimate;
+
+        if (!decode.Estimate.IsKnown)
+            return whole.Estimate;
+        
+        return whole.Distance < decode.Distance ? whole.Estimate : decode.Estimate;
+    }
+
+    private (LoadEstimate Estimate, int Distance) Best(string format, bool includesTransfer, long sizeInBytes, long? pixels)
+    {
+        if (pixels is > 0)
+        {
+            var byPixels = EstimateFor(format, PixelMetric(includesTransfer), pixels.Value, PixelsPerBucketUnit);
+            if (byPixels.Ms > 0)
+                return (new LoadEstimate(byPixels.Ms, includesTransfer), byPixels.Distance);
+        }
+
+        var byBytes = EstimateFor(format, ByteMetric(includesTransfer), sizeInBytes, BytesPerBucketUnit);
+        return (new LoadEstimate(byBytes.Ms, includesTransfer), byBytes.Distance);
     }
     
-    private double EstimateFor(string format, Metric metric, long magnitude, long unit)
+    private (double Ms, int Distance) EstimateFor(string format, Metric metric, long magnitude, long unit)
     {
         var bucket = Bucket(magnitude, unit);
 
         if (_samples.TryGetValue((format, metric, bucket), out var exact))
-            return Typical(exact);
+            return (Typical(exact), 0);
 
         var nearest = NearestBucket(format, metric, bucket);
         if (nearest <= 0 || !_samples.TryGetValue((format, metric, nearest), out var fallback))
-            return 0;
+            return (0, int.MaxValue);
 
         var typical = Typical(fallback);
         if (typical <= 0)
-            return 0;
+            return (0, int.MaxValue);
 
-        return Math.Min(MaxEstimateMs, typical * bucket / nearest);
+        var octaves = Math.Abs(BitOperations.Log2((uint)nearest) - BitOperations.Log2((uint)bucket));
+
+        return (Math.Min(MaxEstimateMs, typical * bucket / nearest), octaves);
     }
     
     private int NearestBucket(string format, Metric metric, int bucket)
@@ -219,12 +251,11 @@ public sealed class DecodeTimeSamples
 
         foreach (var formatGroup in snapshot
                      .GroupBy(x => x.Key.Format, StringComparer.OrdinalIgnoreCase)
-                     .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-                )
+                     .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
         {
             var formatTable = new TomlTable();
 
-            foreach (var metric in (Metric[])[Metric.Bytes, Metric.Pixels])
+            foreach (var metric in (Metric[])[Metric.Bytes, Metric.Pixels, Metric.LoadBytes, Metric.LoadPixels])
             {
                 var metricTable = new TomlTable();
                 var wroteBucket = false;
@@ -285,33 +316,14 @@ public sealed class DecodeTimeSamples
         var model = TomlSerializer.Deserialize(text, LyraTomlContext.Default.TomlTable)!;
         var version = model.TryGetValue(VersionKey, out var value) ? Convert.ToInt32(value) : 0;
 
-        switch (version)
+        if (version == SchemaVersion)
         {
-            case SchemaVersion:
-                ReadFormats(model);
-                return;
-            case 2:
-                Logger.Info("[DecodeTimeSamples] Time data is from schema 2; keeping it as the byte-keyed history.");
-                ReadLegacyByteFormats(model);
-                return;
-            default:
-                Logger.Info("[DecodeTimeSamples] Time data is from an older schema; starting fresh.");
-                _samples.Clear();
-                return;
+            ReadFormats(model);
+            return;
         }
-    }
 
-    private void ReadLegacyByteFormats(TomlTable model)
-    {
+        Logger.Info($"[DecodeTimeSamples] Time data is schema {version}, not {SchemaVersion}; starting fresh.");
         _samples.Clear();
-
-        foreach (var formatEntry in model)
-        {
-            if (formatEntry.Value is not TomlTable bucketsTable)
-                continue; // The version key, or anything else that is not a format table.
-
-            ReadBuckets(formatEntry.Key.ToLowerInvariant(), Metric.Bytes, bucketsTable);
-        }
     }
 
     private void ReadFormats(TomlTable model)
@@ -368,7 +380,13 @@ public sealed class DecodeTimeSamples
         }
     }
 
-    private static string MetricKey(Metric metric) => metric == Metric.Pixels ? PixelsTableKey : BytesTableKey;
+    private static string MetricKey(Metric metric) => metric switch
+    {
+        Metric.Pixels => PixelsTableKey,
+        Metric.LoadBytes => LoadBytesTableKey,
+        Metric.LoadPixels => LoadPixelsTableKey,
+        _ => BytesTableKey
+    };
 
     private static bool TryReadMetric(string key, out Metric metric)
     {
@@ -379,6 +397,12 @@ public sealed class DecodeTimeSamples
                 return true;
             case PixelsTableKey:
                 metric = Metric.Pixels;
+                return true;
+            case LoadBytesTableKey:
+                metric = Metric.LoadBytes;
+                return true;
+            case LoadPixelsTableKey:
+                metric = Metric.LoadPixels;
                 return true;
             default:
                 metric = default;
