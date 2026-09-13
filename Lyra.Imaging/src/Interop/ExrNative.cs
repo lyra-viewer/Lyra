@@ -28,9 +28,13 @@ internal static class ExrNative
     private static bool _memoryEntryPointMissing;
 
     public static bool MemoryLoadAvailable => !Volatile.Read(ref _memoryEntryPointMissing);
-
+    
     public static bool LoadFromMemory(IntPtr data, ulong size, out IntPtr pixels, out int width, out int height, out ExrInfo info)
     {
+        pixels = IntPtr.Zero;
+        width = height = 0;
+        info = default;
+
         try
         {
             return load_exr_rgba_mem(data, size, out pixels, out width, out height, out info);
@@ -38,9 +42,6 @@ internal static class ExrNative
         catch (EntryPointNotFoundException)
         {
             Volatile.Write(ref _memoryEntryPointMissing, true);
-            pixels = IntPtr.Zero;
-            width = height = 0;
-            info = default;
             return false;
         }
     }

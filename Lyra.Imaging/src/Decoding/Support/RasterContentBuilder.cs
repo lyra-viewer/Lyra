@@ -12,30 +12,6 @@ namespace Lyra.Imaging.Decoding.Support;
 /// </summary>
 internal static class RasterContentBuilder
 {
-    /// <summary>
-    /// Above this, publish a preview and tiles instead of one texture.
-    /// </summary>
-    private const long SingleTextureByteBudget = 256L * 1024 * 1024;
-
-    /// <summary>
-    /// Tile edge in pixels. 2048 costs 16 MiB per tile, so the handful covering a screen stays
-    /// far inside any sane cache, while keeping the tile count low enough that walking them per
-    /// frame is free (a 16K image is 8x4).
-    /// </summary>
-    private const int TileEdge = 2048;
-
-    /// <summary>
-    /// Preview is sized to the display so it is sharp at fit-to-window, with headroom for a
-    /// little zoom before tiles take over.
-    /// </summary>
-    private const float PreviewSizeMultiplier = 2.0f;
-
-    /// <summary>
-    /// Used when no display bounds have been published yet - decode can finish before the first
-    /// <c>DisplayBoundsChangedEvent</c>, and a zero-sized preview would be worse than a guess.
-    /// </summary>
-    private const int FallbackDisplayEdge = 2560;
-    
     public static ICompositeContent Build(SKBitmap bitmap, Composite composite, float? sceneWhitePoint = null)
     {
         ArgumentNullException.ThrowIfNull(bitmap);
@@ -44,7 +20,7 @@ internal static class RasterContentBuilder
         bitmap.SetImmutable();
 
         var bytes = (long)bitmap.Width * bitmap.Height * Math.Max(1, bitmap.ColorType.GetBytesPerPixel());
-        if (bytes <= SingleTextureByteBudget)
+        if (bytes <= DecodePolicy.SingleTextureCeilingBytes)
             return Single(bitmap, sceneWhitePoint);
 
         try
@@ -99,7 +75,7 @@ internal static class RasterContentBuilder
         var bytes = (long)width * height * Math.Max(1, bitmap.ColorType.GetBytesPerPixel());
 
         Logger.Info($"[RasterContentBuilder] {width}x{height} is {bytes / 1024 / 1024} MB as " +
-                    $"{bitmap.ColorType}, over the {SingleTextureByteBudget / 1024 / 1024} MB " +
+                    $"{bitmap.ColorType}, over the {DecodePolicy.SingleTextureCeilingBytes / 1024 / 1024} MB " +
                     "single-texture budget; publishing a preview plus tiles so the GPU only holds " +
                     "what is on screen.");
 
@@ -128,15 +104,27 @@ internal static class RasterContentBuilder
 
     internal static (int Width, int Height) PreviewSize(int width, int height)
     {
-        var display = DecodeConstraintsProvider.Current;
-
-        var maxWidth = (int)((display.LogicalWidth > 0 ? display.LogicalWidth : FallbackDisplayEdge) * PreviewSizeMultiplier);
-        var maxHeight = (int)((display.LogicalHeight > 0 ? display.LogicalHeight : FallbackDisplayEdge) * PreviewSizeMultiplier);
+        var (maxWidth, maxHeight) = PreviewBounds();
 
         var scale = MathF.Min(1f, MathF.Min(maxWidth / (float)width, maxHeight / (float)height));
 
         return (Math.Max(1, (int)(width * scale)), Math.Max(1, (int)(height * scale)));
     }
+
+    /// <summary>
+    /// The largest a preview may be, for the display currently published. Every path that builds
+    /// one asks here, so none of them has to remember that the snapshot can still be empty.
+    /// </summary>
+    internal static (int Width, int Height) PreviewBounds() =>
+        PreviewBounds(DecodeConstraintsProvider.Current.LogicalWidth, DecodeConstraintsProvider.Current.LogicalHeight);
+
+    /// <param name="logicalWidth">Display width, or zero when no bounds have been published yet.</param>
+    /// <param name="logicalHeight">Display height, or zero when no bounds have been published yet.</param>
+    internal static (int Width, int Height) PreviewBounds(int logicalWidth, int logicalHeight) =>
+        (
+            (int)((logicalWidth > 0 ? logicalWidth : DecodePolicy.FallbackDisplayEdge) * DecodePolicy.PreviewSizeMultiplier),
+            (int)((logicalHeight > 0 ? logicalHeight : DecodePolicy.FallbackDisplayEdge) * DecodePolicy.PreviewSizeMultiplier)
+        );
 
     /// <summary>
     /// Cuts the image into tiles that share its pixels rather than copying them.
@@ -147,10 +135,10 @@ internal static class RasterContentBuilder
     /// </remarks>
     private static ITileSource CreateTiles(SKBitmap bitmap, out int tileCount)
     {
-        var tilesX = (bitmap.Width + TileEdge - 1) / TileEdge;
-        var tilesY = (bitmap.Height + TileEdge - 1) / TileEdge;
+        var tilesX = (bitmap.Width + DecodePolicy.TileEdge - 1) / DecodePolicy.TileEdge;
+        var tilesY = (bitmap.Height + DecodePolicy.TileEdge - 1) / DecodePolicy.TileEdge;
 
-        var tiles = new RasterTileSource(tilesX, tilesY, TileEdge, TileEdge);
+        var tiles = new RasterTileSource(tilesX, tilesY, DecodePolicy.TileEdge, DecodePolicy.TileEdge);
         var views = new List<SKBitmap>(tilesX * tilesY);
 
         for (var y = 0; y < tilesY; y++)
@@ -158,10 +146,10 @@ internal static class RasterContentBuilder
         {
             // The right and bottom edges are short unless the image divides evenly.
             var rect = SKRectI.Create(
-                x * TileEdge,
-                y * TileEdge,
-                Math.Min(TileEdge, bitmap.Width - x * TileEdge),
-                Math.Min(TileEdge, bitmap.Height - y * TileEdge)
+                x * DecodePolicy.TileEdge,
+                y * DecodePolicy.TileEdge,
+                Math.Min(DecodePolicy.TileEdge, bitmap.Width - x * DecodePolicy.TileEdge),
+                Math.Min(DecodePolicy.TileEdge, bitmap.Height - y * DecodePolicy.TileEdge)
             );
 
             var view = new SKBitmap();

@@ -28,9 +28,6 @@ internal static class HdrToneMap
         Convert(rgba, bitmap, HdrDecodeSettings.ToneMapMode, HdrDecodeSettings.ExposureScale, sceneWhitePoint, ct, out isGrayscale);
 
     /// <summary>Overload taking explicit settings, so tests do not depend on the user's.</summary>
-    public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, ToneMapMode mode, CancellationToken ct, out bool isGrayscale) =>
-        Convert(rgba, bitmap, mode, 1f, null, ct, out isGrayscale);
-
     public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, ToneMapMode mode, float exposureScale, CancellationToken ct, out bool isGrayscale) =>
         Convert(rgba, bitmap, mode, exposureScale, null, ct, out isGrayscale);
 

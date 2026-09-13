@@ -69,6 +69,36 @@ public class J2KColorSpaceTests
         Assert.Equal(255, cyan.Alpha);
     }
 
+    [Fact]
+    public void PublishesWhetherTheImageIsGrey()
+    {
+        if (!NativeJ2KReady.Value)
+            Assert.Skip("libj2k_native not available (native wrappers not built for this platform).");
+
+        var tempPath = Path.Combine(Path.GetTempPath(), $"lyra-grey-{Guid.NewGuid():N}.jp2");
+        File.WriteAllBytes(tempPath, Convert.FromBase64String(SyccJp2Base64));
+
+        try
+        {
+            using var composite = new Composite(new FileInfo(tempPath));
+            new J2KDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
+
+            var entry = Assert.Single(composite.FormatSpecificSnapshot(), pair => pair.Key == "GrayScale");
+            Assert.Equal(false.ToString(), entry.Value);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(tempPath);
+            }
+            catch
+            {
+                /* best effort cleanup */
+            }
+        }
+    }
+
     private static SKBitmap Decode(string base64, string label)
     {
         if (!NativeJ2KReady.Value)

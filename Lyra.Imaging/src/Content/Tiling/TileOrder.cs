@@ -1,6 +1,6 @@
 namespace Lyra.Imaging.Content.Tiling;
 
-public static class TileOrder
+internal static class TileOrder
 {
     public static IEnumerable<(int x, int y)> SpiralWithin(int startX, int startY, int tilesX, int tilesY)
     {

@@ -153,7 +153,7 @@ internal static class TiffNative
         }
         catch (EntryPointNotFoundException)
         {
-            MarkStale("describe_tiff_directories");
+            MissingEntryPoint(nameof(describe_tiff_directories));
             return [];
         }
         finally
@@ -170,6 +170,11 @@ internal static class TiffNative
     public static bool LoadDirectory(string path, IntPtr data, ulong size, int directory,
         out IntPtr pixels, out int width, out int height, out IntPtr icc, out int iccSize)
     {
+        pixels = IntPtr.Zero;
+        width = height = 0;
+        icc = IntPtr.Zero;
+        iccSize = 0;
+
         try
         {
             return data != IntPtr.Zero && size > 0
@@ -178,17 +183,17 @@ internal static class TiffNative
         }
         catch (EntryPointNotFoundException)
         {
-            MarkStale("load_tiff_rgba_at");
-            pixels = IntPtr.Zero;
-            width = height = 0;
-            icc = IntPtr.Zero;
-            iccSize = 0;
-            return false;
+            return MissingEntryPoint(nameof(load_tiff_rgba_at));
         }
     }
 
     public static bool LoadFromMemory(IntPtr data, ulong size, out IntPtr pixels, out int width, out int height, out IntPtr icc, out int iccSize)
     {
+        pixels = IntPtr.Zero;
+        width = height = 0;
+        icc = IntPtr.Zero;
+        iccSize = 0;
+
         try
         {
             return load_tiff_rgba_mem(data, size, out pixels, out width, out height, out icc, out iccSize);
@@ -196,10 +201,6 @@ internal static class TiffNative
         catch (EntryPointNotFoundException)
         {
             Volatile.Write(ref _memoryEntryPointMissing, true);
-            pixels = IntPtr.Zero;
-            width = height = 0;
-            icc = IntPtr.Zero;
-            iccSize = 0;
             return false;
         }
     }
@@ -217,16 +218,16 @@ internal static class TiffNative
     /// </summary>
     public static bool LoadRgbaRegion(string path, int directory, uint x, uint y, uint width, uint height, out IntPtr pixels, out uint stride)
     {
+        pixels = IntPtr.Zero;
+        stride = 0;
+
         try
         {
             return load_tiff_rgba_region(path, directory, x, y, width, height, out pixels, out stride);
         }
         catch (EntryPointNotFoundException)
         {
-            MarkStale("load_tiff_rgba_region");
-            pixels = IntPtr.Zero;
-            stride = 0;
-            return false;
+            return MissingEntryPoint(nameof(load_tiff_rgba_region));
         }
     }
 
@@ -236,16 +237,16 @@ internal static class TiffNative
     public static bool LoadGrayRegion(string path, int directory, uint x, uint y, uint width, uint height,
         out IntPtr pixels, out uint stride)
     {
+        pixels = IntPtr.Zero;
+        stride = 0;
+
         try
         {
             return load_tiff_gray_region(path, directory, x, y, width, height, out pixels, out stride);
         }
         catch (EntryPointNotFoundException)
         {
-            MarkStale("load_tiff_gray_region");
-            pixels = IntPtr.Zero;
-            stride = 0;
-            return false;
+            return MissingEntryPoint(nameof(load_tiff_gray_region));
         }
     }
 
@@ -255,17 +256,17 @@ internal static class TiffNative
     /// </summary>
     public static bool LoadNative(string path, int directory, OutputKind kind, out IntPtr pixels, out int width, out int height, out uint stride)
     {
+        pixels = IntPtr.Zero;
+        width = height = 0;
+        stride = 0;
+
         try
         {
             return load_tiff_native(path, directory, (int)kind, out pixels, out width, out height, out stride);
         }
         catch (EntryPointNotFoundException)
         {
-            MarkStale("load_tiff_native");
-            pixels = IntPtr.Zero;
-            width = height = 0;
-            stride = 0;
-            return false;
+            return MissingEntryPoint(nameof(load_tiff_native));
         }
     }
 
@@ -281,9 +282,10 @@ internal static class TiffNative
     }
 
     /// <summary>
-    /// Records that the native library is older than this build expects, and says so once.
+    /// Records that the native library is older than this build expects, says so once, and reports
+    /// the failure the caller passes straight back.
     /// </summary>
-    private static void MarkStale(string entryPoint)
+    private static bool MissingEntryPoint(string entryPoint)
     {
         Volatile.Write(ref _directoryEntryPointsMissing, true);
 
@@ -292,5 +294,7 @@ internal static class TiffNative
                            "build expects, so multi-page documents, region reads and unusual sample layouts are " +
                            "all unavailable, and large images will fail rather than stream. Rebuild " +
                            "native/TIFFWrapper and check for a stale copy beside the assembly.");
+
+        return false;
     }
 }

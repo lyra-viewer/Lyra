@@ -1,7 +1,4 @@
-using System.Runtime.InteropServices;
-using Lyra.Common.SystemExtensions;
 using Lyra.Common;
-using Lyra.Imaging.ConstraintsProvider;
 using Lyra.Imaging.Content.Tiling;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Structure;
@@ -9,7 +6,6 @@ using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Loading;
 using SkiaSharp;
-using static System.Threading.Thread;
 using Lyra.Imaging.Metadata;
 
 namespace Lyra.Imaging.Decoding.Decoders;
@@ -21,84 +17,64 @@ namespace Lyra.Imaging.Decoding.Decoders;
 /// converted by libtiff itself (the UaToAa table in tif_getimage.c), so Premul is correct
 /// for both EXTRASAMPLES variants.
 /// </summary>
-internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
+internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
 {
-    public bool CanDecode(ImageFormatType format) => format is ImageFormatType.Tiff;
+    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Tiff;
 
-    public Task DecodeAsync(Composite composite, CancellationToken ct)
+    protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        var path = composite.FileInfo.FullName;
-        composite.DecoderName = GetType().Name;
-        Logger.Debug($"[TiffDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
+        var directories = TiffNative.DescribeDirectories(path, IntPtr.Zero, 0);
+        var pages = TiffPageSet.Pages(directories);
 
-        try
+        if (pages.Count > 0 && directories.Count > pages[0])
+            composite.ReportPixelCount((long)directories[pages[0]].Width, (long)directories[pages[0]].Height);
+
+        if (pages.Count > 1)
         {
-            ct.ThrowIfCancellationRequested();
+            DecodeDocument(path, composite, directories, pages, ct);
+            return;
+        }
 
-            var directories = TiffNative.DescribeDirectories(path, IntPtr.Zero, 0);
-            var pages = TiffPageSet.Pages(directories);
+        var page = pages.Count > 0 ? pages[0] : 0;
+        var info = directories.Count > page ? directories[page] : default;
 
-            if (pages.Count > 0 && directories.Count > pages[0])
-                composite.ReportPixelCount((long)directories[pages[0]].Width, (long)directories[pages[0]].Height);
+        TiffPageSet.Describe(composite, directories, pages, IsBigTiff(path));
 
-            if (pages.Count > 1)
+        if (info.RgbaCapable == 0 && info.NativeCapable != 0)
+        {
+            composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
+            composite.Content = DecodeUnsupportedLayout(path, page, info, composite, ct);
+        }
+        else if (WantsNativeDepth(info))
+        {
+            composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
+            composite.Content = WantsStreaming(info)
+                ? StreamGray(path, page, info, composite, ct)
+                : RasterContentBuilder.Build(DecodeGray(path, page, info, ct), composite);
+        }
+        else
+        {
+            try
             {
-                DecodeDocument(path, composite, directories, pages, ct);
-                return Task.CompletedTask;
+                var bitmap = LoadBitmap(path, composite, ct, tagColorSpace: true, out var metadataParsed);
+                if (!metadataParsed)
+                    composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
+
+                composite.Content = RasterContentBuilder.Build(bitmap, composite);
             }
-
-            var page = pages.Count > 0 ? pages[0] : 0;
-            var info = directories.Count > page ? directories[page] : default;
-
-            TiffPageSet.Describe(composite, directories, pages, IsBigTiff(path));
-
-            if (info.RgbaCapable == 0 && info.NativeCapable != 0)
+            catch (InvalidOperationException) when (info.NativeCapable != 0)
             {
-                composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
+                Logger.Info($"[TiffDecoder] The RGBA interface accepted {Path.GetFileName(path)} and then refused it; reading it at its own layout instead.");
+
+                if (composite.ExifInfo is null)
+                    composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
+
                 composite.Content = DecodeUnsupportedLayout(path, page, info, composite, ct);
             }
-            else if (WantsNativeDepth(info))
-            {
-                composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
-                composite.Content = WantsStreaming(info)
-                    ? StreamGray(path, page, info, composite, ct)
-                    : RasterContentBuilder.Build(DecodeGray(path, page, info, ct), composite);
-            }
-            else
-            {
-                try
-                {
-                    var bitmap = LoadBitmap(path, composite, ct, tagColorSpace: true, out var metadataParsed);
-                    if (!metadataParsed)
-                        composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
-
-                    composite.Content = RasterContentBuilder.Build(bitmap, composite);
-                }
-                catch (InvalidOperationException) when (info.NativeCapable != 0)
-                {
-                    Logger.Info($"[TiffDecoder] The RGBA interface accepted {Path.GetFileName(path)} and then refused it; reading it at its own layout instead.");
-
-                    if (composite.ExifInfo is null)
-                        composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
-
-                    composite.Content = DecodeUnsupportedLayout(path, page, info, composite, ct);
-                }
-            }
-
-            if (directories.Count > 1)
-                composite.Structure = [TiffPageSet.Summarise(directories, pages)];
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception e)
-        {
-            Logger.Warning($"[TiffDecoder] Image could not be loaded: {path}\n{e.Message}");
-            throw;
         }
 
-        return Task.CompletedTask;
+        if (directories.Count > 1)
+            composite.Structure = [TiffPageSet.Summarise(directories, pages)];
     }
 
     /// <summary>
@@ -253,11 +229,6 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
     #region Native-depth gray
 
     /// <summary>
-    /// Above this as RGBA8, a gray image is read at its own depth instead.
-    /// </summary>
-    private const long NativeDepthThresholdBytes = 256L * 1024 * 1024;
-
-    /// <summary>
     /// Whether this directory is both able to take the gray path and large enough to want it.
     /// </summary>
     internal static bool WantsNativeDepth(TiffNative.DirectoryInfo info)
@@ -265,7 +236,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
         if (info.RegionCapable == 0 || info.Width == 0 || info.Height == 0)
             return false;
 
-        return (long)info.Width * info.Height * 4 > NativeDepthThresholdBytes;
+        return (long)info.Width * info.Height * 4 > DecodePolicy.RgbaFormCeilingBytes;
     }
 
     /// <summary>Whether a region of this directory comes back as RGBA rather than gray.</summary>
@@ -282,23 +253,14 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
             ? new SKImageInfo(width, height, SKColorType.Rgba8888, info.RegionPremultiplied != 0 ? SKAlphaType.Premul : SKAlphaType.Unpremul)
             : new SKImageInfo(width, height, SKColorType.Gray8, SKAlphaType.Opaque);
 
-    private const long StreamingThresholdBytes = 256L * 1024 * 1024;
-
-    private const int StreamedTileEdge = 2048;
-
-    private const long StreamedTileBudgetBytes = 64L * 1024 * 1024;
-
     /// <summary>Used when the directory's own layout gives nothing better to align to.</summary>
     private const uint DefaultPreviewBandRows = 256;
-
-    /// <summary> What one band of the streaming pass may cost.</summary>
-    private const long PreviewBandBudgetBytes = 192L * 1024 * 1024;
 
     /// <summary>How many rows the streaming pass asks for at a time.</summary>
     internal static uint PreviewBandRowsFor(TiffNative.DirectoryInfo info)
     {
         var bytesPerRow = Math.Max(1L, (long)info.Width * Math.Max((byte)1, info.RegionSamples));
-        var budgetRows = (uint)Math.Clamp(PreviewBandBudgetBytes / bytesPerRow, 1, uint.MaxValue);
+        var budgetRows = (uint)Math.Clamp(DecodePolicy.PreviewBandBudgetBytes / bytesPerRow, 1, uint.MaxValue);
 
         var unit = info.IsTiled != 0 ? info.TileHeight : info.RowsPerStrip;
 
@@ -312,7 +274,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
         return unit * (budgetRows / unit);
     }
 
-    private static bool WantsStreaming(TiffNative.DirectoryInfo info) => (long)info.Width * info.Height * info.RegionSamples > StreamingThresholdBytes;
+    private static bool WantsStreaming(TiffNative.DirectoryInfo info) => (long)info.Width * info.Height * info.RegionSamples > DecodePolicy.SingleTextureCeilingBytes;
 
     /// <summary>
     /// Publishes a sheet too large to hold: a preview built in one streaming pass, and tiles
@@ -338,16 +300,14 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
 
         try
         {
-            var display = DecodeConstraintsProvider.Current;
-            var maxEdge = display.LogicalWidth > 0 ? display.LogicalWidth : 2560;
-            var maxHeight = display.LogicalHeight > 0 ? display.LogicalHeight : 2560;
+            var (maxWidth, maxHeight) = RasterContentBuilder.PreviewBounds();
 
             var colour = IsColour(info);
             var premultiplied = info.RegionPremultiplied != 0;
             var bandRows = PreviewBandRowsFor(info);
 
             var preview = StreamingGrayPreview.Build(
-                width, height, maxEdge * 2, maxHeight * 2,
+                width, height, maxWidth, maxHeight,
                 (uint first, uint rows, out IntPtr pixels, out uint stride) => TiffNative.LoadRegion(path, directory, colour, 0, first, info.Width, rows, out pixels, out stride),
                 TiffNative.free_tiff_pixels,
                 bandRows,
@@ -359,15 +319,15 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
             if (preview is not null)
                 content.SetPreview(SKImage.FromBitmap(preview));
 
-            var tilesX = (width + StreamedTileEdge - 1) / StreamedTileEdge;
-            var tilesY = (height + StreamedTileEdge - 1) / StreamedTileEdge;
+            var tilesX = (width + DecodePolicy.TileEdge - 1) / DecodePolicy.TileEdge;
+            var tilesY = (height + DecodePolicy.TileEdge - 1) / DecodePolicy.TileEdge;
 
             var maxLevel = LevelsDownTo(width, height, preview?.Width ?? 0, preview?.Height ?? 0);
 
             var tiles = new LazyTileSource(
-                tilesX, tilesY, StreamedTileEdge, StreamedTileEdge, 
+                tilesX, tilesY, DecodePolicy.TileEdge, DecodePolicy.TileEdge, 
                 new RegionTileProvider(path, directory, width, height, colour, premultiplied, bandRows),
-                StreamedTileBudgetBytes,
+                DecodePolicy.ResidentTileBudgetBytes,
                 bytesPerPixel: colour ? 4 : 1,
                 maxLevel: maxLevel
             );
@@ -411,7 +371,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
         {
             ct.ThrowIfCancellationRequested();
 
-            var span = StreamedTileEdge << level;
+            var span = DecodePolicy.TileEdge << level;
 
             var x = (long)tileX * span;
             var y = (long)tileY * span;
@@ -464,7 +424,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
         private SKBitmap? DecodeReduced(uint x, uint y, uint width, uint height, CancellationToken ct)
         {
             return StreamingGrayPreview.Build(
-                (int)width, (int)height, StreamedTileEdge, StreamedTileEdge,
+                (int)width, (int)height, DecodePolicy.TileEdge, DecodePolicy.TileEdge,
                 (uint first, uint rows, out IntPtr pixels, out uint stride) => TiffNative.LoadRegion(path, directory, colour, x, y + first, width, rows, out pixels, out stride),
                 TiffNative.free_tiff_pixels,
                 bandRows,
@@ -523,8 +483,6 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
 
     #region Multi-page document
     
-    private const long PageResidentByteBudget = 256L * 1024 * 1024;
-
     /// <summary>
     /// Publishes the document as a set of pages, with the first decoded and the rest on demand.
     /// </summary>
@@ -541,7 +499,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
         var first = DecodePage(path, pages[0], directories[pages[0]], composite, ct);
         var variants = TiffPageSet.Describe(directories, pages);
 
-        composite.Content = new VariantRasterContent(variants, active: 0, first, new PageProvider(path, pages, directories, composite), PageResidentByteBudget)
+        composite.Content = new VariantRasterContent(variants, active: 0, first, new PageProvider(path, pages, directories, composite), DecodePolicy.ResidentPageBudgetBytes)
         {
             GroupLabel = "PAGES"
         };
@@ -638,7 +596,7 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
 
             DecoderValidation.RequireSaneDimensions(nameof(TiffDecoder), width, height);
 
-            var colorSpace = tagColorSpace ? ResolveIccColorSpace(iccPtr, iccSize) : null;
+            var colorSpace = tagColorSpace ? IccColorSpace.FromNative(iccPtr, iccSize, nameof(TiffDecoder)) : null;
 
             var byteCount = checked(width * height * 4);
             var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul, colorSpace);
@@ -656,24 +614,6 @@ internal sealed class TiffDecoder : IImageDecoder, IThumbnailDecoder
             TiffNative.free_tiff_pixels(ptr);
             if (iccPtr != IntPtr.Zero)
                 TiffNative.free_tiff_pixels(iccPtr);
-        }
-    }
-
-    private static SKColorSpace? ResolveIccColorSpace(IntPtr iccPtr, int iccSize)
-    {
-        if (iccPtr == IntPtr.Zero || iccSize <= 0)
-            return null;
-
-        try
-        {
-            var icc = new byte[iccSize];
-            Marshal.Copy(iccPtr, icc, 0, iccSize);
-            return SKColorSpace.CreateIcc(icc);
-        }
-        catch (Exception ex)
-        {
-            Logger.Debug($"[TiffDecoder] ICC profile parse failed: {ex.Message}");
-            return null;
         }
     }
 }

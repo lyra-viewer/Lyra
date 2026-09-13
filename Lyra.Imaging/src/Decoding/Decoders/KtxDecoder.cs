@@ -1,36 +1,27 @@
 using Lyra.Common;
-using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.ManagedCodecs.Texture;
 using Lyra.ManagedCodecs.Texture.Ktx;
 using SkiaSharp;
-using static System.Threading.Thread;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
+internal sealed class KtxDecoder : DecoderBase, IThumbnailDecoder
 {
-    public bool CanDecode(ImageFormatType format) => format is ImageFormatType.Ktx;
+    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Ktx;
 
-    public Task DecodeAsync(Composite composite, CancellationToken ct)
+    protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        var path = composite.FileInfo.FullName;
-        composite.DecoderName = nameof(KtxDecoder);
-        Logger.Debug($"[KtxDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
-
-        ct.ThrowIfCancellationRequested();
-
-        var bytes = DecoderIO.ReadAllBytes(path, ct, out var readMs, composite.ReportTransferred);
-        composite.CompleteTransfer(bytes.Length, readMs);
+        var bytes = composite.ReadAllBytes(ct);
 
         // Basis Universal (ETC1S / UASTC) can't go through the managed reader; the native transcoder
         // decodes the base image straight to RGBA.
         if (BasisTranscoder.IsBasis(bytes))
         {
             DecodeBasis(composite, bytes);
-            return Task.CompletedTask;
+            return;
         }
 
         var texture = ReadTexture(bytes);
@@ -43,8 +34,6 @@ internal sealed class KtxDecoder : IImageDecoder, IThumbnailDecoder
         DecoderValidation.RequireSaneDimensions(nameof(KtxDecoder), surface.Width, surface.Height, TextureBitmap.BytesPerDecodedPixel(texture));
 
         composite.Content = TextureBitmap.DecodeToContent(texture, surface, composite, ct, flipVertical: texture.Origin == TextureOrigin.BottomLeft);
-
-        return Task.CompletedTask;
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)

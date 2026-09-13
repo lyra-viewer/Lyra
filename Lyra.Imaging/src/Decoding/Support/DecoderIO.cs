@@ -3,7 +3,7 @@ using Lyra.Common;
 
 namespace Lyra.Imaging.Decoding.Support;
 
-public static class DecoderIO
+internal static class DecoderIO
 {
     private const int SequentialBuffer = 64 * 1024;
     private const int RandomBuffer = 16 * 1024;

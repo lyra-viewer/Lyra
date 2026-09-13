@@ -1,28 +1,20 @@
 using LibHeifSharp;
 using Lyra.Common;
-using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Metadata;
 using SkiaSharp;
-using static System.Threading.Thread;
 using Lyra.Imaging.Decoding.Support;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
+internal class HeifDecoder : DecoderBase, IThumbnailDecoder
 {
-    public bool CanDecode(ImageFormatType format) => format == ImageFormatType.Heif;
+    public override bool CanDecode(ImageFormatType format) => format == ImageFormatType.Heif;
 
-    public Task DecodeAsync(Composite composite, CancellationToken ct)
+    protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        var path = composite.FileInfo.FullName;
-        composite.DecoderName = GetType().Name;
-        Logger.Debug($"[HeifDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
-
         try
         {
-            ct.ThrowIfCancellationRequested();
-
             using var stream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer);
             using var heifContext = new HeifContext(stream, leaveOpen: true);
             using var imageHandle = heifContext.GetPrimaryImageHandle();
@@ -43,22 +35,10 @@ internal class HeifDecoder : IImageDecoder, IThumbnailDecoder
 
             composite.Content = RasterContentBuilder.Build(bitmap, composite);
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
         catch (HeifException e)
         {
-            // Expected for some HEIF variants (e.g. 'unci'); keep as warning-only.
             Logger.Warning($"[HeifDecoder] Unsupported HEIF feature for file: {path}\n{e.Message}");
         }
-        catch (Exception e)
-        {
-            Logger.Warning($"[HeifDecoder] Image could not be loaded: {path}\n{e.Message}");
-            throw;
-        }
-
-        return Task.CompletedTask;
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)

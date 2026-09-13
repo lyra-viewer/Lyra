@@ -1,12 +1,10 @@
 using Lyra.Common;
-using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.ManagedCodecs.Texture;
 using Lyra.ManagedCodecs.Texture.Dds;
 using SkiaSharp;
-using static System.Threading.Thread;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
@@ -16,20 +14,13 @@ namespace Lyra.Imaging.Decoding.Decoders;
 /// display. Thumbnails pick the smallest stored mip that still covers the target size, so perceptual
 /// hashing never decodes the full-resolution surface.
 /// </summary>
-internal sealed class DdsDecoder : IImageDecoder, IThumbnailDecoder
+internal sealed class DdsDecoder : DecoderBase, IThumbnailDecoder
 {
-    public bool CanDecode(ImageFormatType format) => format is ImageFormatType.Dds;
+    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Dds;
 
-    public Task DecodeAsync(Composite composite, CancellationToken ct)
+    protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        var path = composite.FileInfo.FullName;
-        composite.DecoderName = nameof(DdsDecoder);
-        Logger.Debug($"[DdsDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
-
-        ct.ThrowIfCancellationRequested();
-
-        var bytes = DecoderIO.ReadAllBytes(path, ct, out var readMs, composite.ReportTransferred);
-        composite.CompleteTransfer(bytes.Length, readMs);
+        var bytes = composite.ReadAllBytes(ct);
         var texture = DdsReader.Read(bytes);
         var surface = texture.Subresources[0]; // mip 0, face 0, layer 0
 
@@ -40,7 +31,6 @@ internal sealed class DdsDecoder : IImageDecoder, IThumbnailDecoder
         DecoderValidation.RequireSaneDimensions(nameof(DdsDecoder), surface.Width, surface.Height, TextureBitmap.BytesPerDecodedPixel(texture));
 
         composite.Content = TextureBitmap.DecodeToContent(texture, surface, composite, ct, flipVertical: false);
-        return Task.CompletedTask;
     }
 
     private static void PopulateMetadata(Composite composite, TextureData texture)

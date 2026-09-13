@@ -1,16 +1,14 @@
 using Lyra.Common;
-using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Metadata;
 using Lyra.ManagedCodecs.Raster;
 using SkiaSharp;
-using static System.Threading.Thread;
 using Lyra.ManagedCodecs.Raster.Tga;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-internal sealed class TgaDecoder : IImageDecoder, IThumbnailDecoder
+internal sealed class TgaDecoder : DecoderBase, IThumbnailDecoder
 {
     // The pipeline routes by file extension, so a file named *.tga may actually be another
     // format. TGA has no magic number; when the bytes do not structurally look like a TGA
@@ -18,46 +16,26 @@ internal sealed class TgaDecoder : IImageDecoder, IThumbnailDecoder
     // decoder, which auto-detects the real format (PNG/JPEG/BMP/WebP/...) regardless of extension.
     private static readonly SkiaDecoder Fallback = new();
 
-    public bool CanDecode(ImageFormatType format) => format is ImageFormatType.Tga;
+    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Tga;
 
-    public Task DecodeAsync(Composite composite, CancellationToken ct)
+    protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        var path = composite.FileInfo.FullName;
-        composite.DecoderName = GetType().Name;
-        Logger.Debug($"[TgaDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
-
-
-        ct.ThrowIfCancellationRequested();
-
-        var bytes = DecoderIO.ReadAllBytes(path, ct, out var readMs, composite.ReportTransferred);
-        
-        composite.CompleteTransfer(bytes.Length, readMs);
+        var bytes = composite.ReadAllBytes(ct);
         composite.ExifInfo = ReadMetadata(bytes, path);
-        
+
+        // Some files under .tga are not TGA at all. Skia gets a turn before the file is refused,
+        // and it renames the composite to itself on the way through.
         if (!TryDecodeManaged(bytes, path, out var decoded))
         {
-            return Fallback.DecodeAsync(composite, ct);
+            Fallback.DecodeAsync(composite, ct).GetAwaiter().GetResult();
+            return;
         }
 
-        try
-        {
-            ct.ThrowIfCancellationRequested();
-            DecoderValidation.RequireSaneDimensions(GetType().Name, decoded.Width, decoded.Height);
+        ct.ThrowIfCancellationRequested();
+        DecoderValidation.RequireSaneDimensions(Name, decoded.Width, decoded.Height);
 
-            var bitmap = ToSkBitmap(decoded);
-            composite.Content = RasterContentBuilder.Build(bitmap, composite);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception e)
-        {
-            Logger.Warning($"[TgaDecoder] Image could not be loaded: {path}\n{e.Message}");
-            throw;
-        }
-
-        return Task.CompletedTask;
+        var bitmap = ToSkBitmap(decoded);
+        composite.Content = RasterContentBuilder.Build(bitmap, composite);
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)

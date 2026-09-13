@@ -1,27 +1,19 @@
-using System.Runtime.InteropServices;
 using Lyra.Common;
-using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Metadata;
 using SkiaSharp;
-using static System.Threading.Thread;
 using Lyra.Imaging.Decoding.Support;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-internal class J2KDecoder : IImageDecoder
+internal class J2KDecoder : DecoderBase
 {
-    public bool CanDecode(ImageFormatType format) => format is ImageFormatType.Jp2 or ImageFormatType.J2k;
+    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Jp2 or ImageFormatType.J2k;
 
-    public Task DecodeAsync(Composite composite, CancellationToken ct)
+    protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        var path = composite.FileInfo.FullName;
-        composite.DecoderName = GetType().Name;
-        Logger.Debug($"[J2KDecoder] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
-
-        var data = DecoderIO.ReadAllBytes(path, ct, out var readMs, composite.ReportTransferred);
-        composite.CompleteTransfer(data.Length, readMs);
+        var data = composite.ReadAllBytes(ct);
 
         // OpenJPEG hands back pixels only; JP2 keeps EXIF and XMP in top-level uuid boxes.
         var metadata = IsoBoxMetadata.ReadJp2(data);
@@ -70,91 +62,17 @@ internal class J2KDecoder : IImageDecoder
 
                     ct.ThrowIfCancellationRequested();
 
-                    var colorSpace = ResolveIccColorSpace(nativeIcc, iccSize);
+                    var colorSpace = IccColorSpace.FromNative(nativeIcc, iccSize, nameof(J2KDecoder));
                     var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul, colorSpace);
                     var bitmap = new SKBitmap(info);
-                    bitmap.Erase(SKColors.Transparent);
 
-                    var dst = (byte*)bitmap.GetPixels();
-                    var dstStride = bitmap.Info.RowBytes;
+                    PixelCopy.CopyPremultiplyingRgba(nativePixels, nativeStrideBytes, bitmap, ct, out var isGrayscale);
 
-                    var src = (byte*)nativePixels;
-
-                    var opaque = IsLikelyOpaque(src, nativeStrideBytes, width, height);
-
-                    var isGrayscale = true;
-
-                    if (opaque)
-                    {
-                        CopyRows(src, nativeStrideBytes, dst, dstStride, height, Math.Min(nativeStrideBytes, dstStride));
-
-                        UpdateGrayscaleFlag(src, nativeStrideBytes, width, height, ref isGrayscale);
-                        // composite.FormatSpecific["Grayscale"] = isGrayscale.ToString();
-
-                        composite.Content = RasterContentBuilder.Build(bitmap, composite);
-                        return Task.CompletedTask;
-                    }
-
-                    for (var y = 0; y < height; y++)
-                    {
-                        if ((y & 0x3F) == 0)
-                            ct.ThrowIfCancellationRequested();
-
-                        var srcRow = src + (nint)y * (nint)nativeStrideBytes;
-                        var dstRow = dst + (nint)y * (nint)dstStride;
-
-                        for (var x = 0; x < width; x++)
-                        {
-                            var i = x * 4;
-
-                            var r = srcRow[i + 0];
-                            var g = srcRow[i + 1];
-                            var b = srcRow[i + 2];
-                            var a = srcRow[i + 3];
-
-                            if (isGrayscale && (g != r || b != r))
-                                isGrayscale = false;
-
-                            if (a == 0)
-                            {
-                                dstRow[i + 0] = 0;
-                                dstRow[i + 1] = 0;
-                                dstRow[i + 2] = 0;
-                                dstRow[i + 3] = 0;
-                            }
-                            else if (a == 255)
-                            {
-                                dstRow[i + 0] = r;
-                                dstRow[i + 1] = g;
-                                dstRow[i + 2] = b;
-                                dstRow[i + 3] = 255;
-                            }
-                            else
-                            {
-                                dstRow[i + 0] = (byte)((r * a + 127) / 255);
-                                dstRow[i + 1] = (byte)((g * a + 127) / 255);
-                                dstRow[i + 2] = (byte)((b * a + 127) / 255);
-                                dstRow[i + 3] = a;
-                            }
-                        }
-                    }
-
-                    // composite.FormatSpecific["Grayscale"] = isGrayscale.ToString();
+                    composite.AddFormatSpecific("GrayScale", isGrayscale.ToString());
 
                     composite.Content = RasterContentBuilder.Build(bitmap, composite);
                 }
             }
-
-            return Task.CompletedTask;
-        }
-        catch (OperationCanceledException)
-        {
-            throw; // propagate cancel to Loader
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning($"[J2KDecoder] Failed to load {path}: {ex.Message}");
-            throw; // propagate failure to Loader
         }
         finally
         {
@@ -162,68 +80,6 @@ internal class J2KDecoder : IImageDecoder
                 J2KNative.free_j2k_pixels(nativePixels);
             if (nativeIcc != IntPtr.Zero)
                 J2KNative.free_j2k_pixels(nativeIcc);
-        }
-    }
-
-    private static SKColorSpace? ResolveIccColorSpace(IntPtr iccPtr, int iccSize)
-    {
-        if (iccPtr == IntPtr.Zero || iccSize <= 0)
-            return null;
-
-        try
-        {
-            var icc = new byte[iccSize];
-            Marshal.Copy(iccPtr, icc, 0, iccSize);
-            return SKColorSpace.CreateIcc(icc);
-        }
-        catch (Exception ex)
-        {
-            Logger.Debug($"[J2KDecoder] ICC profile parse failed: {ex.Message}");
-            return null;
-        }
-    }
-
-    private static unsafe bool IsLikelyOpaque(byte* src, int stride, int width, int height)
-    {
-        for (var y = 0; y < height; y++)
-        {
-            var row = src + (nint)y * (nint)stride;
-            for (var x = 0; x < width; x++)
-            {
-                if (row[x * 4 + 3] != 255)
-                    return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static unsafe void CopyRows(byte* src, int srcStride, byte* dst, int dstStride, int height, int bytesPerRow)
-    {
-        for (var y = 0; y < height; y++) 
-            Buffer.MemoryCopy(src + (nint)y * (nint)srcStride, dst + (nint)y * (nint)dstStride, dstStride, bytesPerRow);
-    }
-
-    private static unsafe void UpdateGrayscaleFlag(byte* src, int stride, int width, int height, ref bool isGrayscale)
-    {
-        if (!isGrayscale)
-            return;
-
-        for (var y = 0; y < height; y++)
-        {
-            var row = src + (nint)y * (nint)stride;
-            for (var x = 0; x < width; x++)
-            {
-                var i = x * 4;
-                var r = row[i + 0];
-                var g = row[i + 1];
-                var b = row[i + 2];
-                if (g != r || b != r)
-                {
-                    isGrayscale = false;
-                    return;
-                }
-            }
         }
     }
 }
