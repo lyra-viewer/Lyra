@@ -41,8 +41,11 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
 
         GLGetSwapInterval(out var swapInterval);
         Logger.Debug($"[SkiaOpenGlRenderer] GL swap interval = {swapInterval}");
+        
+        var glInterface = GRGlInterface.Create(GLGetProcAddress);
+        if (glInterface is null || !glInterface.Validate())
+            throw new InvalidOperationException("Could not assemble an OpenGL function interface for the current GL context.");
 
-        var glInterface = GRGlInterface.Create();
         _grContext = GRContext.CreateGl(glInterface);
 
         ConfigureResourceCache(_grContext, "SkiaOpenGlRenderer");

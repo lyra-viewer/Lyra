@@ -183,8 +183,14 @@ internal static class NativeLibraryLoader
             if (!string.IsNullOrWhiteSpace(ldPath))
                 SearchDirs.AddRange(ldPath.Split(':', StringSplitOptions.RemoveEmptyEntries));
 
+            // Debian/Ubuntu multiarch layout.
             SearchDirs.Add("/usr/lib/x86_64-linux-gnu");
             SearchDirs.Add("/lib/x86_64-linux-gnu");
+
+            // Fedora/RHEL/openSUSE layout.
+            SearchDirs.Add("/usr/lib64");
+            SearchDirs.Add("/lib64");
+
             SearchDirs.Add("/usr/local/lib");
             SearchDirs.Add("/usr/lib");
         }
