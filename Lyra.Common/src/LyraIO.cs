@@ -15,6 +15,7 @@ public static class LyraIO
     private static readonly Lazy<string> DataDir = new(GetDataDirectory);
     private static readonly Lazy<string> ConfigDir = new(GetConfigDirectory);
     private static readonly Lazy<string> ThemesDir = new(GetThemesDirectory);
+    private static readonly Lazy<string> ScratchDir = new(GetScratchDirectory);
 
     public static string GetUiSettingsFile() => Path.Combine(ConfigDir.Value, UiSettingsFileName);
 
@@ -27,6 +28,15 @@ public static class LyraIO
     public static string GetLogFile() => Path.Combine(DataDir.Value, LogFileName);
 
     public static string GetLoadTimeFile() => Path.Combine(DataDir.Value, LoadTimeDataFileName);
+    
+    public static string GetScratchDir() => ScratchDir.Value;
+
+    private static string GetScratchDirectory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), BaseDir, "scratch");
+        Directory.CreateDirectory(path);
+        return path;
+    }
 
     private static string GetDataDirectory()
     {

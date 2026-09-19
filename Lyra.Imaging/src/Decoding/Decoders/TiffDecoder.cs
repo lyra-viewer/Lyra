@@ -50,7 +50,7 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
             composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
             composite.Content = WantsStreaming(info)
                 ? StreamGray(path, page, info, composite, ct)
-                : RasterContentBuilder.Build(DecodeGray(path, page, info, ct), composite);
+                : RasterContentBuilder.Build(DecodeGray(path, page, info, composite, ct), composite);
         }
         else
         {
@@ -64,7 +64,7 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
             }
             catch (InvalidOperationException) when (info.NativeCapable != 0)
             {
-                Logger.Info($"[TiffDecoder] The RGBA interface accepted {Path.GetFileName(path)} and then refused it; reading it at its own layout instead.");
+                Logger.Debug($"[TiffDecoder] The RGBA interface accepted {Path.GetFileName(path)} and then refused it; reading it at its own layout instead.");
 
                 if (composite.ExifInfo is null)
                     composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
@@ -152,9 +152,7 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
                                             "Layouts read this way are held whole; nothing streams them.");
     }
 
-    /// <summary>
-    /// Decodes a directory whose sample layout libtiff's RGBA interface will not read.
-    /// </summary>
+    /// <summary>Decodes a directory whose sample layout libtiff's RGBA interface will not read.</summary>
     private static ICompositeContent DecodeUnsupportedLayout(string path, int directory,
         TiffNative.DirectoryInfo info, Composite composite, CancellationToken ct)
     {
@@ -175,9 +173,37 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
 
         ct.ThrowIfCancellationRequested();
 
-        if (!TiffNative.LoadNative(path, directory, kind, out var pixels, out var width, out var height, out var stride) || pixels == IntPtr.Zero)
+        int width = 0, height = 0;
+        uint stride = 0;
+
+        var transfer = new IoTally();
+        string? failure = null;
+        
+        var loaded = BoundedNativeRead.Run(
+            $"Native layout of {Path.GetFileName(path)}",
+            NativeLayoutPeakBytes(info, isFloat),
+            (out IntPtr buffer) =>
+            {
+                var read = TiffNative.LoadNative(path, directory, kind, out buffer, out width, out height, out stride);
+
+                if (!read)
+                    failure = NativeError();
+
+                transfer.AddLastRead();
+
+                return read;
+            },
+            out var pixels, out var timedOut, TiffNative.free_tiff_pixels
+        );
+
+        transfer.ReportTo(composite);
+
+        if (!loaded || pixels == IntPtr.Zero)
         {
-            var error = NativeErrors.GetUtf8ZOrAnsiZ(TiffNative.get_last_tiff_error());
+            var error = timedOut
+                ? "The read did not return in time; the file may be on a source that has stopped responding."
+                : failure ?? string.Empty;
+
             throw new InvalidOperationException($"[TiffDecoder] Failed to decode {path} at its own layout. {error}");
         }
 
@@ -243,6 +269,73 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
     private static bool IsColour(TiffNative.DirectoryInfo info) => info.RegionSamples == 4;
 
     /// <summary>
+    /// What one region read produced. A record rather than a handful of out parameters because
+    /// most callers want two of these four and have to spell out discards for the rest, which at
+    /// the call site reads as nothing at all.
+    /// </summary>
+    /// <param name="Ok">Whether pixels came back.</param>
+    /// <param name="TimedOut">
+    /// Whether it failed by running out of time rather than by being unreadable - what tells a
+    /// caller reading many regions to stop rather than spend the whole bound on every one.
+    /// </param>
+    /// <param name="Error">Why libtiff refused, empty unless <paramref name="Ok"/> is false.</param>
+    private readonly record struct RegionRead(bool Ok, IntPtr Pixels, uint Stride, bool TimedOut, string Error)
+    {
+        public bool HasPixels => Ok && Pixels != IntPtr.Zero;
+    }
+    
+    private sealed class IoTally
+    {
+        private long _bytes;
+        private long _microseconds;
+
+        public void Add(long bytes, double ms)
+        {
+            Interlocked.Add(ref _bytes, bytes);
+            Interlocked.Add(ref _microseconds, (long)(ms * 1000));
+        }
+
+        public void AddLastRead()
+        {
+            if (TiffNative.LastIo() is { } io)
+                Add(io.Bytes, io.Ms);
+        }
+
+        public void ReportTo(Composite? composite)
+        {
+            var bytes = Interlocked.Read(ref _bytes);
+            if (composite is null || bytes <= 0)
+                return;
+
+            composite.CompleteTransfer(bytes, Interlocked.Read(ref _microseconds) / 1000.0);
+        }
+    }
+    
+    private static RegionRead BoundedLoadRegion(string path, int directory, bool colour, uint x, uint y, uint width, uint height, string context, IoTally? tally = null)
+    {
+        uint stride = 0;
+        string? failure = null;
+
+        var ok = BoundedNativeRead.Run(context, (long)width * height * (colour ? 4 : 1),
+            (out IntPtr buffer) =>
+            {
+                var read = TiffNative.LoadRegion(path, directory, colour, x, y, width, height, out buffer, out stride);
+
+                if (!read)
+                    failure = NativeError();
+
+                tally?.AddLastRead();
+
+                return read;
+            },
+            out var pixels, out var timedOut, TiffNative.free_tiff_pixels);
+
+        return new RegionRead(ok, pixels, stride, timedOut, failure ?? string.Empty);
+    }
+    
+    private static string NativeError() => NativeErrors.GetUtf8ZOrAnsiZ(TiffNative.get_last_tiff_error());
+
+    /// <summary>
     /// How a region of this directory should be tagged. The native side resolves the fourth sample
     /// against EXTRASAMPLES - a sample that is not alpha comes back opaque - and says whether what
     /// does come back is associated, which is the one thing it cannot resolve without losing the
@@ -280,18 +373,17 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
     /// Publishes a sheet too large to hold: a preview built in one streaming pass, and tiles
     /// decoded by region as the view asks for them.
     /// </summary>
-    private static ICompositeContent StreamGray(string path, int directory, TiffNative.DirectoryInfo info,
-        Composite composite, CancellationToken ct)
+    private static ICompositeContent StreamGray(string path, int directory, TiffNative.DirectoryInfo info, Composite composite, CancellationToken ct)
     {
         var width = (int)info.Width;
         var height = (int)info.Height;
 
         DecoderValidation.RequireSaneDimensions(nameof(TiffDecoder), width, height);
 
-        Logger.Info($"[TiffDecoder] {Path.GetFileName(path)} is {width}x{height} at {info.BitsPerSample}-bit " +
-                    $"{(IsColour(info) ? "colour" : "grey")} - " +
-                    $"{(long)width * height * info.RegionSamples / (1024 * 1024)} MB if it were held whole. Streaming a preview and " +
-                    "decoding tiles by region instead.");
+        Logger.Debug($"[TiffDecoder] {Path.GetFileName(path)} is {width}x{height} at {info.BitsPerSample}-bit " +
+                     $"{(IsColour(info) ? "colour" : "grey")} - " +
+                     $"{(long)width * height * info.RegionSamples / (1024 * 1024)} MB if it were held whole. Streaming a preview and " +
+                     "decoding tiles by region instead.");
 
         var content = new RasterLargeContent(width, height);
 
@@ -305,16 +397,30 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
             var colour = IsColour(info);
             var premultiplied = info.RegionPremultiplied != 0;
             var bandRows = PreviewBandRowsFor(info);
+            
+            var transfer = new IoTally();
+            
+            bool ReadBand(uint first, uint rows, out IntPtr pixels, out uint stride)
+            {
+                var read = BoundedLoadRegion(path, directory, colour, 0, first, info.Width, rows, $"Preview band {first}..{first + rows} of {Path.GetFileName(path)}", transfer);
+
+                pixels = read.Pixels;
+                stride = read.Stride;
+
+                return read.Ok;
+            }
 
             var preview = StreamingGrayPreview.Build(
                 width, height, maxWidth, maxHeight,
-                (uint first, uint rows, out IntPtr pixels, out uint stride) => TiffNative.LoadRegion(path, directory, colour, 0, first, info.Width, rows, out pixels, out stride),
+                ReadBand,
                 TiffNative.free_tiff_pixels,
                 bandRows,
                 colour ? 4 : 1,
                 ct,
                 premultiplied
             );
+
+            transfer.ReportTo(composite);
 
             if (preview is not null)
                 content.SetPreview(SKImage.FromBitmap(preview));
@@ -367,9 +473,38 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
     {
         private int Channels => colour ? 4 : 1;
 
+        /// <summary>How many reads must time out in a row before this file is given up on.</summary>
+        private const int TimeoutsBeforeGivingUp = 3;
+
+        private int _consecutiveTimeouts;
+
+        /// <summary>
+        /// Set once reads have timed out often enough in a row to call the source wedged rather
+        /// than slow. Every later tile would spend the whole bound finding that out again, so the
+        /// image stops asking and keeps the preview it already has. Reopening it starts a new
+        /// provider, and a new chance.
+        /// </summary>
+        private int _stalled;
+
+        private void RecordTimeout()
+        {
+            if (Interlocked.Increment(ref _consecutiveTimeouts) < TimeoutsBeforeGivingUp)
+                return;
+
+            if (Interlocked.Exchange(ref _stalled, 1) == 0)
+                Logger.Warning($"[TiffDecoder] {TimeoutsBeforeGivingUp} reads of {Path.GetFileName(path)} in a row did not " +
+                               "return in time; no further tiles will be requested for it. The preview stays on screen.");
+        }
+
+        /// <summary>A read that lands says the source is alive, whatever the ones before it did.</summary>
+        private void RecordSuccess() => Interlocked.Exchange(ref _consecutiveTimeouts, 0);
+
         public SKImage? Decode(int level, int tileX, int tileY, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
+
+            if (Volatile.Read(ref _stalled) != 0)
+                return null;
 
             var span = DecodePolicy.TileEdge << level;
 
@@ -392,12 +527,20 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
         /// <summary>Full resolution: the region is the tile, so it is copied straight across.</summary>
         private SKBitmap? DecodeDirect(uint x, uint y, uint width, uint height)
         {
-            if (!TiffNative.LoadRegion(path, directory, colour, x, y, width, height, out var pixels, out var stride)
-                || pixels == IntPtr.Zero)
+            var read = BoundedLoadRegion(path, directory, colour, x, y, width, height,
+                $"Tile {x},{y} of {Path.GetFileName(path)}");
+
+            if (!read.HasPixels)
             {
-                Warn(x, y);
+                if (read.TimedOut)
+                    RecordTimeout();
+                else
+                    Warn(x, y, read.Error);
+
                 return null;
             }
+
+            RecordSuccess();
 
             try
             {
@@ -406,14 +549,14 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
                     : new SKImageInfo((int)width, (int)height, SKColorType.Gray8, SKAlphaType.Opaque);
 
                 var bitmap = new SKBitmap(info);
-                PixelCopy.CopyRows(pixels, stride, bitmap);
+                PixelCopy.CopyRows(read.Pixels, read.Stride, bitmap);
                 bitmap.SetImmutable();
 
                 return bitmap;
             }
             finally
             {
-                TiffNative.free_tiff_pixels(pixels);
+                TiffNative.free_tiff_pixels(read.Pixels);
             }
         }
 
@@ -423,9 +566,27 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
         /// </summary>
         private SKBitmap? DecodeReduced(uint x, uint y, uint width, uint height, CancellationToken ct)
         {
+            bool ReadBand(uint first, uint rows, out IntPtr pixels, out uint stride)
+            {
+                var read = BoundedLoadRegion(path, directory, colour, x, y + first, width, rows,
+                    $"Reduced band {first}..{first + rows} of tile {x},{y} in {Path.GetFileName(path)}");
+
+                pixels = read.Pixels;
+                stride = read.Stride;
+
+                if (read.Ok)
+                    RecordSuccess();
+                else if (read.TimedOut)
+                    RecordTimeout();
+                else
+                    Warn(x, y + first, read.Error);
+
+                return read.Ok;
+            }
+
             return StreamingGrayPreview.Build(
                 (int)width, (int)height, DecodePolicy.TileEdge, DecodePolicy.TileEdge,
-                (uint first, uint rows, out IntPtr pixels, out uint stride) => TiffNative.LoadRegion(path, directory, colour, x, y + first, width, rows, out pixels, out stride),
+                ReadBand,
                 TiffNative.free_tiff_pixels,
                 bandRows,
                 Channels,
@@ -434,8 +595,8 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
             );
         }
 
-        private void Warn(uint x, uint y) =>
-            Logger.Warning($"[TiffDecoder] Region {x},{y} of {Path.GetFileName(path)} failed: " + NativeErrors.GetUtf8ZOrAnsiZ(TiffNative.get_last_tiff_error()));
+        private void Warn(uint x, uint y, string nativeError) =>
+            Logger.Warning($"[TiffDecoder] Region {x},{y} of {Path.GetFileName(path)} failed: {nativeError}");
 
         public void Dispose() { }
     }
@@ -443,7 +604,7 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
     /// <summary>
     /// Decodes a whole gray directory at its own bit depth into an 8-bit gray bitmap.
     /// </summary>
-    private static SKBitmap DecodeGray(string path, int directory, TiffNative.DirectoryInfo info, CancellationToken ct)
+    private static SKBitmap DecodeGray(string path, int directory, TiffNative.DirectoryInfo info, Composite composite, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
@@ -457,9 +618,18 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
                     $"{(long)width * height * info.RegionSamples / (1024 * 1024)} MB read at its own depth, against " +
                     $"{(long)width * height * 4 / (1024 * 1024)} MB through the RGBA interface.");
 
-        if (!TiffNative.LoadRegion(path, directory, IsColour(info), 0, 0, info.Width, info.Height, out var ptr, out var stride) || ptr == IntPtr.Zero)
+        var transfer = new IoTally();
+
+        var read = BoundedLoadRegion(path, directory, IsColour(info), 0, 0, info.Width, info.Height, $"Full region of {Path.GetFileName(path)}", transfer);
+
+        transfer.ReportTo(composite);
+
+        if (!read.HasPixels)
         {
-            var error = NativeErrors.GetUtf8ZOrAnsiZ(TiffNative.get_last_tiff_error());
+            var error = read.TimedOut
+                ? "The read did not return in time; the file may be on a source that has stopped responding."
+                : read.Error;
+
             throw new InvalidOperationException($"[TiffDecoder] Failed to decode {path} at native depth. {error}");
         }
 
@@ -469,13 +639,13 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
 
             var bitmap = new SKBitmap(RegionImageInfo(info, width, height));
 
-            PixelCopy.CopyRows(ptr, stride, bitmap);
+            PixelCopy.CopyRows(read.Pixels, read.Stride, bitmap);
 
             return bitmap;
         }
         finally
         {
-            TiffNative.free_tiff_pixels(ptr);
+            TiffNative.free_tiff_pixels(read.Pixels);
         }
     }
 
@@ -515,14 +685,45 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
             return DecodeUnsupportedLayout(path, directory, info, composite, ct);
         
         if (info.GrayCapable != 0 && info is { Width: > 0, Height: > 0 })
-            return RasterContentBuilder.Build(DecodeGray(path, directory, info, ct), composite);
+            return RasterContentBuilder.Build(DecodeGray(path, directory, info, composite, ct), composite);
 
-        if (!TiffNative.LoadDirectory(path, IntPtr.Zero, 0, directory, out var ptr, out var width, out var height, out var iccPtr, out var iccSize) || ptr == IntPtr.Zero)
+        IntPtr readIcc = IntPtr.Zero;
+        int readWidth = 0, readHeight = 0, readIccSize = 0;
+        string? failure = null;
+        
+        var loaded = BoundedNativeRead.Run(
+            $"Page {directory} of {Path.GetFileName(path)}",
+            (long)info.Width * info.Height * 4,
+            (out IntPtr buffer) =>
+            {
+                var read = TiffNative.LoadDirectory(path, IntPtr.Zero, 0, directory, out buffer, out readWidth, out readHeight, out readIcc, out readIccSize);
+
+                if (!read)
+                    failure = NativeError();
+
+                return read;
+            },
+            out var ptr, out var timedOut,
+            late =>
+            {
+                TiffNative.free_tiff_pixels(late);
+
+                if (readIcc != IntPtr.Zero)
+                    TiffNative.free_tiff_pixels(readIcc);
+            }
+        );
+
+        var (width, height, iccPtr, iccSize) = (readWidth, readHeight, readIcc, readIccSize);
+
+        if (!loaded || ptr == IntPtr.Zero)
         {
-            if (info.NativeCapable != 0)
+            if (info.NativeCapable != 0 && !timedOut)
                 return DecodeUnsupportedLayout(path, directory, info, composite, ct);
 
-            var error = NativeErrors.GetUtf8ZOrAnsiZ(TiffNative.get_last_tiff_error());
+            var error = timedOut
+                ? "The read did not return in time; the file may be on a source that has stopped responding."
+                : failure ?? string.Empty;
+
             throw new InvalidOperationException($"[TiffDecoder] Failed to decode page {directory} of {path}. {error}");
         }
 
@@ -550,11 +751,14 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
         return ThumbnailScaler.ResizeToThumbnail(LoadBitmap(path, composite: null, ct, tagColorSpace: false, out _), maxDimension);
     }
 
-    private static bool TryDecodeNative(string path, Composite? composite, CancellationToken ct, out IntPtr ptr, out int width, out int height, out IntPtr icc, out int iccSize, out bool metadataParsed)
+    private static bool TryDecodeNative(string path, Composite? composite, CancellationToken ct, out IntPtr ptr, out int width, out int height, out IntPtr icc, out int iccSize, out bool metadataParsed, out string nativeError)
     {
         metadataParsed = false;
+        nativeError = string.Empty;
 
-        if (composite is not null && TiffNative.MemoryLoadAvailable && NativeFileBuffer.ShouldBuffer(composite.FileSizeBytes ?? 0))
+        var fileSize = composite?.FileSizeBytes ?? 0;
+
+        if (composite is not null && TiffNative.MemoryLoadAvailable && NativeFileBuffer.ShouldBuffer(fileSize))
         {
             using var data = NativeFileBuffer.Read(path, ct, out var readMs, composite.ReportTransferred);
             composite.CompleteTransfer((long)data.Length, readMs);
@@ -571,20 +775,92 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
                 return ptr != IntPtr.Zero;
 
             if (TiffNative.MemoryLoadAvailable)
+            {
+                nativeError = NativeError();
                 return false;
+            }
 
             Logger.Warning("[TiffDecoder] Native library has no memory entry point; falling back to path decode.");
         }
+        else if (composite is not null && fileSize > 0 && !NativeFileBuffer.ShouldBuffer(fileSize))
+        {
+            using var scratch = ScratchFileCopy.TryCreate(path, fileSize, ct, out var copyMs, composite.ReportTransferred);
+            if (scratch is not null)
+            {
+                composite.CompleteTransfer(scratch.BytesCopied, copyMs);
+                ct.ThrowIfCancellationRequested();
 
-        return TiffNative.load_tiff_rgba(path, out ptr, out width, out height, out icc, out iccSize) && ptr != IntPtr.Zero;
+                composite.ExifInfo = MetadataProcessor.ParseMetadata(scratch.Path);
+                metadataParsed = true;
+
+                return TiffNative.load_tiff_rgba(scratch.Path, out ptr, out width, out height, out icc, out iccSize) && ptr != IntPtr.Zero;
+            }
+        }
+        
+        IntPtr readIcc = IntPtr.Zero;
+        int readWidth = 0, readHeight = 0, readIccSize = 0;
+
+        var transfer = new IoTally();
+        string? failure = null;
+
+        var loaded = BoundedNativeRead.Run(
+            $"Whole image of {Path.GetFileName(path)}",
+            fileSize > 0 ? fileSize : SafeFileLength(path),
+            (out IntPtr buffer) =>
+            {
+                var read = TiffNative.load_tiff_rgba(path, out buffer, out readWidth, out readHeight, out readIcc,
+                    out readIccSize);
+
+                if (!read)
+                    failure = NativeError();
+
+                transfer.AddLastRead();
+
+                return read;
+            },
+            out ptr, out var timedOut,
+            late =>
+            {
+                TiffNative.free_tiff_pixels(late);
+
+                if (readIcc != IntPtr.Zero)
+                    TiffNative.free_tiff_pixels(readIcc);
+            }
+        );
+
+        width = readWidth;
+        height = readHeight;
+        icc = readIcc;
+        iccSize = readIccSize;
+
+        transfer.ReportTo(composite);
+
+        nativeError = timedOut
+            ? "The read did not return in time; the file may be on a source that has stopped responding."
+            : failure ?? string.Empty;
+
+        return loaded && ptr != IntPtr.Zero;
+    }
+
+    /// <summary>The file's size for sizing a read's time bound, or 0 when it cannot be had.</summary>
+    private static long SafeFileLength(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"[TiffDecoder] Could not size {path} for its read bound: {ex.Message}");
+            return 0;
+        }
     }
 
     private static SKBitmap LoadBitmap(string path, Composite? composite, CancellationToken ct, bool tagColorSpace, out bool metadataParsed)
     {
-        if (TryDecodeNative(path, composite, ct, out var ptr, out var width, out var height, out var iccPtr, out var iccSize, out metadataParsed))
+        if (TryDecodeNative(path, composite, ct, out var ptr, out var width, out var height, out var iccPtr, out var iccSize, out metadataParsed, out var error))
             return BuildBitmap(ptr, width, height, iccPtr, iccSize, tagColorSpace, ct);
 
-        var error = NativeErrors.GetUtf8ZOrAnsiZ(TiffNative.get_last_tiff_error());
         throw new InvalidOperationException($"[TiffDecoder] Failed to decode TIFF: {path}. {error}");
     }
 

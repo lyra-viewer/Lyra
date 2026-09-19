@@ -1,6 +1,5 @@
 using Lyra.Common.Events;
 using Lyra.Common.Settings.Enums;
-using Lyra.Common.Settings;
 using Lyra.Common.SystemExtensions;
 using Lyra.Common;
 using Lyra.DropStatusProvider;
@@ -289,6 +288,12 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         
         UIManager.SetLoadProgress(_loadProgress.Update(LoadSnapshot.Of(_composite)), textColor);
 
+        if (_closing)
+        {
+            UIManager.SetStatusOverlay("Closing...", textColor);
+            return;
+        }
+
         if (_scanProgressProvider?.GetScanStatus() is { Active: true } scan)
         {
             UIManager.SetStatusOverlay(FormatScanStatus(scan), textColor);
@@ -404,6 +409,10 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     }
 
     public void SetComposite(Composite? composite) => _composite = composite;
+    
+    public void MarkClosing() => _closing = true;
+
+    private bool _closing;
 
     public void SetOffset(SKPoint offset) => _offset = offset;
 

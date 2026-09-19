@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using HarfBuzzSharp;
 using LibHeifSharp;
 using Lyra.Common;
+using Lyra.Imaging;
 using SDL3;
 using SkiaSharp;
 
@@ -183,6 +184,9 @@ internal static class NativeLibraryLoader
             if (!string.IsNullOrWhiteSpace(ldPath))
                 SearchDirs.AddRange(ldPath.Split(':', StringSplitOptions.RemoveEmptyEntries));
 
+            // Flatpak sandbox.
+            SearchDirs.Add("/app/lib");
+
             // Debian/Ubuntu multiarch layout.
             SearchDirs.Add("/usr/lib/x86_64-linux-gnu");
             SearchDirs.Add("/lib/x86_64-linux-gnu");
@@ -238,6 +242,7 @@ internal static class NativeLibraryLoader
         NativeLibrary.SetDllImportResolver(typeof(SDL).Assembly, ResolveSdl);
         NativeLibrary.SetDllImportResolver(typeof(LibHeifInfo).Assembly, ResolveHeif);
         NativeLibrary.SetDllImportResolver(typeof(NativeLibraryLoader).Assembly, ResolveInterop);
+        NativeLibrary.SetDllImportResolver(typeof(ImageStore).Assembly, ResolveInterop);
 
 #if !DEBUG
         NativeLibrary.SetDllImportResolver(typeof(SKImage).Assembly, ResolveSkia);

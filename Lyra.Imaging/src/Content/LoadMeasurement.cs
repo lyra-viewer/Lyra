@@ -35,9 +35,6 @@ public sealed class LoadMeasurement
         ? Math.Max(0, total - transfer)
         : null;
 
-    /// <summary>
-    /// The duration worth learning from, and whether it includes the read.
-    /// </summary>
     public (double Ms, bool IncludesTransfer)? Learnable => DecodeMs is { } decode
         ? (decode, false)
         : CompleteMs is { } total
@@ -57,10 +54,19 @@ public sealed class LoadMeasurement
         Volatile.Write(ref _transferReads, 0);
     }
     
-    internal void ReportTransferred(long bytesSoFar) => Volatile.Write(ref _transferBytesLive, bytesSoFar);
+    private bool Measuring => _stopwatch is { IsRunning: true };
+
+    internal void ReportTransferred(long bytesSoFar)
+    {
+        if (Measuring)
+            Volatile.Write(ref _transferBytesLive, bytesSoFar);
+    }
 
     internal void CompleteTransfer(long bytes, double ms)
     {
+        if (!Measuring)
+            return;
+
         Interlocked.Add(ref _transferBytesDone, bytes);
         Volatile.Write(ref _transferBytesLive, 0);
         Interlocked.Add(ref _transferMicroseconds, (long)(ms * 1000));

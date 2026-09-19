@@ -75,6 +75,105 @@ public class SourceThroughputTests
     }
     
     [Fact]
+    public void ACachedReadUnderTheAbsoluteCeilingIsStillNotBelieved()
+    {
+        var samples = new SourceThroughputSamples(_ => "nfs");
+
+        // ~11 MB/s, the measured truth of the mount, learned from a handful of cold reads.
+        const double realBytesPerMs = 11.0 * Mb / 1000.0;
+        var sizes = new[] { 16L * Mb, 64 * Mb, 200 * Mb };
+
+        for (var i = 0; i < sizes.Length; i++)
+            samples.Record($"cold{i}.bin", sizes[i], sizes[i] / realBytesPerMs);
+
+        var before = Assert.IsType<TransferEstimate>(samples.Estimate("x.bin")).MsFor(200 * Mb);
+        Assert.InRange(before, 15_000, 22_000); // ~18 s for 200 MB
+
+        // Then a folder's worth of files the cache already holds, each 200 MB in 74 ms = 2.7 GB/s.
+        // These OUTNUMBER the honest reads, which is the ordinary case when re-browsing a folder,
+        // and is where a median over the raw samples stops protecting anything.
+        for (var i = 0; i < 10; i++)
+            samples.Record($"warm{i}.bin", 200 * Mb, 74);
+
+        var after = Assert.IsType<TransferEstimate>(samples.Estimate("x.bin")).MsFor(200 * Mb);
+
+        Assert.Equal(before, after, precision: 6);
+
+        // The estimate must still describe the mount - ~18 s for 200 MB, not the cache's 74 ms.
+        Assert.InRange(after, 15_000, 22_000);
+    }
+    
+    [Fact]
+    public void ASustainedSpeedUpIsEventuallyBelievedRatherThanRejectedForever()
+    {
+        var samples = new SourceThroughputSamples(_ => "mount");
+
+        // Learned while the link was congested: ~2 MB/s.
+        for (var i = 0; i < 4; i++)
+            samples.Record($"slow{i}.bin", 10 * Mb, 5000);
+
+        var congested = Assert.IsType<TransferEstimate>(samples.Estimate("x.bin")).MsFor(10 * Mb);
+        Assert.InRange(congested, 4000, 6000);
+
+        // The same mount, now on a fast link: ~100 MB/s, every read far beyond what the history
+        // allows. Sustained, not a stray cache hit.
+        for (var i = 0; i < 40; i++)
+            samples.Record($"fast{i}.bin", 10 * Mb, 100);
+
+        var recovered = Assert.IsType<TransferEstimate>(samples.Estimate("x.bin")).MsFor(10 * Mb);
+
+        Assert.True(recovered < congested / 2, $"a sustained speed-up should eventually be learned ({congested:F0} ms -> {recovered:F0} ms)");
+    }
+
+    [Fact]
+    public void AGenuinelyQuickerReadIsStillBelieved()
+    {
+        var samples = new SourceThroughputSamples(_ => "nfs");
+
+        for (var i = 0; i < 6; i++)
+            samples.Record($"steady{i}.bin", 10 * Mb, 1000); // ~10 MB/s
+
+        var before = Assert.IsType<TransferEstimate>(samples.Estimate("x.bin")).MsFor(10 * Mb);
+
+        // Three times quicker - plausible on a link that just got quiet, and inside the factor.
+        for (var i = 0; i < 6; i++)
+            samples.Record($"quick{i}.bin", 10 * Mb, 330);
+
+        var after = Assert.IsType<TransferEstimate>(samples.Estimate("x.bin")).MsFor(10 * Mb);
+
+        Assert.True(after < before, $"a real speed-up should move the estimate ({before:F0} ms -> {after:F0} ms)");
+    }
+    
+    [Fact]
+    public void WithNoHistoryTheAbsoluteCeilingStillApplies()
+    {
+        var samples = new SourceThroughputSamples(_ => "src");
+
+        for (var i = 0; i < 6; i++)
+            samples.Record($"ram{i}.bin", 10 * Mb, 0.5); // ~20 GB/s
+
+        Assert.Null(samples.Estimate("next.bin"));
+    }
+    
+    [Fact]
+    public void AHistorySeededWithCacheReadsRecovers()
+    {
+        var samples = new SourceThroughputSamples(_ => "nfs");
+
+        // A cold start that happens to catch warm files first: ~2.7 GB/s, under the ceiling.
+        for (var i = 0; i < 4; i++)
+            samples.Record($"warm{i}.bin", 200 * Mb, 74);
+
+        // Then the truth arrives, file after file, at ~11 MB/s.
+        for (var i = 0; i < 20; i++)
+            samples.Record($"cold{i}.bin", 200 * Mb, 18_000);
+
+        var estimate = Assert.IsType<TransferEstimate>(samples.Estimate("next.bin"));
+
+        Assert.InRange(estimate.MsFor(200 * Mb), 14_000, 22_000);
+    }
+
+    [Fact]
     public void OnlyTheFirstReadOfAFileIsSampled()
     {
         var samples = new SourceThroughputSamples();

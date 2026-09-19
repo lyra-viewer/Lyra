@@ -58,6 +58,10 @@ typedef struct TiffDirectoryInfo {
 
 TIFF_API const char *get_last_tiff_error(void);
 
+TIFF_API uint64_t get_last_tiff_io_microseconds(void);
+
+TIFF_API uint64_t get_last_tiff_io_bytes(void);
+
 TIFF_API bool describe_tiff_directories(const char *path, TiffDirectoryInfo **out_dirs, int *out_count);
 
 TIFF_API bool describe_tiff_directories_mem(const uint8_t *data, uint64_t size, TiffDirectoryInfo **out_dirs, int *out_count);

@@ -98,7 +98,7 @@ public sealed class DecodeTimeSamples
         lock (list)
         {
             list.Add(ms);
-            Logger.Debug($"[DecodeTimeSamples] Recorded: {format}, {magnitude} {metric.ToString().ToLowerInvariant()}, {ms} ms.");
+            Logger.Debug($"[DecodeTimeSamples] Recorded: {format}, {magnitude} {metric.ToString().ToLowerInvariant()}, {Formatters.MsToStr(ms)} ms.");
 
             if (list.Count > MaxSamplesPerBucket)
                 list.RemoveAt(0);

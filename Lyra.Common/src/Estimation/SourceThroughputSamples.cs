@@ -24,10 +24,20 @@ public sealed class SourceThroughputSamples
 
     /// <summary>
     /// No storage device delivers this, so anything above it came from the operating system's
-    /// page cache rather than the source. Accepting those would teach a slow share that it is
-    /// fast - the one error that matters, since it is what the estimate exists to catch.
+    /// page cache rather than the source.
     /// </summary>
     private const double ImplausibleBytesPerMs = 8.0 * 1024 * 1024; // 8 GB/s
+
+    /// <summary>
+    /// How much faster than its own established behavior a read must be before it is taken for a
+    /// cache hit rather than simply a good run.
+    /// </summary>
+    private const double CacheSuspicionFactor = 8.0;
+
+    /// <summary>
+    /// How many fast reads in a row are turned away before one is believed after all.
+    /// </summary>
+    private const int RejectionsBeforeBelieving = 8;
 
     /// <summary>How many recently-read files to remember, to avoid sampling a re-read.</summary>
     private const int RecentFilesRemembered = 4096;
@@ -35,6 +45,8 @@ public sealed class SourceThroughputSamples
     private readonly record struct Sample(long Bytes, double Ms);
 
     private readonly ConcurrentDictionary<string, List<Sample>> _bySource = new(StringComparer.OrdinalIgnoreCase);
+    
+    private readonly ConcurrentDictionary<string, int> _rejections = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly Func<string, string> _sourceOf;
 
@@ -63,10 +75,32 @@ public sealed class SourceThroughputSamples
             return;
         }
 
+        var source = _sourceOf(path);
+
+        if (BeatsWhatTheSourceCanDo(source, bytes, ms, out var expectedMs))
+        {
+            var inARow = _rejections.AddOrUpdate(source, 1, (_, count) => count + 1);
+
+            if (inARow < RejectionsBeforeBelieving)
+            {
+                Logger.Debug(
+                    $"[SourceThroughput] Ignoring {rate * 1000 / (1024 * 1024):F0} MB/s - {source} takes about " +
+                    $"{expectedMs:F0} ms for this many bytes and it took {ms:F0} ms, so it came from cache: {path}"
+                );
+                return;
+            }
+
+            Logger.Info(
+                $"[SourceThroughput] {source} has read faster than its history allows {inARow} times running; " +
+                "taking it as genuinely quicker now rather than cache, and learning from it."
+            );
+        }
+
+        _rejections.TryRemove(source, out _);
+
         if (!FirstReadThisSession(path))
             return;
 
-        var source = _sourceOf(path);
         var samples = _bySource.GetOrAdd(source, _ => []);
 
         lock (samples)
@@ -96,6 +130,33 @@ public sealed class SourceThroughputSamples
         }
 
         return Fit(snapshot);
+    }
+
+    /// <summary>
+    /// Whether this read beat what the source has already shown it can do by so much that the
+    /// bytes cannot have come from it.
+    /// </summary>
+    private bool BeatsWhatTheSourceCanDo(string source, long bytes, double ms, out double expectedMs)
+    {
+        expectedMs = 0;
+
+        if (!_bySource.TryGetValue(source, out var samples))
+            return false;
+
+        Sample[] snapshot;
+        lock (samples)
+        {
+            if (samples.Count < MinSamplesToEstimate)
+                return false;
+
+            snapshot = samples.ToArray();
+        }
+
+        if (Fit(snapshot) is not { } established)
+            return false;
+
+        expectedMs = established.MsFor(bytes);
+        return expectedMs > 0 && ms * CacheSuspicionFactor < expectedMs;
     }
 
     private static TransferEstimate? Fit(Sample[] samples)

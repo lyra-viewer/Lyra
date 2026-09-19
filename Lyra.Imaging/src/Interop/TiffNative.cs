@@ -125,6 +125,31 @@ internal static class TiffNative
     [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
     public static extern IntPtr get_last_tiff_error();
 
+    [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
+    private static extern ulong get_last_tiff_io_microseconds();
+
+    [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
+    private static extern ulong get_last_tiff_io_bytes();
+
+    private static bool _ioEntryPointsMissing;
+    
+    public static (long Bytes, double Ms)? LastIo()
+    {
+        if (Volatile.Read(ref _ioEntryPointsMissing))
+            return null;
+
+        try
+        {
+            return ((long)get_last_tiff_io_bytes(), get_last_tiff_io_microseconds() / 1000.0);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            Volatile.Write(ref _ioEntryPointsMissing, true);
+            Logger.Info($"[TiffNative] {nameof(get_last_tiff_io_microseconds)} is missing; this build cannot separate fetch time from decode time for TIFFs it reads by path.");
+            return null;
+        }
+    }
+
     /// <summary>
     /// Reads what directories the file holds, without decoding a pixel. Returns an empty list when
     /// the entry point is missing - <see cref="DirectoryAccessAvailable"/> then reports that for

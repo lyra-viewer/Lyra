@@ -1,6 +1,4 @@
 using Lyra.UI.Components.Controls;
-using Lyra.UI.Components.Layout;
-using Lyra.UI.SupportingTypes;
 using SkiaSharp;
 using Xunit;
 
@@ -69,40 +67,4 @@ public class ControlGuardTests
         Assert.Equal(5, slider.Value);
         Assert.Equal(0, changes);
     }
-
-    // --------------------------------------------------------
-    //  Grid
-    // --------------------------------------------------------
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-3)]
-    public void GridClampsColumnsToAtLeastOne(int requested)
-    {
-        var grid = new Grid { Columns = requested };
-
-        Assert.Equal(1, grid.Columns);
-    }
-
-    [Fact]
-    public void GridWithClampedColumnsStillLaysOut()
-    {
-        var grid = new Grid { Columns = 0 };
-        grid.AddComponents(Cell(), Cell(), Cell());
-
-        grid.Measure(new SKSize(200, 200));
-        grid.Resolve();
-        grid.Arrange(new SKRect(0, 0, 200, 200));
-
-        // One column: three cells stacked, each 20 tall.
-        Assert.Equal(60f, grid.DesiredSize.Height);
-    }
-
-    private static HStack Cell() => new()
-    {
-        HorizontalSize = SizeMode.Fixed,
-        VerticalSize = SizeMode.Fixed,
-        Width = 20,
-        Height = 20
-    };
 }

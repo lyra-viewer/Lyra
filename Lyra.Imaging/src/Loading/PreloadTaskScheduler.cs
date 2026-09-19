@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Lyra.Common;
 
 namespace Lyra.Imaging.Loading;
 
@@ -36,6 +37,8 @@ internal sealed class PreloadTaskScheduler : TaskScheduler, IDisposable
     protected override void QueueTask(Task task) => _tasks.Add(task);
     protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) => false;
 
+    private static readonly TimeSpan ShutdownJoinTimeout = TimeSpan.FromSeconds(2);
+
     public void Dispose()
     {
         if (_disposed)
@@ -44,9 +47,18 @@ internal sealed class PreloadTaskScheduler : TaskScheduler, IDisposable
 
         _tasks.CompleteAdding();
 
-        foreach (var thread in _threads)
-            thread.Join();
+        var allJoined = true;
 
-        _tasks.Dispose();
+        foreach (var thread in _threads)
+        {
+            if (thread.Join(ShutdownJoinTimeout))
+                continue;
+
+            allJoined = false;
+            Logger.Warning($"[PreloadTaskScheduler] {thread.Name} did not finish within {ShutdownJoinTimeout.TotalSeconds}s; abandoning it so shutdown can proceed.");
+        }
+        
+        if (allJoined)
+            _tasks.Dispose();
     }
 }

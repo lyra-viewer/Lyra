@@ -1,6 +1,7 @@
 using Lyra.Common.Estimation;
 using Lyra.Imaging.ConstraintsProvider;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Loading;
 
 namespace Lyra.Imaging;
@@ -12,6 +13,7 @@ public static class ImageStore
     public static void Initialize()
     {
         _ = DecodeConstraintsProvider.Current;
+        ScratchFileCopy.SweepStaleFiles();
     }
     
     public static Composite GetImage(string path)

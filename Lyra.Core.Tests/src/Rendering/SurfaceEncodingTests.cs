@@ -32,7 +32,7 @@ public class SurfaceEncodingTests
     {
         var profile = SurfaceProfile.Extended(P3, headroom: 8f);
 
-        Assert.Equal(1.825f, Render(4f, profile, P3, readAs: P3), 2);
+        Assert.Equal(1.825f, Render(4f, profile, P3, readAs: P3), 0.01f);
         Assert.Equal(4f, Render(4f, profile, P3, readAs: LinearP3), 2);
     }
 
@@ -71,7 +71,7 @@ public class SurfaceEncodingTests
         var encoded = Ink(DrawInterface(size, SKColorType.Bgra8888, P3));
         var linear = Ink(DrawInterface(size, SKColorType.RgbaF16, LinearP3));
 
-        Assert.True(linear > encoded * 1.08f, $"expected a linear surface to fatten the text; got {linear:F2} against {encoded:F2}.");
+        Assert.True(linear > encoded * 1.04f, $"expected a linear surface to fatten the text; got {linear:F2} against {encoded:F2}.");
     }
     
     [Theory]

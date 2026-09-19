@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using Lyra.Common;
-using Lyra.Common.Settings;
 using Lyra.DropStatusProvider;
 using Lyra.DuplicateStatusProvider;
 using Lyra.Renderer.Drawing;
@@ -129,12 +128,12 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
             }
             else
             {
-                Logger.Debug("[SkiaOpenGlRenderer] Render surface tagged with the display's ICC profile (wide-gamut content preserved).");
+                Logger.Info("[SkiaOpenGlRenderer] Render surface tagged with the display's ICC profile (wide-gamut content preserved).");
                 return displayColorSpace;
             }
         }
 
-        Logger.Debug("[SkiaOpenGlRenderer] No display ICC profile published; render surface falls back to sRGB (wide-gamut content folds to sRGB).");
+        Logger.Info("[SkiaOpenGlRenderer] No display ICC profile published; render surface falls back to sRGB (wide-gamut content folds to sRGB).");
         return SKColorSpace.CreateSrgb();
     }
 

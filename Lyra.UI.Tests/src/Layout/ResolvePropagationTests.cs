@@ -13,7 +13,7 @@ namespace Lyra.UI.Tests.Layout;
 /// every container forwards it, and a container that forgets fails silently: children keep their
 /// measured size and nothing reports an error.
 ///
-/// VScrollContainer, Grid, ListView and TreeView all used to drop it. The visible symptom was a
+/// VScrollContainer, ListView and TreeView all used to drop it. The visible symptom was a
 /// Flexible child inside a scroller staying at its content width instead of filling the row.
 /// </summary>
 public class ResolvePropagationTests
@@ -34,7 +34,7 @@ public class ResolvePropagationTests
 
     public static TheoryData<string> ContainerNames() =>
     [
-        "VStack", "HStack", "VScrollContainer", "Grid", "ListView", "TreeView", "Collapsible"
+        "VStack", "HStack", "VScrollContainer", "ListView", "TreeView", "Collapsible"
     ];
 
     [Theory]
@@ -69,12 +69,6 @@ public class ResolvePropagationTests
             case "VScrollContainer":
             {
                 var c = new VScrollContainer();
-                c.AddComponent(child);
-                return c;
-            }
-            case "Grid":
-            {
-                var c = new Grid();
                 c.AddComponent(child);
                 return c;
             }

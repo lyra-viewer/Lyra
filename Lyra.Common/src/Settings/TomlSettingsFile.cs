@@ -13,7 +13,7 @@ internal static class TomlSettingsFile
         {
             if (!File.Exists(path))
             {
-                Logger.Warning($"[Settings] Missing settings file: {path}. Writing default.");
+                Logger.Warning($"[TomlSettingsFile] Missing settings file: {path}. Writing default.");
                 Save(defaultToml, path);
                 return TomlSerializer.Deserialize(defaultToml, LyraTomlContext.Default.TomlTable)!;
             }
@@ -23,9 +23,9 @@ internal static class TomlSettingsFile
 
             if (doc.HasErrors)
             {
-                Logger.Error($"[Settings] TOML parse errors in: {path}. Resetting to default.");
+                Logger.Error($"[TomlSettingsFile] TOML parse errors in: {path}. Resetting to default.");
                 foreach (var d in doc.Diagnostics)
-                    Logger.Error($"[Settings] TOML: {d}");
+                    Logger.Error($"[TomlSettingsFile] TOML: {d}");
 
                 BackupCorrupted(path, "parse diagnostics present");
                 Save(defaultToml, path);
@@ -33,12 +33,12 @@ internal static class TomlSettingsFile
             }
 
             var model = TomlSerializer.Deserialize(text, LyraTomlContext.Default.TomlTable)!;
-            Logger.Debug($"[Settings] Parsed TOML table: {path}");
+            Logger.Info($"[TomlSettingsFile] Parsed TOML table: {path}");
             return model;
         }
         catch (Exception ex)
         {
-            Logger.Error($"[Settings] Failed to parse settings file: {path}. Resetting to default.");
+            Logger.Error($"[TomlSettingsFile] Failed to parse settings file: {path}. Resetting to default.");
             Logger.Error(ex.Message);
 
             BackupCorrupted(path, "hard parse failure", ex);
@@ -50,7 +50,7 @@ internal static class TomlSettingsFile
     /// <summary>Writes via a temp file + move so a crash mid-write can't truncate the live file.</summary>
     public static void Save(string toml, string path)
     {
-        Logger.Info($"[Settings] Saving: {path}");
+        Logger.Info($"[TomlSettingsFile] Saving: {path}");
 
         var dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(dir))
@@ -64,11 +64,11 @@ internal static class TomlSettingsFile
             File.WriteAllText(tmpPath, normalized, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             File.Move(tmpPath, path, overwrite: true);
 
-            Logger.Debug($"[Settings] Saved OK: {path}");
+            Logger.Info($"[TomlSettingsFile] Saved OK: {path}");
         }
         catch (Exception ex)
         {
-            Logger.Error($"[Settings] Save FAILED: {path}");
+            Logger.Error($"[TomlSettingsFile] Save FAILED: {path}");
             Logger.Error(ex.Message);
 
             try
@@ -96,14 +96,14 @@ internal static class TomlSettingsFile
 
             File.Move(path, backup, overwrite: true);
 
-            Logger.Warning($"[Settings] Backed up corrupted settings file: {path} -> {backup}. Reason: {reason}");
+            Logger.Warning($"[TomlSettingsFile] Backed up corrupted settings file: {path} -> {backup}. Reason: {reason}");
 
             if (ex != null)
                 Logger.Warning(ex.Message);
         }
         catch (Exception backupEx)
         {
-            Logger.Error($"[Settings] Failed to back up corrupted file: {path}");
+            Logger.Error($"[TomlSettingsFile] Failed to back up corrupted file: {path}");
             Logger.Error(backupEx.Message);
         }
     }
@@ -116,7 +116,7 @@ internal static class TomlSettingsFile
         if (v is string s)
             return s;
 
-        Logger.Warning($"[Settings] Key '{key}' expected string but was '{v.GetType().Name}'. Using fallback.");
+        Logger.Warning($"[TomlSettingsFile] Key '{key}' expected string but was '{v.GetType().Name}'. Using fallback.");
         return fallback;
     }
 
@@ -128,7 +128,7 @@ internal static class TomlSettingsFile
         if (v is bool b)
             return b;
 
-        Logger.Warning($"[Settings] Key '{key}' expected bool but was '{v.GetType().Name}'. Using fallback.");
+        Logger.Warning($"[TomlSettingsFile] Key '{key}' expected bool but was '{v.GetType().Name}'. Using fallback.");
         return fallback;
     }
 
@@ -148,7 +148,7 @@ internal static class TomlSettingsFile
         }
         catch (Exception)
         {
-            Logger.Warning($"[Settings] Key '{key}' integer out of range. Using fallback.");
+            Logger.Warning($"[TomlSettingsFile] Key '{key}' integer out of range. Using fallback.");
             return fallback;
         }
     }

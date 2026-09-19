@@ -573,6 +573,7 @@ public partial class SdlCore : IDisposable
     {
         Logger.Info("[Core] Exiting application...");
         _running = false;
+        _renderer.MarkClosing();
         _duplicateScanService.Shutdown();
         _renderer.SetComposite(null);
     }

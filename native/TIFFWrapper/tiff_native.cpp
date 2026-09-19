@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
 #include <mutex>
 #include <vector>
 #include <algorithm>
@@ -15,6 +16,14 @@
 #define THREAD_LOCAL __thread
 #else
 #define THREAD_LOCAL thread_local
+#endif
+
+#ifdef _WIN32
+#define lyra_fseek _fseeki64
+#define lyra_ftell _ftelli64
+#else
+#define lyra_fseek fseeko
+#define lyra_ftell ftello
 #endif
 
 static THREAD_LOCAL char last_tiff_error[1024] = "";
@@ -55,6 +64,8 @@ static void install_handlers() {
         TIFFSetWarningHandler(tiff_warning_handler);
     });
 }
+
+static void begin_call();
 
 namespace {
 
@@ -116,7 +127,99 @@ namespace {
 
     void mem_unmap(thandle_t, void *, toff_t) {}
 
+    struct file_tiff {
+        std::FILE *fp;
+        uint64_t size;
+    };
+
+    THREAD_LOCAL uint64_t io_microseconds = 0;
+    THREAD_LOCAL uint64_t io_bytes = 0;
+
+    inline uint64_t now_microseconds() {
+        using namespace std::chrono;
+        return static_cast<uint64_t>(
+            duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count());
+    }
+
+    tmsize_t file_read(thandle_t handle, void *buffer, tmsize_t count) {
+        auto *f = static_cast<file_tiff *>(handle);
+        if (count <= 0)
+            return 0;
+
+        const uint64_t started = now_microseconds();
+        const size_t got = std::fread(buffer, 1, static_cast<size_t>(count), f->fp);
+        io_microseconds += now_microseconds() - started;
+        io_bytes += got;
+
+        return static_cast<tmsize_t>(got);
+    }
+
+    tmsize_t file_write(thandle_t, void *, tmsize_t) { return 0; }
+
+    toff_t file_seek(thandle_t handle, toff_t offset, int whence) {
+        auto *f = static_cast<file_tiff *>(handle);
+        const uint64_t started = now_microseconds();
+        const int failed = lyra_fseek(f->fp, static_cast<int64_t>(offset), whence);
+        const int64_t at = failed ? -1 : lyra_ftell(f->fp);
+        io_microseconds += now_microseconds() - started;
+
+        return at < 0 ? static_cast<toff_t>(-1) : static_cast<toff_t>(at);
+    }
+
+    int file_close(thandle_t handle) {
+        auto *f = static_cast<file_tiff *>(handle);
+        const int result = f->fp ? std::fclose(f->fp) : 0;
+        delete f;
+        return result;
+    }
+
+    toff_t file_size(thandle_t handle) { return static_cast<file_tiff *>(handle)->size; }
+    
+    int file_map(thandle_t, void **, toff_t *) { return 0; }
+
+    void file_unmap(thandle_t, void *, toff_t) {}
+
 } // namespace
+
+static void begin_call() {
+    install_handlers();
+    clear_error();
+
+    io_microseconds = 0;
+    io_bytes = 0;
+}
+
+static TIFF *open_tiff_measured(const char *path) {
+    std::FILE *fp = std::fopen(path, "rb");
+    if (!fp) {
+        set_error("Could not open %s", path);
+        return nullptr;
+    }
+
+    if (lyra_fseek(fp, 0, SEEK_END) != 0) {
+        std::fclose(fp);
+        set_error("Could not measure %s", path);
+        return nullptr;
+    }
+
+    const int64_t size = lyra_ftell(fp);
+    if (size < 0 || lyra_fseek(fp, 0, SEEK_SET) != 0) {
+        std::fclose(fp);
+        set_error("Could not rewind %s", path);
+        return nullptr;
+    }
+
+    auto *handle = new file_tiff{fp, static_cast<uint64_t>(size)};
+
+    TIFF *tif = TIFFClientOpen(path, "r", static_cast<thandle_t>(handle),
+                               file_read, file_write, file_seek, file_close,
+                               file_size, file_map, file_unmap);
+    
+    if (!tif)
+        file_close(static_cast<thandle_t>(handle));
+
+    return tif;
+}
 
 namespace {
 
@@ -408,13 +511,16 @@ static void begin_tiff_load(uint8_t **out_pixels, int *width, int *height, uint8
     if (out_icc_size)
         *out_icc_size = 0;
 
-    clear_error();
-    install_handlers();
+    begin_call();
 }
 
 extern "C" {
 
 TIFF_API const char *get_last_tiff_error(void) { return last_tiff_error; }
+
+TIFF_API uint64_t get_last_tiff_io_microseconds(void) { return io_microseconds; }
+
+TIFF_API uint64_t get_last_tiff_io_bytes(void) { return io_bytes; }
 
 TIFF_API bool load_tiff_rgba_at(const char *path, int directory, uint8_t **out_pixels, int *width, int *height, uint8_t **out_icc, int *out_icc_size) {
     begin_tiff_load(out_pixels, width, height, out_icc, out_icc_size);
@@ -424,7 +530,7 @@ TIFF_API bool load_tiff_rgba_at(const char *path, int directory, uint8_t **out_p
         return false;
     }
 
-    TIFF *tif = TIFFOpen(path, "r");
+    TIFF *tif = open_tiff_measured(path);
     if (!tif) {
         if (last_tiff_error[0] == '\0')
             set_error("Failed to open TIFF: %s", path);
@@ -539,8 +645,7 @@ static void begin_describe(TiffDirectoryInfo **out_dirs, int *out_count) {
     if (out_count)
         *out_count = 0;
 
-    clear_error();
-    install_handlers();
+    begin_call();
 }
 
 TIFF_API bool describe_tiff_directories(const char *path, TiffDirectoryInfo **out_dirs, int *out_count) {
@@ -551,7 +656,7 @@ TIFF_API bool describe_tiff_directories(const char *path, TiffDirectoryInfo **ou
         return false;
     }
 
-    TIFF *tif = TIFFOpen(path, "r");
+    TIFF *tif = open_tiff_measured(path);
     if (!tif) {
         if (last_tiff_error[0] == '\0')
             set_error("Failed to open TIFF: %s", path);
@@ -762,8 +867,7 @@ static bool read_region(TIFF *tif, uint32_t x, uint32_t y, uint32_t width, uint3
 // Zeroes the outputs and refuses an empty rectangle, before anything is opened. Zeroed first
 // because the header promises every out-parameter is zeroed on failure, whichever failure it is.
 static bool begin_region(uint8_t **out_pixels, uint32_t *out_stride, uint32_t width, uint32_t height) {
-    install_handlers();
-    clear_error();
+    begin_call();
 
     if (out_pixels)
         *out_pixels = nullptr;
@@ -790,7 +894,7 @@ static TIFF *open_for_region(const char *path, int directory, bool rgba) {
         return nullptr;
     }
 
-    TIFF *tif = TIFFOpen(path, "r");
+    TIFF *tif = open_tiff_measured(path);
     if (!tif) {
         if (last_tiff_error[0] == '\0')
             set_error("Failed to open TIFF: %s", path);
@@ -840,8 +944,7 @@ TIFF_API bool load_tiff_rgba_region(const char *path, int directory, uint32_t x,
 }
 
 TIFF_API bool load_tiff_native(const char *path, int directory, int output_kind, uint8_t **out_pixels, int *out_width, int *out_height, uint32_t *out_stride) {
-    install_handlers();
-    clear_error();
+    begin_call();
 
     if (!out_pixels || !out_width || !out_height || !out_stride) {
         set_error("No output given.");
@@ -863,7 +966,7 @@ TIFF_API bool load_tiff_native(const char *path, int directory, int output_kind,
         return false;
     }
 
-    TIFF *tif = TIFFOpen(path, "r");
+    TIFF *tif = open_tiff_measured(path);
     if (!tif) {
         if (last_tiff_error[0] == '\0')
             set_error("Failed to open TIFF: %s", path);

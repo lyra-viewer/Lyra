@@ -52,7 +52,7 @@ public sealed class DebugSection : IUISection
     private readonly HStack _decoderRow;
     private readonly Label _decoderValue;
 
-    private readonly HStack _timeEstRow;
+    private readonly HStack _decodeEstRow;
     private readonly Label _timeEstValue;
 
     private readonly HStack _timeCompleteRow;
@@ -119,12 +119,12 @@ public sealed class DebugSection : IUISection
         // Composite state rows
         _stateRow = BuildRow(keyLabels, "State", "", out _stateValue);
         _decoderRow = BuildRow(keyLabels, "Decoder", "", out _decoderValue);
-        _timeEstRow = BuildRow(keyLabels, "Decode Est (ms)", "", out _timeEstValue);
+        _decodeEstRow = BuildRow(keyLabels, "Decode Est (ms)", "", out _timeEstValue);
         _timeDecodeRow = BuildRow(keyLabels, "Time Decode (ms)", "", out _timeDecodeValue);
+        _transferEstRow = BuildRow(keyLabels, "Transfer Est (ms)", "", out _transferEstValue);
         _timeTransferRow = BuildRow(keyLabels, "Time Transfer (ms)", "", out _timeTransferValue);
         _timeCompleteRow = BuildRow(keyLabels, "Time Complete (ms)", "", out _timeCompleteValue);
         _sourceRow = BuildRow(keyLabels, "Source", "", out _sourceValue);
-        _transferEstRow = BuildRow(keyLabels, "Transfer Est (ms)", "", out _transferEstValue);
         
         var displayRow = BuildRow(keyLabels, "Display", "-", out _displayValue);
         var edrRow = BuildRow(keyLabels, "EDR", "-", out _edrValue);
@@ -171,12 +171,12 @@ public sealed class DebugSection : IUISection
                 Spacer(),
                 _stateRow,
                 _decoderRow,
-                _timeEstRow,
+                _decodeEstRow,
                 _timeDecodeRow,
+                _transferEstRow,
                 _timeTransferRow,
                 _timeCompleteRow,
                 _sourceRow,
-                _transferEstRow,
                 Spacer(),
                 displayRow,
                 edrRow,
@@ -211,7 +211,7 @@ public sealed class DebugSection : IUISection
         {
             _stateRow.Present = false;
             _decoderRow.Present = false;
-            _timeEstRow.Present = false;
+            _decodeEstRow.Present = false;
             _timeCompleteRow.Present = false;
             _timeTransferRow.Present = false;
             _timeDecodeRow.Present = false;
@@ -224,7 +224,7 @@ public sealed class DebugSection : IUISection
         {
             _stateRow.Present = true;
             _decoderRow.Present = true;
-            _timeEstRow.Present = true;
+            _decodeEstRow.Present = true;
             _timeCompleteRow.Present = true;
 
             var composite = state.Composite;
