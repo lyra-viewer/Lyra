@@ -1,12 +1,13 @@
 ﻿using System.Runtime.InteropServices;
 using Lyra.Common;
 using Lyra.Common.Settings;
+using Lyra.SystemUtils;
 
 namespace Lyra;
 
 static class Program
 {
-    private static void Main(string[] args)
+    private static int Main(string[] args)
     {
         LogSetup();
         Logger.Info($"[Application] Application started on {RuntimeInformation.RuntimeIdentifier}");
@@ -17,15 +18,36 @@ static class Program
         // NOTE: Some earlier Debug logs might escape capture in Release builds due to execution order.
         if (SettingsManager.AppSettings.Debug)
             Logger.SetLogDebugMode(true);
+        
+        SdlCore.SdlCore? lyraCore = null;
 
         try
         {
-            using var viewer = new SdlCore.SdlCore(args);
-            viewer.Run();
+            lyraCore = new SdlCore.SdlCore(args);
+            lyraCore.Run();
+
+            return 0;
         }
         catch (Exception ex)
         {
-            Logger.Error($"[Unhandled Exception]: {ex}");
+            FatalError.Report(lyraCore is null ? "Lyra Viewer could not start." : "Lyra Viewer has stopped.", ex);
+            return 1;
+        }
+        finally
+        {
+            Shutdown(lyraCore);
+        }
+    }
+
+    private static void Shutdown(IDisposable? viewer)
+    {
+        try
+        {
+            viewer?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[Application] Shutting down failed: {ex}");
         }
     }
 
@@ -37,6 +59,6 @@ static class Program
 #else
         Logger.SetLogStrategy(Logger.LogStrategy.File);
 #endif
-        Logger.ClearLog();
+        Logger.StartNewLog();
     }
 }

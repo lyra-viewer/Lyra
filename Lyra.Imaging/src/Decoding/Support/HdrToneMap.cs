@@ -6,8 +6,7 @@ namespace Lyra.Imaging.Decoding.Support;
 /// <summary>
 /// Maps linear, scene-referred RGBA float pixels into an 8-bit RGBA <see cref="SKBitmap"/>.
 /// Shared by every HDR-ish decode path (EXR, Radiance HDR, JXL, BC6H) so they all agree.
-///
-/// Which curve is used comes from <see cref="ToneMapMode"/>:
+/// Which curve is used comes from <see cref="ToneMapMode"/>.
 ///
 /// The per-pixel work is the hotspot, so it is fanned out across rows; the gamma encode is a
 /// 64 KB LUT instead of a per-channel MathF.Pow (at most 1 byte-level error, even in shadows).

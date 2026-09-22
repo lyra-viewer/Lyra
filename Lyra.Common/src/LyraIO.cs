@@ -6,7 +6,10 @@ public static class LyraIO
 
     private const string UiSettingsFileName = "ui-settings.toml";
     private const string AppSettingsFileName = "app-settings.toml";
+    
     private const string LogFileName = "log.txt";
+    private const string PreviousLogFileName = "log.previous.txt";
+    
     private const string LoadTimeDataFileName = "load-time-data.toml";
 
     private const string ThemesDirName = "themes";
@@ -15,6 +18,7 @@ public static class LyraIO
     private static readonly Lazy<string> DataDir = new(GetDataDirectory);
     private static readonly Lazy<string> ConfigDir = new(GetConfigDirectory);
     private static readonly Lazy<string> ThemesDir = new(GetThemesDirectory);
+    private static readonly Lazy<string> CacheDir = new(GetCacheDirectory);
     private static readonly Lazy<string> ScratchDir = new(GetScratchDirectory);
 
     public static string GetUiSettingsFile() => Path.Combine(ConfigDir.Value, UiSettingsFileName);
@@ -27,13 +31,25 @@ public static class LyraIO
 
     public static string GetLogFile() => Path.Combine(DataDir.Value, LogFileName);
 
+    public static string GetPreviousLogFile() => Path.Combine(DataDir.Value, PreviousLogFileName);
+
     public static string GetLoadTimeFile() => Path.Combine(DataDir.Value, LoadTimeDataFileName);
     
     public static string GetScratchDir() => ScratchDir.Value;
-
+    
     private static string GetScratchDirectory()
     {
-        var path = Path.Combine(Path.GetTempPath(), BaseDir, "scratch");
+        var path = Path.Combine(CacheDir.Value, "scratch");
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private static string GetCacheDirectory()
+    {
+        var path = OperatingSystem.IsWindows()
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), BaseDir, "cache")
+            : Path.Combine(GetXdgOrHomeFallback("XDG_CACHE_HOME", ".cache"), BaseDir);
+
         Directory.CreateDirectory(path);
         return path;
     }

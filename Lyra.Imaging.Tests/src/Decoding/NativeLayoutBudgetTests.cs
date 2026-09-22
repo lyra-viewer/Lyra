@@ -59,7 +59,7 @@ public class NativeLayoutBudgetTests
 
         Assert.True(TiffDecoder.NativeLayoutPeakBytes(info, isFloat: false) > TiffDecoder.NativeLayoutBudgetBytes);
 
-        var ex = Assert.Throws<InvalidOperationException>(() => TiffDecoder.RequireNativeLayoutFits("sheet.tif", info, isFloat: false));
+        var ex = Assert.Throws<InvalidOperationException>(() => TiffDecoder.RequireNativeLayoutWithinBudget("sheet.tif", info, isFloat: false));
 
         Assert.Contains("at peak", ex.Message);
     }
@@ -71,14 +71,14 @@ public class NativeLayoutBudgetTests
 
         Assert.True(TiffDecoder.NativeLayoutPeakBytes(info, isFloat: false) <= TiffDecoder.NativeLayoutBudgetBytes);
 
-        TiffDecoder.RequireNativeLayoutFits("scan.tif", info, isFloat: false);
+        TiffDecoder.RequireNativeLayoutWithinBudget("scan.tif", info, isFloat: false);
     }
     
     [Fact]
     public void ADegenerateDirectoryIsRefused()
     {
-        Assert.Throws<InvalidOperationException>(() => TiffDecoder.RequireNativeLayoutFits("empty.tif", Odd(0, 4096, 12, 3), isFloat: false));
-        Assert.Throws<InvalidOperationException>(() => TiffDecoder.RequireNativeLayoutFits("empty.tif", Odd(4096, 0, 12, 3), isFloat: false));
-        Assert.Throws<InvalidOperationException>(() => TiffDecoder.RequireNativeLayoutFits("huge.tif", Odd(uint.MaxValue, 4096, 12, 3), isFloat: false));
+        Assert.Throws<InvalidOperationException>(() => TiffDecoder.RequireNativeLayoutWithinBudget("empty.tif", Odd(0, 4096, 12, 3), isFloat: false));
+        Assert.Throws<InvalidOperationException>(() => TiffDecoder.RequireNativeLayoutWithinBudget("empty.tif", Odd(4096, 0, 12, 3), isFloat: false));
+        Assert.Throws<InvalidOperationException>(() => TiffDecoder.RequireNativeLayoutWithinBudget("huge.tif", Odd(uint.MaxValue, 4096, 12, 3), isFloat: false));
     }
 }

@@ -1,6 +1,6 @@
-using System.Runtime.InteropServices;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders;
+using Lyra.Imaging.Tests.Support;
 using SkiaSharp;
 using Xunit;
 
@@ -67,7 +67,7 @@ public class ExrGrayscaleTests
         });
     }
 
-    private static readonly Lazy<bool> NativeExrReady = new(TryPrepareNativeExr);
+    private static readonly Lazy<bool> NativeExrReady = new(() => NativeWrapper.TryLoad("libexr_native", typeof(ExrDecoder).Assembly));
 
     [Fact]
     public void DecodesSingleChannelExr_AsGrayscale_NotRedOnly()
@@ -150,57 +150,5 @@ public class ExrGrayscaleTests
                 /* best effort cleanup */
             }
         }
-    }
-
-    private static bool TryPrepareNativeExr()
-    {
-        var libPath = LocateExrNative();
-        if (libPath is null)
-            return false;
-
-        try
-        {
-            var handle = NativeLibrary.Load(libPath);
-            try
-            {
-                NativeLibrary.SetDllImportResolver(typeof(ExrDecoder).Assembly, (name, _, _) =>
-                    name is "libexr_native" or "libexr_native.dll" or "libexr_native.so"
-                        or "libexr_native.dylib" or "libexr"
-                        ? handle
-                        : IntPtr.Zero);
-            }
-            catch (InvalidOperationException)
-            {
-                // A resolver was already set for this assembly; the eager Load above still
-                // brought the module into the process, so decoding can proceed.
-            }
-
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-    
-    private static string? LocateExrNative()
-    {
-        var (leaf, distDir) =
-            RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-                ? ("libexr_native.dll", "dist-windows")
-                : RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-                    ? ("libexr_native.so", "dist-linux")
-                    : ("libexr_native.dylib", "dist-macos");
-
-        var relDir = Path.Combine("release", "native", distDir);
-
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            var candidate = Path.Combine(dir.FullName, relDir, leaf);
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        return null;
     }
 }

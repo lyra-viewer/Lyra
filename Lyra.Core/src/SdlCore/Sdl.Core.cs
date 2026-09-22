@@ -93,10 +93,7 @@ public partial class SdlCore : IDisposable
         SetAppMetadata("Lyra Viewer", appVersion, AppId);
 
         if (!Init(InitFlags.Video))
-        {
-            LogError(LogCategory.System, $"SDL could not initialize: {GetError()}");
-            return;
-        }
+            throw new InvalidOperationException($"SDL could not initialize: {GetError()}");
 
         ColdStartReset();
 
@@ -150,8 +147,9 @@ public partial class SdlCore : IDisposable
             Logger.Warning($"[Core] {reason}{fallback}");
         }
 
-        if (!candidates.Any(candidate => TryInitializeRenderer(candidate, w, h, flags)))
-            throw new InvalidOperationException($"No renderer backend could be initialized (tried: {string.Join(", ", candidates)}).");
+        var refusals = new List<string>();
+        if (!candidates.Any(candidate => TryInitializeRenderer(candidate, w, h, flags, refusals)))
+            throw new InvalidOperationException(DescribeRendererFailure(refusals));
 
         AttachDisplayCapabilities();
         ApplyWindowIcon();
@@ -187,7 +185,19 @@ public partial class SdlCore : IDisposable
 
     private bool _headroomReported;
 
-    private bool TryInitializeRenderer(Backend backend, int w, int h, WindowFlags flags)
+    internal static string DescribeRendererFailure(IReadOnlyList<string> refusals)
+    {
+        var reasons = refusals.Count > 0
+            ? string.Join("\n", refusals)
+            : "No backend was available to try on this platform.";
+
+        return "Lyra could not set up a renderer, so there is nothing to draw into.\n\n" +
+               $"{reasons}\n\n" +
+               "Lyra draws through OpenGL 3.2. A remote desktop session, or a virtual machine " +
+               "without graphics drivers, often has no driver that provides it.";
+    }
+
+    private bool TryInitializeRenderer(Backend backend, int w, int h, WindowFlags flags, List<string> refusals)
     {
         try
         {
@@ -212,6 +222,8 @@ public partial class SdlCore : IDisposable
         catch (Exception ex)
         {
             Logger.Warning($"[Core] {backend} initialization failed ({ex.Message}).");
+            refusals.Add($"{backend}: {ex.Message}");
+
             DiscardFailedRenderer();
             return false;
         }
@@ -414,6 +426,8 @@ public partial class SdlCore : IDisposable
         if (_composite is not null)
             _composite.ProgressChanged -= OnCompositeProgress;
 
+        _refitForVariant = -1;
+
         var currentPath = DirectoryNavigator.GetCurrent();
         if (currentPath == null)
         {
@@ -516,8 +530,23 @@ public partial class SdlCore : IDisposable
 
     private void OnCompositeProgress(Composite c)
     {
-        DispatchToMain(() => _renderer.UIManager.RefreshCurrent());
+        DispatchToMain(() =>
+        {
+            if (_refitForVariant >= 0 && ReferenceEquals(c, _composite) && c.Content is VariantRasterContent { IsWaiting: false } variants)
+            {
+                var arrived = variants.ShownIndex == _refitForVariant;
+                _refitForVariant = -1;
+
+                if (arrived)
+                    FitToShownVariant();
+            }
+
+            _renderer.UIManager.RefreshCurrent();
+        });
     }
+
+    /// <summary>The page still decoding after it was selected, so its arrival refits the view; -1 when none.</summary>
+    private int _refitForVariant = -1;
 
     private void OnToneMapModeChanged(ToneMapMode mode)
     {
@@ -534,6 +563,15 @@ public partial class SdlCore : IDisposable
     private void OnVariantSelected(int index)
     {
         if (_composite?.Content is not VariantRasterContent variants || !variants.Select(index))
+            return;
+
+        _refitForVariant = variants.IsWaiting ? index : -1;
+        FitToShownVariant();
+    }
+
+    private void FitToShownVariant()
+    {
+        if (_composite is null)
             return;
 
         _displayMode = DimensionHelper.GetDisplayMode(_window, _composite, _viewState.InitDisplayMode, out _zoomPercentage);

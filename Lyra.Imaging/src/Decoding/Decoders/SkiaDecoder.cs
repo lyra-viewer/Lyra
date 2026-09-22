@@ -31,44 +31,55 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
 
         composite.ReportPixelCount(codec.Info.Width, codec.Info.Height);
 
+        DecoderValidation.RequireSaneDimensions(Name, codec.Info.Width, codec.Info.Height);
+        DecoderValidation.RequireAvailableMemory(Name, codec.Info.Width, codec.Info.Height);
+
         var srcColorSpace = codec.Info.ColorSpace ?? SKColorSpace.CreateSrgb();
         var info = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Rgba8888, SKAlphaType.Premul, srcColorSpace);
         var bitmap = new SKBitmap(info);
 
-        // Ensure deterministic output if the image is truncated (IncompleteInput).
-        bitmap.Erase(SKColors.Transparent);
-
-        var result = codec.GetPixels(bitmap.Info, bitmap.GetPixels());
-
-        // Tries to repair if the image is truncated JPEG
-        if (result == SKCodecResult.InvalidInput)
+        try
         {
-            var repaired = TryDecodeJpegWithEoiRepair(composite, bitmap, ct);
-            if (repaired.HasValue)
+            // Ensure deterministic output if the image is truncated (IncompleteInput).
+            bitmap.Erase(SKColors.Transparent);
+
+            var result = codec.GetPixels(bitmap.Info, bitmap.GetPixels());
+
+            // Tries to repair if the image is truncated JPEG
+            if (result == SKCodecResult.InvalidInput)
             {
-                result = repaired.Value;
-                Logger.Warning($"[SkiaDecoder] Recovered truncated JPEG via EOI repair: {path}");
+                var repaired = TryDecodeJpegWithEoiRepair(composite, bitmap, ct);
+                if (repaired.HasValue)
+                {
+                    result = repaired.Value;
+                    Logger.Warning($"[SkiaDecoder] Recovered truncated JPEG via EOI repair: {path}");
+                }
             }
+
+            if (result == SKCodecResult.IncompleteInput)
+                Logger.Warning($"[SkiaDecoder] Incomplete input (truncated image): {path}");
+
+            if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput)
+            {
+                bitmap.Dispose();
+                Logger.Warning($"[SkiaDecoder] Decode failed with status: {result}");
+                return;
+            }
+
+            ct.ThrowIfCancellationRequested();
+
+            var upright = OrientationTransform.Apply(bitmap, codec.EncodedOrigin);
+
+            if (!ReferenceEquals(upright, bitmap))
+                composite.AppliedOrientation = (ExifOrientation)codec.EncodedOrigin;
+
+            bitmap = upright;
         }
-
-        if (result == SKCodecResult.IncompleteInput)
-            Logger.Warning($"[SkiaDecoder] Incomplete input (truncated image): {path}");
-
-        if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput)
+        catch
         {
             bitmap.Dispose();
-            Logger.Warning($"[SkiaDecoder] Decode failed with status: {result}");
-            return;
+            throw;
         }
-
-        ct.ThrowIfCancellationRequested();
-
-        var upright = OrientationTransform.Apply(bitmap, codec.EncodedOrigin);
-
-        if (!ReferenceEquals(upright, bitmap))
-            composite.AppliedOrientation = (ExifOrientation)codec.EncodedOrigin;
-
-        bitmap = upright;
 
         // The builder takes ownership of the bitmap and keeps it alive for the image it makes.
         composite.Content = RasterContentBuilder.Build(bitmap, composite);
@@ -119,6 +130,8 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
         // the full size, and the final downscale to the hash grid happens in the caller.
         var desiredScale = Math.Min(1f, (float)maxDimension / Math.Max(fullWidth, fullHeight));
         var scaled = codec.GetScaledDimensions(desiredScale);
+
+        DecoderValidation.RequireAvailableMemory(nameof(SkiaDecoder), scaled.Width, scaled.Height);
 
         var info = new SKImageInfo(scaled.Width, scaled.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
         var bitmap = new SKBitmap(info);

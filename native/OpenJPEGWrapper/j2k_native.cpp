@@ -201,12 +201,12 @@ static inline ScaleParams make_scale_params(const opj_image_comp_t &comp) {
 }
 
 static inline uint8_t scale_to_u8(int sample, const ScaleParams &p) {
-    int v = sample;
+    int64_t v = sample;
     if (p.sgnd) {
-        v = v + (1 << (p.prec - 1));
+        v = v + ((int64_t) 1 << (p.prec - 1));
     }
 
-    int out = (v * 255 + p.maxv / 2) / p.maxv;
+    int64_t out = (v * 255 + p.maxv / 2) / p.maxv;
     if (out < 0)
         out = 0;
 

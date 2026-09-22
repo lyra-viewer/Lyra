@@ -3,6 +3,8 @@ namespace Lyra.Common;
 public static class Logger
 {
     private static readonly string LogFilePath = LyraIO.GetLogFile();
+    private static readonly string PreviousLogFilePath = LyraIO.GetPreviousLogFile();
+
     private const long MaxLogFileSize = 5 * 1024 * 1024; // 5 MB max log size
 
     private static readonly Lock Lock = new();
@@ -55,10 +57,9 @@ public static class Logger
             {
                 try
                 {
+                    // Rotated rather than truncated.
                     if (File.Exists(LogFilePath) && new FileInfo(LogFilePath).Length > MaxLogFileSize)
-                    {
-                        File.WriteAllText(LogFilePath, string.Empty); // Truncate if too large
-                    }
+                        RotateWhileLocked();
 
                     File.AppendAllText(LogFilePath, logEntry + Environment.NewLine);
                 }
@@ -72,19 +73,47 @@ public static class Logger
         }
     }
 
-    public static void ClearLog()
+    /// <summary>
+    /// Begins a fresh log for this run, keeping the last one as
+    /// <see cref="LyraIO.GetPreviousLogFile"/>.
+    /// </summary>
+    public static void StartNewLog()
     {
         lock (Lock)
+            RotateWhileLocked();
+    }
+    
+    private static void RotateWhileLocked()
+    {
+        if (TryKeepAsPrevious(LogFilePath, PreviousLogFilePath))
+            return;
+
+        try
         {
-            try
-            {
-                File.WriteAllText(LogFilePath, string.Empty);
-                Console.WriteLine("[Logger] Log file cleared.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Logger] Failed to clear log: {ex.Message}");
-            }
+            File.WriteAllText(LogFilePath, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Logger] Failed to clear log: {ex.Message}");
+        }
+    }
+    
+    internal static bool TryKeepAsPrevious(string current, string previous)
+    {
+        try
+        {
+            if (!File.Exists(current))
+                return true;
+
+            File.Move(current, previous, overwrite: true);
+            Console.WriteLine($"[Logger] Previous log kept as {previous}");
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Logger] Could not keep the previous log: {ex.Message}");
+            return false;
         }
     }
 

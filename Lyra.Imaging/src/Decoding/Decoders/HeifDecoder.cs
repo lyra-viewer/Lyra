@@ -31,8 +31,6 @@ internal class HeifDecoder : DecoderBase, IThumbnailDecoder
 
             var bitmap = DecodedImageToBitmap(decodedImage, ct, ResolveColorSpace(imageHandle));
 
-            ct.ThrowIfCancellationRequested();
-
             composite.Content = RasterContentBuilder.Build(bitmap, composite);
         }
         catch (HeifException e)
@@ -121,31 +119,39 @@ internal class HeifDecoder : DecoderBase, IThumbnailDecoder
         var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul, colorSpace);
         var bitmap = new SKBitmap(info);
 
-        unsafe
+        try
         {
-            var dstSpan = bitmap.GetPixelSpan();
-            fixed (void* dstBase = &dstSpan.GetPinnableReference())
+            unsafe
             {
-                byte* srcBase = (byte*)src;
-                byte* dst = (byte*)dstBase;
-
-                const int bytesPerPixel = 4;
-                var rowBytes = width * bytesPerPixel;
-
-                var dstStride = bitmap.RowBytes;
-
-                var copyBytes = Math.Min(rowBytes, Math.Min(srcStride, dstStride));
-
-                for (var y = 0; y < height; y++)
+                var dstSpan = bitmap.GetPixelSpan();
+                fixed (void* dstBase = &dstSpan.GetPinnableReference())
                 {
-                    ct.ThrowIfCancellationRequested();
+                    byte* srcBase = (byte*)src;
+                    byte* dst = (byte*)dstBase;
 
-                    var srcRow = srcBase + (nint)y * (nint)srcStride;
-                    var dstRow = dst + (nint)y * (nint)dstStride;
+                    const int bytesPerPixel = 4;
+                    var rowBytes = width * bytesPerPixel;
 
-                    Buffer.MemoryCopy(srcRow, dstRow, dstStride, copyBytes);
+                    var dstStride = bitmap.RowBytes;
+
+                    var copyBytes = Math.Min(rowBytes, Math.Min(srcStride, dstStride));
+
+                    for (var y = 0; y < height; y++)
+                    {
+                        ct.ThrowIfCancellationRequested();
+
+                        var srcRow = srcBase + (nint)y * (nint)srcStride;
+                        var dstRow = dst + (nint)y * (nint)dstStride;
+
+                        Buffer.MemoryCopy(srcRow, dstRow, dstStride, copyBytes);
+                    }
                 }
             }
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
         }
 
         return bitmap;

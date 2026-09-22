@@ -1,6 +1,6 @@
-using System.Runtime.InteropServices;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders;
+using Lyra.Imaging.Tests.Support;
 using SkiaSharp;
 using Xunit;
 
@@ -32,7 +32,7 @@ public class J2KColorSpaceTests
         "/5AACgAAAAAAJgAB/5PfgDAI8SbXRz/fgBAIkN+AEAiQ34AQCJD/2Q==";
 
     // Load + wire the native wrapper once; false when it (or its deps) can't be found/loaded.
-    private static readonly Lazy<bool> NativeJ2KReady = new(TryPrepareNativeJ2K);
+    private static readonly Lazy<bool> NativeJ2KReady = new(() => NativeWrapper.TryLoad("libj2k_native", typeof(J2KDecoder).Assembly));
 
     [Fact]
     public void DecodesSyccJp2_ConvertsLumaChromaToRgb()
@@ -130,53 +130,5 @@ public class J2KColorSpaceTests
                 /* best effort cleanup */
             }
         }
-    }
-
-    private static bool TryPrepareNativeJ2K()
-    {
-        var dylibPath = LocateJ2KNative();
-        if (dylibPath is null)
-            return false;
-
-        try
-        {
-            var handle = NativeLibrary.Load(dylibPath);
-            try
-            {
-                NativeLibrary.SetDllImportResolver(typeof(J2KDecoder).Assembly, (name, _, _) =>
-                    name is "libj2k_native" or "libj2k_native.dll" or "libj2k_native.so" or "libj2k_native.dylib" ? handle : IntPtr.Zero);
-            }
-            catch (InvalidOperationException)
-            {
-                // A resolver was already set for this assembly; the eager Load above still
-                // brought the module into the process, so decoding can proceed.
-            }
-
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static string? LocateJ2KNative()
-    {
-        var (leaf, distDir) = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? ("libj2k_native.dll", "dist-windows")
-            : RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-                ? ("libj2k_native.so", "dist-linux")
-                : ("libj2k_native.dylib", "dist-macos");
-
-        var relDir = Path.Combine("release", "native", distDir);
-
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            var candidate = Path.Combine(dir.FullName, relDir, leaf);
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        return null;
     }
 }

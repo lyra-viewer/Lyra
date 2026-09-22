@@ -72,11 +72,11 @@ public sealed class Composite : IDisposable
 
     public bool IsHdrImage => IsHdrDecoded || HdrBakedReason is not null;
 
-    /// <summary>
-    /// Whether the pixels are still scene-referred, and so whether exposure and curve apply at
-    /// draw time.
-    /// </summary>
-    public bool IsHdrDecoded => Content is HdrRasterContent or RasterLargeContent { HasScenePreview: true };
+    /// <summary>Whether the pixels are still scene-referred, and so whether exposure and curve apply at draw time.</summary>
+    public bool IsHdrDecoded => Displayed is HdrRasterContent or RasterLargeContent { HasScenePreview: true };
+
+    /// <summary>What is on screen: the content itself, or the rendition a page set is showing.</summary>
+    private ICompositeContent? Displayed => Content is VariantRasterContent variants ? variants.Active : Content;
 
     public float LogicalWidth => Content is VariantRasterContent pages
         ? pages.DecodedWidth ?? 0f

@@ -221,10 +221,7 @@ internal static class NativeLibraryLoader
             // back to the highest-versioned match.
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && libraryName.EndsWith(".so"))
             {
-                var versioned = Directory
-                    .EnumerateFiles(dir, libraryName + ".*")
-                    .OrderByDescending(p => p, StringComparer.OrdinalIgnoreCase)
-                    .FirstOrDefault();
+                var versioned = SonameVersion.SelectHighest(Directory.EnumerateFiles(dir, libraryName + ".*"), libraryName);
                 if (versioned is not null)
                 {
                     PathDictionary[identifier] = versioned;

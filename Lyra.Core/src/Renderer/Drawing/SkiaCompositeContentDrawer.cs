@@ -13,11 +13,12 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
         var content = composite.Content;
         if (content is null)
             return;
-
-        // Unwrap first: a variant set draws whatever rendition is selected, which can be any
-        // content type - so this defers to the same switch rather than assuming raster.
+        
         while (content is VariantRasterContent variants)
+        {
+            variants.ReleaseRetired();
             content = variants.Active;
+        }
 
         switch (content)
         {

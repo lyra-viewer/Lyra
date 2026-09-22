@@ -13,10 +13,10 @@ internal static class ExrNative
         public int IsGray;
         public int CustomPrimaries;
     }
-
+    
     [DllImport("libexr_native", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)] // native returns a 1-byte C++ bool
-    public static extern bool load_exr_rgba(string path, out IntPtr pixels, out int width, out int height, out ExrInfo info);
+    public static extern bool load_exr_rgba([MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr pixels, out int width, out int height, out ExrInfo info);
 
     [DllImport("libexr_native", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]

@@ -23,12 +23,8 @@ internal abstract class FloatRgbaDecoderBase : DecoderBase
 
         composite.ReportPixelCount(width, height);
         
-        var content = HdrImageBuilder.Build(pixels.AsSpan(), width, height, composite, ct, out var isGrayscale);
+        composite.Content = HdrImageBuilder.Build(pixels.AsSpan(), width, height, composite, ct, out var isGrayscale);
 
         composite.AddFormatSpecific("GrayScale", isGrayscale.ToString());
-
-        ct.ThrowIfCancellationRequested();
-
-        composite.Content = content;
     }
 }

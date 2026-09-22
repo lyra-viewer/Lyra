@@ -26,6 +26,13 @@
 #include <thread>
 #include <unordered_set>
 
+#ifdef _WIN32
+#include <OpenEXR/ImfStdIO.h>
+
+#include <filesystem>
+#include <fstream>
+#endif
+
 #ifdef __clang__
 #define THREAD_LOCAL __thread
 #else
@@ -233,7 +240,32 @@ private:
     uint64_t pos_;
 };
 
-static std::unique_ptr<Imf::RgbaInputFile> open_rgba(const char *path, MemIStream *stream) {
+#ifdef _WIN32
+// A file opened by its wide path, as an OpenEXR stream.
+class WidePathSource {
+public:
+    static std::unique_ptr<WidePathSource> Open(const char *path) {
+        auto source = std::unique_ptr<WidePathSource>(new WidePathSource());
+
+        source->file_.open(std::filesystem::u8path(path), std::ios_base::binary);
+        if (!source->file_.is_open())
+            return nullptr;
+
+        source->stream_ = std::make_unique<Imf::StdIFStream>(source->file_, path);
+        return source;
+    }
+
+    Imf::IStream &Stream() { return *stream_; }
+
+private:
+    WidePathSource() = default;
+
+    std::ifstream file_;
+    std::unique_ptr<Imf::StdIFStream> stream_; // references file_, so it is declared after it
+};
+#endif
+
+static std::unique_ptr<Imf::RgbaInputFile> open_rgba(const char *path, Imf::IStream *stream) {
     if (stream == nullptr)
         return std::make_unique<Imf::RgbaInputFile>(path);
 
@@ -241,7 +273,7 @@ static std::unique_ptr<Imf::RgbaInputFile> open_rgba(const char *path, MemIStrea
     return std::make_unique<Imf::RgbaInputFile>(*stream);
 }
 
-static std::unique_ptr<Imf::InputFile> open_input(const char *path, MemIStream *stream) {
+static std::unique_ptr<Imf::InputFile> open_input(const char *path, Imf::IStream *stream) {
     if (stream == nullptr)
         return std::make_unique<Imf::InputFile>(path);
 
@@ -289,7 +321,7 @@ static bool load_rgba_file(Imf::RgbaInputFile &file, float **out_pixels, int *wi
 // Reads a single-channel EXR, broadcasting that channel into R, G and B so it comes out
 // gray. Alpha comes from an "A" channel when the file has one, and is opaque otherwise -
 // matching what RgbaInputFile does for RGB files without alpha.
-static bool load_single_channel(const char *path, MemIStream *stream, const std::string &channel, float **out_pixels, int *width, int *height) {
+static bool load_single_channel(const char *path, Imf::IStream *stream, const std::string &channel, float **out_pixels, int *width, int *height) {
     auto opened = open_input(path, stream);
     Imf::InputFile &file = *opened;
     const Imath::Box2i dw = file.header().dataWindow();
@@ -362,7 +394,7 @@ static void reset_outputs(float **out_pixels, int *width, int *height, exr_info 
 }
 
 // Both entry points land here; exactly one of path / stream is used.
-static bool load_exr_core(const char *path, MemIStream *stream, float **out_pixels, int *width, int *height, exr_info *out_info) {
+static bool load_exr_core(const char *path, Imf::IStream *stream, float **out_pixels, int *width, int *height, exr_info *out_info) {
     ensure_threads();
     clear_error();
     reset_outputs(out_pixels, width, height, out_info);
@@ -402,7 +434,19 @@ EXR_API bool load_exr_rgba(const char *path, float **out_pixels, int *width, int
         return false;
     }
 
+#ifdef _WIN32
+    // Named by its wide path, then read exactly as the memory case is - see WidePathSource.
+    auto source = WidePathSource::Open(path);
+    if (!source) {
+        set_error("Could not open %s", path);
+        reset_outputs(out_pixels, width, height, out_info);
+        return false;
+    }
+
+    return load_exr_core(path, &source->Stream(), out_pixels, width, height, out_info);
+#else
     return load_exr_core(path, nullptr, out_pixels, width, height, out_info);
+#endif
 }
 
 EXR_API bool load_exr_rgba_mem(const void *data, uint64_t size, float **out_pixels, int *width, int *height, exr_info *out_info) {

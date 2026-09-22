@@ -31,13 +31,14 @@ internal static class TiffPageSet
         return marked.Count > 0 ? marked : unmarked;
     }
     
-    public static List<ImageVariant> Describe(IReadOnlyList<TiffNative.DirectoryInfo> directories, List<int> pages)
+    public static List<ImageVariant> Describe(IReadOnlyList<TiffNative.DirectoryInfo> directories, List<int> pages, long[]? encodedBytes)
     {
         var variants = new List<ImageVariant>(pages.Count);
 
         for (var position = 0; position < pages.Count; position++)
         {
-            var info = directories[pages[position]];
+            var directory = pages[position];
+            var info = directories[directory];
 
             // PAGENUMBER when the file carries it, otherwise the position in the chain. Files that
             // set it can disagree with file order, and the tag is what the document itself says.
@@ -52,7 +53,7 @@ internal static class TiffPageSet
                 Width: (int)info.Width,
                 Height: (int)info.Height,
                 Detail: detail,
-                ByteSize: (long)info.Width * info.Height * 4)
+                ByteSize: encodedBytes is { } sizes && directory < sizes.Length && sizes[directory] > 0 ? sizes[directory] : null)
             );
         }
 

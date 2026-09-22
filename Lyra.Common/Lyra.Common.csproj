@@ -11,4 +11,8 @@
       <PackageReference Include="Tomlyn" Version="2.4.0" />
     </ItemGroup>
 
+    <ItemGroup>
+      <InternalsVisibleTo Include="Lyra.Core.Tests" />
+    </ItemGroup>
+
 </Project>

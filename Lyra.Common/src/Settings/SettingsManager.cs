@@ -181,8 +181,10 @@ public static class SettingsManager
                 # Leave blank to use the built-in default palette.
                 theme = "{s.Theme}"
 
-                # Debug mode:
-                debug = {s.Debug.ToString().ToLowerInvariant()}
+                # Debug mode: extra logging, a diagnostics section in the sidebar, and
+                # per-frame measurements that can make Lyra noticeably slower.
+                # Keep it off for normal use.
+                debug ={s.Debug.ToString().ToLowerInvariant()}
 
                 """;
     }

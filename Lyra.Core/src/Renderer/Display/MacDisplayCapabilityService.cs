@@ -58,27 +58,36 @@ internal sealed class MacDisplayCapabilityService : IDisplayCapabilityService
     private bool TrySample(out DisplayCapabilities sample)
     {
         sample = default;
-
-        var screen = WindowScreen();
-        if (screen == IntPtr.Zero)
-            return false; // Minimised, or mid-move between displays: keep the last known answer.
-
-        var displayId = GetDisplayForWindow(_window);
-        if (displayId != _displayId)
+        
+        var pool = ObjC.Send(ObjC.Class("NSAutoreleasePool"), _selNew);
+        try
         {
-            _displayId = displayId;
-            _displayName = GetDisplayName(displayId) is { Length: > 0 } name ? name : "unknown";
+            var screen = WindowScreen();
+            if (screen == IntPtr.Zero)
+                return false; // Minimised, or mid-move between displays: keep the last known answer.
+
+            var displayId = GetDisplayForWindow(_window);
+            if (displayId != _displayId)
+            {
+                _displayId = displayId;
+                _displayName = GetDisplayName(displayId) is { Length: > 0 } name ? name : "unknown";
+            }
+
+            sample = DisplayCapabilities.Create(
+                displayId,
+                _displayName,
+                Headroom(screen, _selPotential, ref _hasPotential),
+                Headroom(screen, _selCurrent, ref _hasCurrent),
+                Headroom(screen, _selReference, ref _hasReference)
+            );
+
+            return true;
         }
-
-        sample = DisplayCapabilities.Create(
-            displayId,
-            _displayName,
-            Headroom(screen, _selPotential, ref _hasPotential),
-            Headroom(screen, _selCurrent, ref _hasCurrent),
-            Headroom(screen, _selReference, ref _hasReference)
-        );
-
-        return true;
+        finally
+        {
+            if (pool != IntPtr.Zero)
+                ObjC.SendVoid(pool, _selDrain);
+        }
     }
 
     private bool? _hasPotential;
@@ -92,19 +101,8 @@ internal sealed class MacDisplayCapabilityService : IDisplayCapabilityService
     {
         var props = GetWindowProperties(_window);
         var nsWindow = GetPointerProperty(props, Props.WindowCocoaWindowPointer, IntPtr.Zero);
-        if (nsWindow == IntPtr.Zero)
-            return IntPtr.Zero;
 
-        var pool = ObjC.Send(ObjC.Class("NSAutoreleasePool"), _selNew);
-        try
-        {
-            return ObjC.Send(nsWindow, _selScreen);
-        }
-        finally
-        {
-            if (pool != IntPtr.Zero)
-                ObjC.SendVoid(pool, _selDrain);
-        }
+        return nsWindow == IntPtr.Zero ? IntPtr.Zero : ObjC.Send(nsWindow, _selScreen);
     }
 
     /// NaN for a selector this OS does not have; <see cref="DisplayCapabilities.Create"/> turns

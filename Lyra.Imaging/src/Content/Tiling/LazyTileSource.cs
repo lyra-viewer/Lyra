@@ -29,6 +29,8 @@ public sealed class LazyTileSource : ITileSource
 
     /// <summary>Tiles the current view covers. Nothing here is evicted, and nothing else is fetched.</summary>
     private readonly HashSet<Key> _wanted = [];
+    
+    private readonly HashSet<Key> _borrowed = [];
 
     private readonly Queue<Key> _queue = new();
     private readonly HashSet<Key> _queued = [];
@@ -256,11 +258,14 @@ public sealed class LazyTileSource : ITileSource
         if (edge <= 1 || half * 2 != edge)
             return null;
 
-        // Snapshot under the lock; the pixels themselves are immutable once published.
         var children = new SKImage?[4];
+        var keys = new Key[4];
 
         lock (_gate)
         {
+            if (_disposed)
+                return null;
+
             for (var i = 0; i < 4; i++)
             {
                 var child = new Key(key.Level - 1, key.X * 2 + (i & 1), key.Y * 2 + (i >> 1));
@@ -269,7 +274,11 @@ public sealed class LazyTileSource : ITileSource
                     return null;
 
                 children[i] = image;
+                keys[i] = child;
             }
+
+            foreach (var child in keys)
+                _borrowed.Add(child);
         }
 
         var info = new SKImageInfo(edge, edge, SKColorType.Gray8, SKAlphaType.Opaque);
@@ -321,6 +330,32 @@ public sealed class LazyTileSource : ITileSource
             bitmap.Dispose();
             throw;
         }
+        finally
+        {
+            ReturnBorrowed(keys);
+        }
+    }
+    
+    private void ReturnBorrowed(Key[] keys)
+    {
+        List<SKImage>? orphaned = null;
+
+        lock (_gate)
+        {
+            foreach (var key in keys)
+            {
+                _borrowed.Remove(key);
+
+                if (!_disposed)
+                    continue;
+
+                if (_tiles.Remove(key, out var image))
+                    (orphaned ??= []).Add(image);
+            }
+        }
+
+        foreach (var image in orphaned ?? [])
+            image.Dispose();
     }
 
     private void EnsureWorker()
@@ -428,7 +463,7 @@ public sealed class LazyTileSource : ITileSource
         {
             var key = _recent[i];
 
-            if (_wanted.Contains(key) || !_tiles.TryGetValue(key, out var image))
+            if (_wanted.Contains(key) || _borrowed.Contains(key) || !_tiles.TryGetValue(key, out var image))
                 continue;
 
             resident -= RasterLargeContent.Bytes(image);
@@ -456,10 +491,15 @@ public sealed class LazyTileSource : ITileSource
             cancellation = _cancellation;
             _cancellation = null;
 
-            foreach (var image in _tiles.Values)
-                image.Dispose();
+            foreach (var key in _tiles.Keys.ToArray())
+            {
+                if (_borrowed.Contains(key))
+                    continue;
 
-            _tiles.Clear();
+                if (_tiles.Remove(key, out var image))
+                    image.Dispose();
+            }
+
             _recent.Clear();
             _wanted.Clear();
             _queue.Clear();

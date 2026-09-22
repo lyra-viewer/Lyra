@@ -122,10 +122,6 @@ public sealed class HdrDecodeSection : IUISection, IDisposable
         return ("Tone curve baked in at decode.", composite.HdrBakedReason ?? "Live controls do not apply.");
     }
 
-    internal bool ControlsPresent => _controls.Present;
-
-    internal bool NotePresent => _note.Present;
-
     public void SetToneMapMode(ToneMapMode mode) => _curve.Selected = mode;
 
     public void SetExposureStops(int stops) => _exposure.Value = stops;

@@ -1,4 +1,5 @@
 using Lyra.Common.Events;
+using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
 using Lyra.Common.SystemExtensions;
 using Lyra.Common;
@@ -169,7 +170,9 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
                 UpdateStatusOverlay();
                 RenderUI(canvas);
 
-                _presentedPeak.Observe(surface, _backend, _composite?.Content is not null);
+                // Debug only: it reads the whole frame back from the GPU, for one log line.
+                if (SettingsManager.AppSettings.Debug)
+                    _presentedPeak.Observe(surface, _backend, _composite?.Content is not null);
 
                 AfterRender(surface);
             }

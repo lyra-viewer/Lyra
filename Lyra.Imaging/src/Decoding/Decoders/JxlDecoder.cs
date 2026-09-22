@@ -80,8 +80,6 @@ internal class JxlDecoder : DecoderBase
         var content = HdrImageBuilder.Build(rgba, width, height, composite, ct, out var isGrayscale);
         composite.AddFormatSpecific("GrayScale", isGrayscale.ToString());
 
-        ct.ThrowIfCancellationRequested();
-
         return content;
     }
 
@@ -91,7 +89,16 @@ internal class JxlDecoder : DecoderBase
         var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul, SdrColorSpace);
         var bitmap = new SKBitmap(info);
 
-        PixelCopy.CopyPremultiplyingRgba((IntPtr)src, width * 4, bitmap, ct, out var isGrayscale);
+        bool isGrayscale;
+        try
+        {
+            PixelCopy.CopyPremultiplyingRgba((IntPtr)src, width * 4, bitmap, ct, out isGrayscale);
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
 
         composite.AddFormatSpecific("GrayScale", isGrayscale.ToString());
 

@@ -10,6 +10,8 @@ public sealed class VariantRasterContent : ICompositeContent
 
     /// <summary>Most recently shown last. Only used for the on-demand form.</summary>
     private readonly List<int> _recent = [];
+    
+    private readonly List<ICompositeContent> _retired = [];
 
     private readonly Lock _gate = new();
     private CancellationTokenSource? _pending;
@@ -78,6 +80,16 @@ public sealed class VariantRasterContent : ICompositeContent
 
     private int _shownIndex;
 
+    /// <summary>The index of the rendition on screen, which lags <see cref="ActiveIndex"/> while one decodes.</summary>
+    public int ShownIndex
+    {
+        get
+        {
+            lock (_gate)
+                return _shownIndex;
+        }
+    }
+
     /// <summary>
     /// The rendition currently on screen. Follows <see cref="ActiveIndex"/> as soon as that one is
     /// decoded, and until then stays on the last one that was - so the view never goes blank.
@@ -106,10 +118,23 @@ public sealed class VariantRasterContent : ICompositeContent
     /// <summary>Raised on a background thread when a requested rendition becomes drawable.</summary>
     public event Action<VariantRasterContent>? VariantReady;
 
+    /// <summary>Raised on a background thread when a requested rendition could not be decoded.</summary>
+    public event Action<VariantRasterContent>? VariantFailed;
+
     public bool IsResolutionIndependent => Active?.IsResolutionIndependent == true;
 
-    public float? DecodedWidth => Active is RasterLargeContent large ? large.FullWidth : Active?.DecodedWidth;
-    public float? DecodedHeight => Active is RasterLargeContent large ? large.FullHeight : Active?.DecodedHeight;
+    public float? DecodedWidth => Shown?.Width;
+    public float? DecodedHeight => Shown?.Height;
+
+    /// <summary>The description of the rendition currently on screen.</summary>
+    private ImageVariant? Shown
+    {
+        get
+        {
+            lock (_gate)
+                return _shownIndex >= 0 && _shownIndex < Variants.Count ? Variants[_shownIndex] : null;
+        }
+    }
 
     /// <summary>What is decoded right now, which for the on-demand form is not the whole document.</summary>
     public long ByteSize
@@ -174,6 +199,7 @@ public sealed class VariantRasterContent : ICompositeContent
         }
 
         var publish = false;
+        var failed = false;
 
         lock (_gate)
         {
@@ -182,7 +208,15 @@ public sealed class VariantRasterContent : ICompositeContent
                 decoded?.Dispose();
 
                 if (_pendingIndex == index)
+                {
                     _pendingIndex = -1;
+
+                    if (!_disposed)
+                    {
+                        ActiveIndex = _shownIndex;
+                        failed = true;
+                    }
+                }
             }
             else
             {
@@ -196,6 +230,8 @@ public sealed class VariantRasterContent : ICompositeContent
 
         if (publish)
             VariantReady?.Invoke(this);
+        else if (failed)
+            VariantFailed?.Invoke(this);
     }
 
     /// <summary>Marks a rendition as the one on screen and the most recently used. Call under the lock.</summary>
@@ -225,12 +261,29 @@ public sealed class VariantRasterContent : ICompositeContent
                 continue;
 
             resident -= content.ByteSize;
-            content.Dispose();
+            _retired.Add(content);
             _contents[index] = null;
 
             _recent.RemoveAt(i);
             i--;
         }
+    }
+    
+    public void ReleaseRetired()
+    {
+        ICompositeContent[] retired;
+
+        lock (_gate)
+        {
+            if (_retired.Count == 0)
+                return;
+
+            retired = [.. _retired];
+            _retired.Clear();
+        }
+
+        foreach (var content in retired)
+            content.Dispose();
     }
 
     public void Dispose()
@@ -238,7 +291,6 @@ public sealed class VariantRasterContent : ICompositeContent
         lock (_gate)
         {
             _disposed = true;
-
             _pending?.Cancel();
             _pending = null;
 
@@ -248,6 +300,10 @@ public sealed class VariantRasterContent : ICompositeContent
                 _contents[i] = null;
             }
 
+            foreach (var content in _retired)
+                content.Dispose();
+
+            _retired.Clear();
             _recent.Clear();
         }
     }

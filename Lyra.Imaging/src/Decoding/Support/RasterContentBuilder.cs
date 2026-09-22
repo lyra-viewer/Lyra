@@ -175,7 +175,7 @@ internal static class RasterContentBuilder
     private sealed class SharedPixelTileSource(RasterTileSource tiles, SKBitmap source, List<SKBitmap> views)
         : ITileSource
     {
-        public long ByteSize => source.ByteCount;
+        public long ByteSize => (long)source.RowBytes * source.Height;
 
         public IEnumerable<RasterTile> GetTiles(SKRect visibleFullRect, SKSize imageSize, float pixelsPerFullUnit) =>
             tiles.GetTiles(visibleFullRect, imageSize, pixelsPerFullUnit);

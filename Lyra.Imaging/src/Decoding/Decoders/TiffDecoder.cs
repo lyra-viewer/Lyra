@@ -23,7 +23,7 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
 
     protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        var directories = TiffNative.DescribeDirectories(path, IntPtr.Zero, 0);
+        var directories = TiffNative.DescribeDirectories(path, IntPtr.Zero, 0, out var encodedBytes);
         var pages = TiffPageSet.Pages(directories);
 
         if (pages.Count > 0 && directories.Count > pages[0])
@@ -31,14 +31,14 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
 
         if (pages.Count > 1)
         {
-            DecodeDocument(path, composite, directories, pages, ct);
+            DecodeDocument(path, composite, directories, encodedBytes, pages, ct);
             return;
         }
 
         var page = pages.Count > 0 ? pages[0] : 0;
         var info = directories.Count > page ? directories[page] : default;
 
-        TiffPageSet.Describe(composite, directories, pages, IsBigTiff(path));
+        TiffPageSet.Describe(composite, directories, pages, BigTiffMetadataReader.IsBigTiff(path));
 
         if (info.RgbaCapable == 0 && info.NativeCapable != 0)
         {
@@ -56,6 +56,8 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
         {
             try
             {
+                RequireRgbaWithinOneBitmap(path, info);
+
                 var bitmap = LoadBitmap(path, composite, ct, tagColorSpace: true, out var metadataParsed);
                 if (!metadataParsed)
                     composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
@@ -75,38 +77,6 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
 
         if (directories.Count > 1)
             composite.Structure = [TiffPageSet.Summarise(directories, pages)];
-    }
-
-    /// <summary>
-    /// Whether the file is BigTIFF, from its header rather than from libtiff.
-    /// </summary>
-    private static bool IsBigTiff(string path)
-    {
-        try
-        {
-            using var stream = File.OpenRead(path);
-
-            Span<byte> header = stackalloc byte[4];
-            if (stream.ReadAtLeast(header, 4, throwOnEndOfStream: false) < 4)
-                return false;
-
-            var little = header[0] == 'I' && header[1] == 'I';
-            var big = header[0] == 'M' && header[1] == 'M';
-
-            if (!little && !big)
-                return false;
-
-            var version = little
-                ? (ushort)(header[2] | (header[3] << 8))
-                : (ushort)((header[2] << 8) | header[3]);
-
-            return version == 43;
-        }
-        catch (Exception ex)
-        {
-            Logger.Debug($"[TiffDecoder] Could not read the header of {path}: {ex.Message}");
-            return false;
-        }
     }
 
     #region Layouts the RGBA interface refuses
@@ -133,7 +103,7 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
     /// Refuses a directory whose own layout cannot be read within the budget, before anything is
     /// allocated for it.
     /// </summary>
-    internal static void RequireNativeLayoutFits(string path, TiffNative.DirectoryInfo info, bool isFloat)
+    internal static void RequireNativeLayoutWithinBudget(string path, TiffNative.DirectoryInfo info, bool isFloat)
     {
         if (info.Width == 0 || info.Height == 0 || info.Width > int.MaxValue || info.Height > int.MaxValue)
             throw new InvalidOperationException($"[TiffDecoder] {Path.GetFileName(path)} declares dimensions this path cannot read: {info.Width}x{info.Height}.");
@@ -164,7 +134,7 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
                 ? TiffNative.OutputKind.Gray8
                 : TiffNative.OutputKind.Rgba8;
 
-        RequireNativeLayoutFits(path, info, isFloat);
+        RequireNativeLayoutWithinBudget(path, info, isFloat);
 
         Logger.Info($"[TiffDecoder] {Path.GetFileName(path)} is {info.BitsPerSample}-bit x{info.SamplesPerPixel} " +
                     $"{(isFloat ? "float" : "integer")}, which the RGBA interface refuses; " +
@@ -333,7 +303,35 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
         return new RegionRead(ok, pixels, stride, timedOut, failure ?? string.Empty);
     }
     
+    /// <summary>Reads full-width bands of a directory, for a streaming pass over the whole sheet.</summary>
+    private static StreamingGrayPreview.BandReader FullWidthBands(string path, int directory, TiffNative.DirectoryInfo info, string purpose, IoTally? tally = null) =>
+        (uint first, uint rows, out IntPtr pixels, out uint stride) =>
+        {
+            var read = BoundedLoadRegion(path, directory, IsColour(info), 0, first, info.Width, rows, $"{purpose} band {first}..{first + rows} of {Path.GetFileName(path)}", tally);
+
+            pixels = read.Pixels;
+            stride = read.Stride;
+
+            return read.Ok;
+        };
+
     private static string NativeError() => NativeErrors.GetUtf8ZOrAnsiZ(TiffNative.get_last_tiff_error());
+
+    /// <summary>
+    /// Refuses a directory the RGBA interface cannot deliver: its output is one buffer copied into
+    /// one bitmap, so past an int of bytes it fails in <see cref="BuildBitmap"/> - after libtiff
+    /// has already allocated and decoded all of it.
+    /// </summary>
+    internal static void RequireRgbaWithinOneBitmap(string path, TiffNative.DirectoryInfo info)
+    {
+        var bytes = (long)info.Width * info.Height * 4;
+        if (bytes <= int.MaxValue)
+            return;
+
+        throw new InvalidOperationException($"[TiffDecoder] {Path.GetFileName(path)} is {info.Width}x{info.Height}, " +
+                                            $"{bytes / (1024 * 1024)} MB as RGBA: more than one bitmap holds, in a layout " +
+                                            "that cannot be read by region.");
+    }
 
     /// <summary>
     /// How a region of this directory should be tagged. The native side resolves the fourth sample
@@ -399,20 +397,10 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
             var bandRows = PreviewBandRowsFor(info);
             
             var transfer = new IoTally();
-            
-            bool ReadBand(uint first, uint rows, out IntPtr pixels, out uint stride)
-            {
-                var read = BoundedLoadRegion(path, directory, colour, 0, first, info.Width, rows, $"Preview band {first}..{first + rows} of {Path.GetFileName(path)}", transfer);
-
-                pixels = read.Pixels;
-                stride = read.Stride;
-
-                return read.Ok;
-            }
 
             var preview = StreamingGrayPreview.Build(
                 width, height, maxWidth, maxHeight,
-                ReadBand,
+                FullWidthBands(path, directory, info, "Preview", transfer),
                 TiffNative.free_tiff_pixels,
                 bandRows,
                 colour ? 4 : 1,
@@ -656,18 +644,18 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
     /// <summary>
     /// Publishes the document as a set of pages, with the first decoded and the rest on demand.
     /// </summary>
-    private void DecodeDocument(string path, Composite composite, IReadOnlyList<TiffNative.DirectoryInfo> directories, List<int> pages, CancellationToken ct)
+    private void DecodeDocument(string path, Composite composite, IReadOnlyList<TiffNative.DirectoryInfo> directories, long[]? encodedBytes, List<int> pages, CancellationToken ct)
     {
         Logger.Info($"[TiffDecoder] {Path.GetFileName(path)} holds {pages.Count} pages across {directories.Count} directories; decoding the first and the rest on demand.");
 
         composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
         composite.Structure = [TiffPageSet.Summarise(directories, pages)];
-        TiffPageSet.Describe(composite, directories, pages, IsBigTiff(path));
+        TiffPageSet.Describe(composite, directories, pages, BigTiffMetadataReader.IsBigTiff(path));
 
         ct.ThrowIfCancellationRequested();
 
         var first = DecodePage(path, pages[0], directories[pages[0]], composite, ct);
-        var variants = TiffPageSet.Describe(directories, pages);
+        var variants = TiffPageSet.Describe(directories, pages, encodedBytes);
 
         composite.Content = new VariantRasterContent(variants, active: 0, first, new PageProvider(path, pages, directories, composite), DecodePolicy.ResidentPageBudgetBytes)
         {
@@ -683,9 +671,18 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
 
         if (info.RgbaCapable == 0 && info.NativeCapable != 0)
             return DecodeUnsupportedLayout(path, directory, info, composite, ct);
-        
+
+        // As for a single-page file: a page too large to hold streams rather than being read whole.
+        if (WantsNativeDepth(info) && WantsStreaming(info))
+            return StreamGray(path, directory, info, composite, ct);
+
         if (info.GrayCapable != 0 && info is { Width: > 0, Height: > 0 })
             return RasterContentBuilder.Build(DecodeGray(path, directory, info, composite, ct), composite);
+
+        if ((long)info.Width * info.Height * 4 > int.MaxValue && info.NativeCapable != 0)
+            return DecodeUnsupportedLayout(path, directory, info, composite, ct);
+
+        RequireRgbaWithinOneBitmap(path, info);
 
         IntPtr readIcc = IntPtr.Zero;
         int readWidth = 0, readHeight = 0, readIccSize = 0;
@@ -747,8 +744,39 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
     {
         ct.ThrowIfCancellationRequested();
 
+        var directories = TiffNative.DescribeDirectories(path, IntPtr.Zero, 0);
+        var pages = TiffPageSet.Pages(directories);
+        var page = pages.Count > 0 ? pages[0] : 0;
+
+        if (directories.Count > page)
+        {
+            var info = directories[page];
+            if (WantsNativeDepth(info))
+                return StreamThumbnail(path, page, info, maxDimension, ct);
+
+            RequireRgbaWithinOneBitmap(path, info);
+        }
+
         // libtiff has no native scaled decode, so decode full then downscale.
         return ThumbnailScaler.ResizeToThumbnail(LoadBitmap(path, composite: null, ct, tagColorSpace: false, out _), maxDimension);
+    }
+
+    private static SKBitmap? StreamThumbnail(string path, int directory, TiffNative.DirectoryInfo info, int maxDimension, CancellationToken ct)
+    {
+        var width = (int)info.Width;
+        var height = (int)info.Height;
+
+        DecoderValidation.RequireSaneDimensions(nameof(TiffDecoder), width, height);
+
+        return StreamingGrayPreview.Build(
+            width, height, maxDimension, maxDimension,
+            FullWidthBands(path, directory, info, "Thumbnail"),
+            TiffNative.free_tiff_pixels,
+            PreviewBandRowsFor(info),
+            IsColour(info) ? 4 : 1,
+            ct,
+            info.RegionPremultiplied != 0
+        );
     }
 
     private static bool TryDecodeNative(string path, Composite? composite, CancellationToken ct, out IntPtr ptr, out int width, out int height, out IntPtr icc, out int iccSize, out bool metadataParsed, out string nativeError)

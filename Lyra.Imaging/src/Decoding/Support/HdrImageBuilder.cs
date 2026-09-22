@@ -109,21 +109,29 @@ internal static class HdrImageBuilder
 
         var gray = true;
 
-        unsafe
+        try
         {
-            fixed (float* srcPin = rgba)
+            unsafe
             {
-                var src = (nint)srcPin;
-                var dst = (nint)bitmap.GetPixels();
-                var dstRowBytes = bitmap.RowBytes;
-                var options = new ParallelOptions { CancellationToken = ct };
-
-                Parallel.For(0, height, options, y =>
+                fixed (float* srcPin = rgba)
                 {
-                    if (!ConvertRow((float*)src, (byte*)dst, y, width, dstRowBytes))
-                        gray = false;
-                });
+                    var src = (nint)srcPin;
+                    var dst = (nint)bitmap.GetPixels();
+                    var dstRowBytes = bitmap.RowBytes;
+                    var options = new ParallelOptions { CancellationToken = ct };
+
+                    Parallel.For(0, height, options, y =>
+                    {
+                        if (!ConvertRow((float*)src, (byte*)dst, y, width, dstRowBytes))
+                            gray = false;
+                    });
+                }
             }
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
         }
 
         isGrayscale = gray;
@@ -150,7 +158,15 @@ internal static class HdrImageBuilder
         var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul, SKColorSpace.CreateSrgb());
         var bitmap = new SKBitmap(info);
 
-        HdrToneMap.ToBitmap(rgba, bitmap, whitePoint, ct, out isGrayscale);
+        try
+        {
+            HdrToneMap.ToBitmap(rgba, bitmap, whitePoint, ct, out isGrayscale);
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
 
         // Large by definition at this point, so the builder decides between one texture and tiles.
         var content = RasterContentBuilder.Build(bitmap, composite);
@@ -203,6 +219,22 @@ internal static class HdrImageBuilder
         var xScale = width / (double)targetWidth;
         var yScale = height / (double)targetHeight;
 
+        try
+        {
+            Downsample(rgba, width, height, targetWidth, targetHeight, xScale, yScale, bitmap, ct);
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
+
+        bitmap.SetImmutable();
+        return SKImage.FromBitmap(bitmap);
+    }
+
+    private static void Downsample(Span<float> rgba, int width, int height, int targetWidth, int targetHeight, double xScale, double yScale, SKBitmap bitmap, CancellationToken ct)
+    {
         unsafe
         {
             fixed (float* srcPin = rgba)
@@ -252,9 +284,6 @@ internal static class HdrImageBuilder
                 });
             }
         }
-
-        bitmap.SetImmutable();
-        return SKImage.FromBitmap(bitmap);
     }
 
     private static unsafe bool ConvertRow(float* src, byte* dst, int y, int width, int dstRowBytes)

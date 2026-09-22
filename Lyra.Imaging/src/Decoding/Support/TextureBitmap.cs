@@ -12,8 +12,40 @@ namespace Lyra.Imaging.Decoding.Support;
 internal static class TextureBitmap
 {
     private static int HdrFloatCount(in Subresource surface) => checked(surface.Width * surface.Height * 4);
-    
+
     public static int BytesPerDecodedPixel(TextureData texture) => texture.IsHdr ? sizeof(float) * 4 : 4;
+
+    /// <summary>Smallest stored mip (of face 0, layer 0) whose longest side still covers the target.</summary>
+    public static Subresource SelectThumbnailSurface(TextureData texture, int maxDimension)
+    {
+        var chosen = texture.Subresources[0];
+        foreach (var sr in texture.Subresources)
+        {
+            if (sr.ArrayLayer != 0 || sr.Face != 0)
+                continue;
+
+            if (Math.Max(sr.Width, sr.Height) >= maxDimension && sr.MipLevel > chosen.MipLevel)
+                chosen = sr;
+        }
+
+        return chosen;
+    }
+
+    public static void PopulateMetadata(Composite composite, TextureData texture)
+    {
+        var info = TextureFormats.Info(texture.Format);
+
+        composite.AddFormatSpecific("Format", texture.FormatName);
+        composite.AddFormatSpecific("Has Alpha", info.HasAlpha ? "Yes" : "No");
+        composite.AddFormatSpecific("Is Cubemap", texture.Kind == TextureKind.Cube ? "Yes" : "No");
+        composite.AddFormatSpecific("Is Volume", texture.Kind == TextureKind.Volume ? "Yes" : "No");
+
+        if (texture.Kind == TextureKind.Volume)
+            composite.AddFormatSpecific("Depth", $"{texture.Depth}");
+
+        composite.AddFormatSpecific("Mipmap Count", $"{texture.MipLevels}");
+        composite.AddFormatSpecific("Bits/Pixel", $"{info.BitsPerPixel} bpp");
+    }
 
     /// <summary>
     /// Decodes a surface into displayable content. HDR surfaces (float formats, BC6H) stay
@@ -88,12 +120,27 @@ internal static class TextureBitmap
         var info = new SKImageInfo(surface.Width, surface.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
         var bitmap = new SKBitmap(info);
 
+        try
+        {
+            Fill(texture, surface, bitmap, ct);
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
+
+        return bitmap;
+    }
+
+    private static void Fill(TextureData texture, in Subresource surface, SKBitmap bitmap, CancellationToken ct)
+    {
         if (texture.IsHdr)
         {
             var floats = new float[HdrFloatCount(surface)];
             texture.DecodeHdr(surface, floats);
             HdrToneMap.ToBitmap(floats, bitmap, ct, out _);
-            return bitmap;
+            return;
         }
 
         var tightRowBytes = checked(surface.Width * 4);
@@ -112,7 +159,5 @@ internal static class TextureBitmap
             texture.Decode(surface, tmp);
             PixelCopy.CopyTightRgba(tmp, bitmap);
         }
-
-        return bitmap;
     }
 }

@@ -1,6 +1,6 @@
-using System.Runtime.InteropServices;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders;
+using Lyra.Imaging.Tests.Support;
 using SkiaSharp;
 using Xunit;
 
@@ -28,7 +28,7 @@ public class JxlColorSpaceTests
         SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Srgb, SKColorSpaceXyz.DisplayP3);
 
     // Load + wire the native wrapper once; false when it (or its deps) can't be found/loaded.
-    private static readonly Lazy<bool> NativeJxlReady = new(TryPrepareNativeJxl);
+    private static readonly Lazy<bool> NativeJxlReady = new(() => NativeWrapper.TryLoad("libjxl_native", typeof(JxlDecoder).Assembly));
 
     [Fact]
     public void DecodesDisplayP3Jxl_PreservesWideGamut_AndTagsDisplayP3()
@@ -69,61 +69,5 @@ public class JxlColorSpaceTests
                 /* best effort cleanup */
             }
         }
-    }
-
-    private static bool TryPrepareNativeJxl()
-    {
-        var dylibPath = LocateJxlNative();
-        if (dylibPath is null)
-            return false;
-
-        try
-        {
-            var handle = NativeLibrary.Load(dylibPath); // resolves libjxl deps via the wrapper's rpaths
-            try
-            {
-                NativeLibrary.SetDllImportResolver(typeof(JxlDecoder).Assembly, (name, _, _) =>
-                    name is "libjxl_native" or "libjxl_native.dll" or "libjxl_native.so"
-                        or "libjxl_native.dylib" or "libjxl"
-                        ? handle
-                        : IntPtr.Zero);
-            }
-            catch (InvalidOperationException)
-            {
-                // A resolver was already set for this assembly; the eager Load above still
-                // brought the module into the process, so decoding can proceed.
-            }
-
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    // Walks up from the test output directory to the repo root and returns the built native
-    // JXL wrapper for this platform, or null if it hasn't been built. release/native/dist-<platform>
-    // is the single canonical build output (see release/native/build-<platform>.sh); there is no
-    // second copy to search, so a stale-vs-fresh mismatch between two paths can't mask a bad build.
-    private static string? LocateJxlNative()
-    {
-        var (leaf, distDir) =
-            RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-                ? ("libjxl_native.dll", "dist-windows")
-                : RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-                    ? ("libjxl_native.so", "dist-linux")
-                    : ("libjxl_native.dylib", "dist-macos");
-
-        var relDir = Path.Combine("release", "native", distDir);
-
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            var candidate = Path.Combine(dir.FullName, relDir, leaf);
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        return null;
     }
 }

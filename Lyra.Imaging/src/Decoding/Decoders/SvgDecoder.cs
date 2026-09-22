@@ -41,7 +41,7 @@ internal sealed class SvgDecoder : DecoderBase, IThumbnailDecoder
     {
         ct.ThrowIfCancellationRequested();
 
-        var svg = new SKSvg();
+        using var svg = new SKSvg();
         svg.Load(path);
 
         ct.ThrowIfCancellationRequested();

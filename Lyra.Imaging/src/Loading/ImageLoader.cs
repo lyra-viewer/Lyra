@@ -313,7 +313,10 @@ internal class ImageLoader : IDisposable
                 largeContent.TilesProgressChanged += _ => composite.SignalProgress();
             
             if (composite.Content is VariantRasterContent variants)
+            {
                 variants.VariantReady += _ => composite.SignalProgress();
+                variants.VariantFailed += _ => composite.SignalProgress();
+            }
             
             if (largeContent?.TileSource is LazyTileSource lazyTiles)
                 lazyTiles.TileReady += _ => composite.SignalProgress();

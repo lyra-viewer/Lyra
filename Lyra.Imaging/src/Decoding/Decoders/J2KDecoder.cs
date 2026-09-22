@@ -66,7 +66,16 @@ internal class J2KDecoder : DecoderBase
                     var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul, colorSpace);
                     var bitmap = new SKBitmap(info);
 
-                    PixelCopy.CopyPremultiplyingRgba(nativePixels, nativeStrideBytes, bitmap, ct, out var isGrayscale);
+                    bool isGrayscale;
+                    try
+                    {
+                        PixelCopy.CopyPremultiplyingRgba(nativePixels, nativeStrideBytes, bitmap, ct, out isGrayscale);
+                    }
+                    catch
+                    {
+                        bitmap.Dispose();
+                        throw;
+                    }
 
                     composite.AddFormatSpecific("GrayScale", isGrayscale.ToString());
 

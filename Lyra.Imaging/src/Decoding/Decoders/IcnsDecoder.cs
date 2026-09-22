@@ -100,6 +100,7 @@ internal sealed class IcnsDecoder : IconContainerDecoder<IcnsEntry>
     private static unsafe SKBitmap? DecodeJpeg2000(byte[] data, IcnsEntry entry)
     {
         var nativePixels = IntPtr.Zero;
+        var nativeIcc = IntPtr.Zero;
 
         try
         {
@@ -113,7 +114,7 @@ internal sealed class IcnsDecoder : IconContainerDecoder<IcnsEntry>
                     out var width,
                     out var height,
                     out var strideBytes,
-                    out _,
+                    out nativeIcc,
                     out _
                 );
 
@@ -145,6 +146,9 @@ internal sealed class IcnsDecoder : IconContainerDecoder<IcnsEntry>
         {
             if (nativePixels != IntPtr.Zero)
                 J2KNative.free_j2k_pixels(nativePixels);
+
+            if (nativeIcc != IntPtr.Zero)
+                J2KNative.free_j2k_pixels(nativeIcc);
         }
     }
 }

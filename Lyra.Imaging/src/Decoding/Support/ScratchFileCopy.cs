@@ -17,6 +17,9 @@ internal sealed class ScratchFileCopy : IDisposable
     /// <summary>Total scratch bytes this process will reserve across concurrent jobs.</summary>
     private const long MaxConcurrentReservationBytes = 8L * 1024 * 1024 * 1024;
 
+    /// <summary>What a scratch copy is called: <c>&lt;run token&gt;-&lt;copy id&gt;.tmp</c>.</summary>
+    private const string ScratchSuffix = ".tmp";
+
     private static long _reservedBytes;
 
     private readonly long _reservedForThis;
@@ -42,10 +45,13 @@ internal sealed class ScratchFileCopy : IDisposable
         if (!TryGetScratchDir(out var dir))
             return null;
 
+        if (ScratchSession.Claim(dir) is not { } token)
+            return null;
+
         if (!TryReserve(sizeBytes))
             return null;
 
-        var scratchPath = System.IO.Path.Combine(dir, $"tiff-{Environment.ProcessId}-{Guid.NewGuid():N}.tmp");
+        var scratchPath = System.IO.Path.Combine(dir, $"{token}-{Guid.NewGuid():N}{ScratchSuffix}");
 
         try
         {
@@ -98,23 +104,28 @@ internal sealed class ScratchFileCopy : IDisposable
     }
 
     /// <summary>
-    /// Deletes scratch files left behind by a run that never got to clean up after itself - a hard
-    /// kill or crash between finishing a copy and disposing it.
+    /// Deletes what runs that never got to clean up after themselves left behind - a hard kill or
+    /// a crash between finishing a copy and disposing it.
     /// </summary>
     public static void SweepStaleFiles()
     {
-        if (!TryGetScratchDir(out var dir))
-            return;
-
+        if (TryGetScratchDir(out var dir))
+            Sweep(dir);
+    }
+    
+    internal static void Sweep(string dir)
+    {
         try
         {
-            foreach (var file in Directory.EnumerateFiles(dir, "tiff-*.tmp"))
-            {
-                if (BelongsToLiveProcess(file))
-                    continue;
+            var ended = new Dictionary<string, bool>(StringComparer.Ordinal);
 
-                TryDelete(file);
-            }
+            foreach (var file in Directory.EnumerateFiles(dir, "*" + ScratchSuffix))
+                if (HasEnded(dir, TokenOf(file), ended))
+                    TryDelete(file);
+
+            foreach (var mark in Directory.EnumerateFiles(dir, "*" + ScratchSession.LockSuffix))
+                if (HasEnded(dir, TokenOf(mark), ended))
+                    TryDelete(mark);
         }
         catch (Exception ex)
         {
@@ -122,35 +133,32 @@ internal sealed class ScratchFileCopy : IDisposable
         }
     }
 
-    /// <summary>
-    /// Whether this scratch file belongs to a process still running, read from the process id its
-    /// name carries. Deleting a live instance's copy would fail that instance's decode, because the
-    /// file is opened again by path once the copy stream closes.
-    /// </summary>
-    private static bool BelongsToLiveProcess(string file)
+    private static string TokenOf(string file)
     {
-        var parts = System.IO.Path.GetFileNameWithoutExtension(file).Split('-');
+        var name = System.IO.Path.GetFileNameWithoutExtension(file);
+        var cut = name.IndexOf('-');
 
-        if (parts.Length < 3 || !int.TryParse(parts[1], out var pid))
-            return true;
+        return cut > 0 ? name[..cut] : name;
+    }
 
-        if (pid == Environment.ProcessId)
-            return true;
+    /// <summary>
+    /// Whether the run that owns <paramref name="token"/> is over, and so whether its files may be
+    /// deleted. Answered once per run and remembered, since a sweep meets the same token as often
+    /// as that run left files behind.
+    /// </summary>
+    private static bool HasEnded(string dir, string token, Dictionary<string, bool> ended)
+    {
+        if (token == ScratchSession.CurrentToken)
+            return false;
 
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            return !process.HasExited;
-        }
-        catch (ArgumentException)
-        {
-            return false; // No process with that id: the file outlived whoever made it.
-        }
-        catch (Exception ex)
-        {
-            Logger.Debug($"[ScratchFileCopy] Could not tell whether {pid} is still running: {ex.Message}; keeping {file}.");
-            return true;
-        }
+        if (ended.TryGetValue(token, out var known))
+            return known;
+
+        var mark = System.IO.Path.Combine(dir, token + ScratchSession.LockSuffix);
+        var answer = !File.Exists(mark) || ScratchSession.HasEnded(mark);
+
+        ended[token] = answer;
+        return answer;
     }
 
     /// <summary>

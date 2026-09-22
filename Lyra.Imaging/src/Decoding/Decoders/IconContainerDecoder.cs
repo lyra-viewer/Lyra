@@ -75,36 +75,46 @@ internal abstract class IconContainerDecoder<TEntry> : DecoderBase
     {
         var icons = new List<DecodedIcon>(entries.Count);
 
-        foreach (var entry in entries)
+        try
         {
-            ct.ThrowIfCancellationRequested();
-
-            SKBitmap? bitmap = null;
-            try
+            foreach (var entry in entries)
             {
-                bitmap = DecodeEntry(data, entry);
+                ct.ThrowIfCancellationRequested();
+
+                SKBitmap? bitmap = null;
+                try
+                {
+                    bitmap = DecodeEntry(data, entry);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"[{Name}] Entry {Describe(entry)} failed to decode: {ex.Message}");
+                }
+
+                if (bitmap is null)
+                {
+                    Logger.Warning($"[{Name}] Skipping unreadable {EntryNoun} {Describe(entry)} in {path}.");
+                    continue;
+                }
+
+                bitmap.SetImmutable();
+
+                var encoding = EncodingName(data, entry);
+
+                icons.Add(new DecodedIcon(
+                    entry,
+                    encoding,
+                    new RasterContent(bitmap, SKImage.FromBitmap(bitmap)),
+                    BuildVariant(entry, bitmap, encoding))
+                );
             }
-            catch (Exception ex)
-            {
-                Logger.Warning($"[{Name}] Entry {Describe(entry)} failed to decode: {ex.Message}");
-            }
+        }
+        catch
+        {
+            foreach (var icon in icons)
+                icon.Content.Dispose();
 
-            if (bitmap is null)
-            {
-                Logger.Warning($"[{Name}] Skipping unreadable {EntryNoun} {Describe(entry)} in {path}.");
-                continue;
-            }
-
-            bitmap.SetImmutable();
-
-            var encoding = EncodingName(data, entry);
-
-            icons.Add(new DecodedIcon(
-                entry,
-                encoding,
-                new RasterContent(bitmap, SKImage.FromBitmap(bitmap)),
-                BuildVariant(entry, bitmap, encoding))
-            );
+            throw;
         }
 
         return icons;

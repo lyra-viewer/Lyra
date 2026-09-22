@@ -88,7 +88,8 @@ internal static class ObjC
     public static ulong SendUInt64(IntPtr receiver, IntPtr selector) => msg_UInt64(receiver, selector);
     public static ulong SendUInt64(IntPtr receiver, string selector) => msg_UInt64(receiver, Sel(selector));
 
-    /// A CGFloat return - see the type remarks for why this is not one <c>DllImport</c>.
+    /// A CGFloat return. Two imports because x86-64 returns floating point through
+    /// <c>objc_msgSend_fpret</c>, while arm64 has only <c>objc_msgSend</c>.
     public static double SendDouble(IntPtr receiver, IntPtr selector)
         => IsArm ? msg_Double_arm(receiver, selector) : msg_Double_x64(receiver, selector);
 

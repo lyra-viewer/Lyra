@@ -8,6 +8,11 @@
 //   * On failure the call returns false, leaves every out-parameter zeroed, and
 //     leaves a reason in get_last_tiff_error().
 //   * Buffers handed back are released with the matching free_* function.
+//   * A `const char *path` is UTF-8, on every platform, and the wrapper is what
+//     turns it into whatever the host's file API wants - Windows' narrow CRT
+//     would otherwise read those bytes in the active code page. The managed
+//     side spells this out per parameter rather than relying on the default,
+//     which is the active code page there.
 // -----------------------------------------------------------------------------
 
 #pragma once
@@ -67,6 +72,10 @@ TIFF_API bool describe_tiff_directories(const char *path, TiffDirectoryInfo **ou
 TIFF_API bool describe_tiff_directories_mem(const uint8_t *data, uint64_t size, TiffDirectoryInfo **out_dirs, int *out_count);
 
 TIFF_API void free_tiff_directories(TiffDirectoryInfo *ptr);
+
+TIFF_API bool describe_tiff_directories_sized(const char *path, TiffDirectoryInfo **out_dirs, uint64_t **out_encoded, int *out_count);
+
+TIFF_API bool describe_tiff_directories_sized_mem(const uint8_t *data, uint64_t size, TiffDirectoryInfo **out_dirs, uint64_t **out_encoded, int *out_count);
 
 TIFF_API bool load_tiff_rgba(const char *path, uint8_t **out_pixels, int *width, int *height, uint8_t **out_icc, int *out_icc_size);
 

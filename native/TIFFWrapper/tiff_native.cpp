@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
+#include <filesystem>
 #include <mutex>
 #include <vector>
 #include <algorithm>
@@ -189,8 +190,16 @@ static void begin_call() {
     io_bytes = 0;
 }
 
+static std::FILE *open_binary_read(const char *path) {
+#ifdef _WIN32
+    return _wfopen(std::filesystem::u8path(path).c_str(), L"rb");
+#else
+    return std::fopen(path, "rb");
+#endif
+}
+
 static TIFF *open_tiff_measured(const char *path) {
-    std::FILE *fp = std::fopen(path, "rb");
+    std::FILE *fp = open_binary_read(path);
     if (!fp) {
         set_error("Could not open %s", path);
         return nullptr;
@@ -448,7 +457,7 @@ static bool decode_open_tiff(TIFF *tif, const char *label, int directory, uint8_
     uint32_t w = 0, h = 0;
     TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &w);
     TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &h);
-    if (w == 0 || h == 0) {
+    if (w == 0 || h == 0 || w > INT32_MAX || h > INT32_MAX) {
         set_error("Invalid TIFF dimensions: %ux%u", w, h);
         TIFFClose(tif);
         return false;
@@ -568,8 +577,29 @@ TIFF_API bool load_tiff_rgba_mem(const uint8_t *data, uint64_t size, uint8_t **o
     return load_tiff_rgba_mem_at(data, size, 0, out_pixels, width, height, out_icc, out_icc_size);
 }
 
-static bool describe_open_tiff(TIFF *tif, TiffDirectoryInfo **out_dirs, int *out_count) {
+static uint64_t encoded_size(TIFF *tif) {
+    const uint32_t striles = TIFFIsTiled(tif) ? TIFFNumberOfTiles(tif) : TIFFNumberOfStrips(tif);
+    uint64_t total = 0;
+
+    for (uint32_t i = 0; i < striles; i++) {
+        int err = 0;
+        const uint64_t bytes = TIFFGetStrileByteCountWithErr(tif, i, &err);
+
+        if (err)
+            return 0;
+
+        if (bytes > UINT64_MAX - total)
+            return UINT64_MAX;
+
+        total += bytes;
+    }
+
+    return total;
+}
+
+static bool describe_open_tiff(TIFF *tif, TiffDirectoryInfo **out_dirs, uint64_t **out_encoded, int *out_count) {
     std::vector<TiffDirectoryInfo> found;
+    std::vector<uint64_t> encoded;
 
     do {
         TiffDirectoryInfo info;
@@ -611,6 +641,9 @@ static bool describe_open_tiff(TIFF *tif, TiffDirectoryInfo **out_dirs, int *out
 
         found.push_back(info);
 
+        if (out_encoded)
+            encoded.push_back(encoded_size(tif));
+
         // Second line of defence against a malformed chain that loops. The cap is the 16-bit
         // directory index, past which no page reported here could be loaded anyway.
         if (found.size() > 0xFFFF)
@@ -632,15 +665,32 @@ static bool describe_open_tiff(TIFF *tif, TiffDirectoryInfo **out_dirs, int *out
     }
 
     std::memcpy(copy, found.data(), bytes);
+
+    if (out_encoded) {
+        const size_t sizes = encoded.size() * sizeof(uint64_t);
+        auto *sized = static_cast<uint64_t *>(std::malloc(sizes));
+        if (!sized) {
+            std::free(copy);
+            set_error("Failed to allocate %zu bytes for %zu directory sizes.", sizes, encoded.size());
+            return false;
+        }
+
+        std::memcpy(sized, encoded.data(), sizes);
+        *out_encoded = sized;
+    }
+
     *out_dirs = copy;
     *out_count = static_cast<int>(found.size());
     return true;
 }
 
 // Zeroes the outputs and installs the handlers, as begin_tiff_load does for the decode path.
-static void begin_describe(TiffDirectoryInfo **out_dirs, int *out_count) {
+static void begin_describe(TiffDirectoryInfo **out_dirs, uint64_t **out_encoded, int *out_count) {
     if (out_dirs)
         *out_dirs = nullptr;
+
+    if (out_encoded)
+        *out_encoded = nullptr;
 
     if (out_count)
         *out_count = 0;
@@ -648,9 +698,7 @@ static void begin_describe(TiffDirectoryInfo **out_dirs, int *out_count) {
     begin_call();
 }
 
-TIFF_API bool describe_tiff_directories(const char *path, TiffDirectoryInfo **out_dirs, int *out_count) {
-    begin_describe(out_dirs, out_count);
-
+static bool describe_path(const char *path, TiffDirectoryInfo **out_dirs, uint64_t **out_encoded, int *out_count) {
     if (!path || !out_dirs || !out_count) {
         set_error("No TIFF path given.");
         return false;
@@ -663,12 +711,10 @@ TIFF_API bool describe_tiff_directories(const char *path, TiffDirectoryInfo **ou
         return false;
     }
 
-    return describe_open_tiff(tif, out_dirs, out_count);
+    return describe_open_tiff(tif, out_dirs, out_encoded, out_count);
 }
 
-TIFF_API bool describe_tiff_directories_mem(const uint8_t *data, uint64_t size, TiffDirectoryInfo **out_dirs, int *out_count) {
-    begin_describe(out_dirs, out_count);
-
+static bool describe_mem(const uint8_t *data, uint64_t size, TiffDirectoryInfo **out_dirs, uint64_t **out_encoded, int *out_count) {
     if (!data || size == 0 || !out_dirs || !out_count) {
         set_error("Empty TIFF buffer.");
         return false;
@@ -683,7 +729,39 @@ TIFF_API bool describe_tiff_directories_mem(const uint8_t *data, uint64_t size, 
         return false;
     }
 
-    return describe_open_tiff(tif, out_dirs, out_count);
+    return describe_open_tiff(tif, out_dirs, out_encoded, out_count);
+}
+
+TIFF_API bool describe_tiff_directories(const char *path, TiffDirectoryInfo **out_dirs, int *out_count) {
+    begin_describe(out_dirs, nullptr, out_count);
+    return describe_path(path, out_dirs, nullptr, out_count);
+}
+
+TIFF_API bool describe_tiff_directories_mem(const uint8_t *data, uint64_t size, TiffDirectoryInfo **out_dirs, int *out_count) {
+    begin_describe(out_dirs, nullptr, out_count);
+    return describe_mem(data, size, out_dirs, nullptr, out_count);
+}
+
+TIFF_API bool describe_tiff_directories_sized(const char *path, TiffDirectoryInfo **out_dirs, uint64_t **out_encoded, int *out_count) {
+    begin_describe(out_dirs, out_encoded, out_count);
+
+    if (!out_encoded) {
+        set_error("No size output given.");
+        return false;
+    }
+
+    return describe_path(path, out_dirs, out_encoded, out_count);
+}
+
+TIFF_API bool describe_tiff_directories_sized_mem(const uint8_t *data, uint64_t size, TiffDirectoryInfo **out_dirs, uint64_t **out_encoded, int *out_count) {
+    begin_describe(out_dirs, out_encoded, out_count);
+
+    if (!out_encoded) {
+        set_error("No size output given.");
+        return false;
+    }
+
+    return describe_mem(data, size, out_dirs, out_encoded, out_count);
 }
 
 TIFF_API void free_tiff_directories(TiffDirectoryInfo *ptr) {
@@ -996,7 +1074,7 @@ TIFF_API bool load_tiff_native(const char *path, int directory, int output_kind,
     TIFFGetFieldDefaulted(tif, TIFFTAG_PLANARCONFIG, &planar);
     TIFFGetField(tif, TIFFTAG_PHOTOMETRIC, &photometric);
 
-    if (width == 0 || height == 0) {
+    if (width == 0 || height == 0 || width > INT32_MAX || height > INT32_MAX) {
         set_error("Invalid TIFF dimensions: %ux%u", width, height);
         TIFFClose(tif);
         return false;
@@ -1041,7 +1119,7 @@ TIFF_API bool load_tiff_native(const char *path, int directory, int output_kind,
         TIFFGetField(tif, TIFFTAG_TILELENGTH, &tileHeight);
 
         const tmsize_t tileBytes = TIFFTileSize(tif);
-        auto *tile = static_cast<uint8_t *>(std::malloc(static_cast<size_t>(tileBytes)));
+        auto *tile = static_cast<uint8_t *>(std::calloc(static_cast<size_t>(tileBytes), 1));
 
         if (!tile || tileWidth == 0 || tileHeight == 0) {
             set_error("Could not set up a %lld byte tile buffer.", (long long) tileBytes);
@@ -1060,7 +1138,7 @@ TIFF_API bool load_tiff_native(const char *path, int directory, int output_kind,
                     break;
                 }
 
-                const uint32_t rows = (ty + tileHeight < height) ? tileHeight : height - ty;\
+                const uint32_t rows = (ty + tileHeight < height) ? tileHeight : height - ty;
                 const uint64_t offsetBytes = (static_cast<uint64_t>(tx) * bits * perPlane) / 8;
                 const uint64_t copyBytes = std::min<uint64_t>(tileRowBytes, rowBytes - offsetBytes);
 

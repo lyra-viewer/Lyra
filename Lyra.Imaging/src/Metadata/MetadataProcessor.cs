@@ -1,6 +1,7 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
 using MetadataExtractor;
+using MetadataExtractor.Formats.Png;
 using MetadataExtractor.Formats.Xmp;
 using Directory = MetadataExtractor.Directory;
 
@@ -30,8 +31,7 @@ internal static class MetadataProcessor
         }
         catch (Exception e)
         {
-            Logger.Warning($"[MetadataProcessor] Error parsing metadata from file: {path}");
-            Logger.Error($"[MetadataProcessor] Error parsing metadata: {e.Message}");
+            Logger.Warning($"[MetadataProcessor] Could not read metadata from {path}: {e.Message}");
             return ExifInfo.Failed();
         }
     }
@@ -42,12 +42,11 @@ internal static class MetadataProcessor
         {
             return ProcessMetadata(BigTiffMetadataReader.IsBigTiff(stream)
                 ? BigTiffMetadataReader.Read(stream)
-                : ImageMetadataReader.ReadMetadata(stream));
+                : ReadTolerating(stream, path));
         }
         catch (Exception e)
         {
-            Logger.Warning($"[MetadataProcessor] Error parsing metadata from file: {path}");
-            Logger.Error($"[MetadataProcessor] Error while parsing metadata: {e.Message}");
+            Logger.Warning($"[MetadataProcessor] Could not read metadata from {path}: {e.Message}");
             return ExifInfo.Failed();
         }
     }
@@ -76,9 +75,30 @@ internal static class MetadataProcessor
         }
         catch (Exception e)
         {
-            Logger.Warning($"[MetadataProcessor] Error parsing embedded metadata from file: {path}");
-            Logger.Error($"[MetadataProcessor] Error parsing embedded metadata: {e.Message}");
+            Logger.Warning($"[MetadataProcessor] Could not read embedded metadata from {path}: {e.Message}");
             return ExifInfo.Failed();
+        }
+    }
+
+    /// <summary>Reads the stream, retrying a PNG that <see cref="PngChunkRepair"/> can mend.</summary>
+    private static IReadOnlyList<Directory> ReadTolerating(Stream stream, string path)
+    {
+        var start = stream.CanSeek ? stream.Position : -1;
+
+        try
+        {
+            return ImageMetadataReader.ReadMetadata(stream);
+        }
+        catch (Exception e) when (start >= 0 && e is PngProcessingException or IOException)
+        {
+            stream.Position = start;
+
+            using var repaired = PngChunkRepair.Repair(stream, out var repair);
+            if (repaired is null)
+                throw;
+
+            Logger.Info($"[MetadataProcessor] {path}: {e.Message}; read around it ({repair}).");
+            return ImageMetadataReader.ReadMetadata(repaired);
         }
     }
 

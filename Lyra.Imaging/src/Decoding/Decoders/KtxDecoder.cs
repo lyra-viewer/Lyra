@@ -27,7 +27,7 @@ internal sealed class KtxDecoder : DecoderBase, IThumbnailDecoder
         var texture = ReadTexture(bytes);
         var surface = texture.Subresources[0]; // mip 0, face 0, layer 0
 
-        PopulateMetadata(composite, texture);
+        TextureBitmap.PopulateMetadata(composite, texture);
         composite.Structure = KtxStructure.Describe(bytes, texture);
 
         ct.ThrowIfCancellationRequested();
@@ -47,7 +47,7 @@ internal sealed class KtxDecoder : DecoderBase, IThumbnailDecoder
         }
 
         var texture = ReadTexture(bytes);
-        var surface = SelectThumbnailSurface(texture, maxDimension);
+        var surface = TextureBitmap.SelectThumbnailSurface(texture, maxDimension);
 
         ct.ThrowIfCancellationRequested();
 
@@ -76,38 +76,6 @@ internal sealed class KtxDecoder : DecoderBase, IThumbnailDecoder
             return KtxReader.Read(bytes);
 
         throw new InvalidDataException("KTX: missing or unrecognized Khronos Texture identifier.");
-    }
-
-    private static void PopulateMetadata(Composite composite, TextureData texture)
-    {
-        var info = TextureFormats.Info(texture.Format);
-
-        composite.AddFormatSpecific("Format", texture.FormatName);
-        composite.AddFormatSpecific("Has Alpha", info.HasAlpha ? "Yes" : "No");
-        composite.AddFormatSpecific("Is Cubemap", texture.Kind == TextureKind.Cube ? "Yes" : "No");
-        composite.AddFormatSpecific("Is Volume", texture.Kind == TextureKind.Volume ? "Yes" : "No");
-
-        if (texture.Kind == TextureKind.Volume) 
-            composite.AddFormatSpecific("Depth", $"{texture.Depth}");
-
-        composite.AddFormatSpecific("Mipmap Count", $"{texture.MipLevels}");
-        composite.AddFormatSpecific("Bits/Pixel", $"{info.BitsPerPixel} bpp");
-    }
-
-    /// <summary>Smallest stored mip (of face 0, layer 0) whose longest side still covers the target.</summary>
-    private static Subresource SelectThumbnailSurface(TextureData texture, int maxDimension)
-    {
-        var chosen = texture.Subresources[0];
-        foreach (var sr in texture.Subresources)
-        {
-            if (sr.ArrayLayer != 0 || sr.Face != 0)
-                continue;
-
-            if (Math.Max(sr.Width, sr.Height) >= maxDimension && sr.MipLevel > chosen.MipLevel)
-                chosen = sr;
-        }
-
-        return chosen;
     }
 
     private static SKBitmap DecodeToBitmap(TextureData texture, in Subresource surface, CancellationToken ct)

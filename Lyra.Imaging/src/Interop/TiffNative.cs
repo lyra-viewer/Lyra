@@ -69,6 +69,7 @@ internal static class TiffNative
     private const int ExpectedDirectoryInfoSize = 48;
 
     private static bool _directoryEntryPointsMissing;
+    private static bool _sizedEntryPointMissing;
     private static bool _memoryEntryPointMissing;
     private static int _staleWarningIssued;
 
@@ -82,7 +83,7 @@ internal static class TiffNative
 
     [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)] // native returns a 1-byte C++ bool
-    public static extern bool load_tiff_rgba(string path, out IntPtr pixels, out int width, out int height, out IntPtr icc, out int iccSize);
+    public static extern bool load_tiff_rgba([MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr pixels, out int width, out int height, out IntPtr icc, out int iccSize);
 
     [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
@@ -90,7 +91,7 @@ internal static class TiffNative
 
     [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
-    private static extern bool describe_tiff_directories(string path, out IntPtr dirs, out int count);
+    private static extern bool describe_tiff_directories([MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr dirs, out int count);
 
     [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
@@ -98,7 +99,15 @@ internal static class TiffNative
 
     [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
-    private static extern bool load_tiff_rgba_at(string path, int directory, out IntPtr pixels, out int width, out int height, out IntPtr icc, out int iccSize);
+    private static extern bool describe_tiff_directories_sized([MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr dirs, out IntPtr encoded, out int count);
+
+    [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private static extern bool describe_tiff_directories_sized_mem(IntPtr data, ulong size, out IntPtr dirs, out IntPtr encoded, out int count);
+
+    [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private static extern bool load_tiff_rgba_at([MarshalAs(UnmanagedType.LPUTF8Str)] string path, int directory, out IntPtr pixels, out int width, out int height, out IntPtr icc, out int iccSize);
 
     [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
@@ -106,15 +115,15 @@ internal static class TiffNative
 
     [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
-    private static extern bool load_tiff_gray_region(string path, int directory, uint x, uint y, uint width, uint height, out IntPtr pixels, out uint stride);
+    private static extern bool load_tiff_gray_region([MarshalAs(UnmanagedType.LPUTF8Str)] string path, int directory, uint x, uint y, uint width, uint height, out IntPtr pixels, out uint stride);
 
     [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
-    private static extern bool load_tiff_rgba_region(string path, int directory, uint x, uint y, uint width, uint height, out IntPtr pixels, out uint stride);
+    private static extern bool load_tiff_rgba_region([MarshalAs(UnmanagedType.LPUTF8Str)] string path, int directory, uint x, uint y, uint width, uint height, out IntPtr pixels, out uint stride);
 
     [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
-    private static extern bool load_tiff_native(string path, int directory, int outputKind, out IntPtr pixels, out int width, out int height, out uint stride);
+    private static extern bool load_tiff_native([MarshalAs(UnmanagedType.LPUTF8Str)] string path, int directory, int outputKind, out IntPtr pixels, out int width, out int height, out uint stride);
 
     [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
     private static extern void free_tiff_directories(IntPtr ptr);
@@ -156,8 +165,12 @@ internal static class TiffNative
     /// the rest of the process - or when the file could not be read.
     /// </summary>
     /// <param name="data">A buffer holding the whole file, or <see cref="IntPtr.Zero"/> to read from the path.</param>
-    public static IReadOnlyList<DirectoryInfo> DescribeDirectories(string path, IntPtr data, ulong size)
+    public static IReadOnlyList<DirectoryInfo> DescribeDirectories(string path, IntPtr data, ulong size) => DescribeDirectories(path, data, size, out _);
+
+    public static IReadOnlyList<DirectoryInfo> DescribeDirectories(string path, IntPtr data, ulong size, out long[]? encodedBytes)
     {
+        encodedBytes = null;
+
         if (!DirectoryAccessAvailable)
             return [];
 
@@ -165,16 +178,26 @@ internal static class TiffNative
         if (managedSize != ExpectedDirectoryInfoSize)
             throw new InvalidOperationException($"TiffDirectoryInfo is {managedSize} bytes managed, {ExpectedDirectoryInfoSize} native.");
 
+        var fromBuffer = data != IntPtr.Zero && size > 0;
         var dirs = IntPtr.Zero;
+        var encoded = IntPtr.Zero;
 
         try
         {
-            var fromBuffer = data != IntPtr.Zero && size > 0;
-            var ok = fromBuffer
-                ? describe_tiff_directories_mem(data, size, out dirs, out var count)
-                : describe_tiff_directories(path, out dirs, out count);
+            if (!Describe(path, data, size, fromBuffer, out dirs, out encoded, out var count))
+                return [];
 
-            return ok ? Take(dirs, count) : [];
+            if (encoded != IntPtr.Zero)
+            {
+                encodedBytes = new long[count];
+                Marshal.Copy(encoded, encodedBytes, 0, count);
+
+                for (var i = 0; i < count; i++)
+                    if (encodedBytes[i] < 0)
+                        encodedBytes[i] = long.MaxValue;
+            }
+
+            return Take(dirs, count);
         }
         catch (EntryPointNotFoundException)
         {
@@ -185,7 +208,38 @@ internal static class TiffNative
         {
             if (dirs != IntPtr.Zero)
                 free_tiff_directories(dirs);
+
+            if (encoded != IntPtr.Zero)
+                free_tiff_pixels(encoded);
         }
+    }
+
+    /// <summary>
+    /// The sized entry point when this build has it, the plain one otherwise, so an older library
+    /// still lists pages and only their sizes go missing.
+    /// </summary>
+    private static bool Describe(string path, IntPtr data, ulong size, bool fromBuffer, out IntPtr dirs, out IntPtr encoded, out int count)
+    {
+        encoded = IntPtr.Zero;
+
+        if (!Volatile.Read(ref _sizedEntryPointMissing))
+        {
+            try
+            {
+                return fromBuffer
+                    ? describe_tiff_directories_sized_mem(data, size, out dirs, out encoded, out count)
+                    : describe_tiff_directories_sized(path, out dirs, out encoded, out count);
+            }
+            catch (EntryPointNotFoundException)
+            {
+                Volatile.Write(ref _sizedEntryPointMissing, true);
+                Logger.Info($"[TiffNative] {nameof(describe_tiff_directories_sized)} is missing; page sizes are unavailable until native/TIFFWrapper is rebuilt.");
+            }
+        }
+
+        return fromBuffer
+            ? describe_tiff_directories_mem(data, size, out dirs, out count)
+            : describe_tiff_directories(path, out dirs, out count);
     }
 
     /// <summary>

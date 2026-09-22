@@ -12,6 +12,11 @@
 //     leaves a reason in get_last_exr_error().
 //   * Buffers handed back are owned by the caller and released with the matching
 //     free_* function - never with the platform free().
+//   * A `const char *path` is UTF-8, on every platform, and the wrapper is what
+//     turns it into whatever the host's file API wants - Windows' narrow CRT
+//     would otherwise read those bytes in the active code page. The managed
+//     side spells this out per parameter rather than relying on the default,
+//     which is the active code page there.
 // -----------------------------------------------------------------------------
 
 #pragma once
