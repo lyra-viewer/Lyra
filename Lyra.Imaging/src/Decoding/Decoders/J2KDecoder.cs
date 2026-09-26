@@ -10,10 +10,12 @@ namespace Lyra.Imaging.Decoding.Decoders;
 internal class J2KDecoder : DecoderBase
 {
     public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Jp2 or ImageFormatType.J2k;
-
+    
     protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
         var data = composite.ReadAllBytes(ct);
+
+        J2KHeader.RequireDeclaredSizeFits(data);
 
         // OpenJPEG hands back pixels only; JP2 keeps EXIF and XMP in top-level uuid boxes.
         var metadata = IsoBoxMetadata.ReadJp2(data);
@@ -50,13 +52,11 @@ internal class J2KDecoder : DecoderBase
 
                     if (!ok || nativePixels == IntPtr.Zero)
                     {
-                        var err = NativeErrors.GetUtf8ZOrAnsiZ(J2KNative.get_last_j2k_error());
-                        Logger.Error($"[J2KDecoder] Native decode failed: {err}");
-                        throw new InvalidOperationException($"[J2KDecoder] Failed to decode: {path}");
+                        throw NativeErrors.DecodeFailed(J2KNative.get_last_j2k_error(), path);
                     }
 
-                    DecoderValidation.RequireSaneDimensions("J2KDecoder", width, height);
-                    DecoderValidation.RequireValidStride("J2KDecoder", nativeStrideBytes, width);
+                    DecoderValidation.RequireSaneDimensions(width, height);
+                    DecoderValidation.RequireValidStride(nativeStrideBytes, width);
 
                     composite.ReportPixelCount(width, height);
 

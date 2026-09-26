@@ -37,6 +37,14 @@ public sealed class Composite : IDisposable
 
     public CompositeState State = CompositeState.Pending;
 
+    public volatile LoadFailure? Failure;
+
+    internal void Fail(LoadFailure failure)
+    {
+        Failure = failure;
+        State = CompositeState.Failed;
+    }
+
     public event Action<Composite>? Completed;
     public event Action<Composite>? ProgressChanged;
     internal event Action<Composite>? PixelCountReported;

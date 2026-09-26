@@ -24,12 +24,12 @@ public static class KtxReader
         var span = file.Span;
         if (span.Length < HeaderSize)
         {
-            throw new InvalidDataException("KTX: file is too small to contain a header.");
+            throw new InvalidDataException("File is too small to contain a header.");
         }
 
         if (!KtxShared.IsKtx1(span))
         {
-            throw new InvalidDataException("KTX: missing or unrecognized KTX 1.1 identifier.");
+            throw new InvalidDataException("Missing or unrecognized KTX 1.1 identifier.");
         }
 
         // The endianness marker is written in the producer's byte order, so a raw little-endian read
@@ -39,7 +39,7 @@ public static class KtxReader
         var bigEndian = endiannessRaw == 0x01020304;
         if (!bigEndian && endiannessRaw != EndiannessRef)
         {
-            throw new NotSupportedException($"KTX: invalid endianness marker 0x{endiannessRaw:X8}.");
+            throw new NotSupportedException($"Invalid endianness marker 0x{endiannessRaw:X8}.");
         }
 
         var glTypeSize = Read32(span, 20, bigEndian);
@@ -56,55 +56,55 @@ public static class KtxReader
         // sizes. (For little-endian files it is informational.)
         if (bigEndian && glTypeSize is not (1 or 2 or 4))
         {
-            throw new InvalidDataException($"KTX: invalid glTypeSize {glTypeSize} in a big-endian file.");
+            throw new InvalidDataException($"Invalid glTypeSize {glTypeSize} in a big-endian file.");
         }
 
         var format = KtxFormatMap.FromGl(glInternalFormat);
         if (format == TextureFormat.Unknown)
         {
-            throw new NotSupportedException($"KTX: unsupported {KtxFormatMap.DescribeUnsupportedGl(glInternalFormat)}.");
+            throw new NotSupportedException($"Unsupported {KtxFormatMap.DescribeUnsupportedGl(glInternalFormat)}.");
         }
 
         if (width is <= 0 or > TextureLayout.MaxDimension)
         {
-            throw new InvalidDataException($"KTX: implausible width {width}.");
+            throw new InvalidDataException($"Implausible width {width}.");
         }
 
         // height = 0 marks a 1D texture; we display it as a single row.
         var height = heightField == 0 ? 1 : heightField;
         if (height is <= 0 or > TextureLayout.MaxDimension)
         {
-            throw new InvalidDataException($"KTX: implausible height {heightField}.");
+            throw new InvalidDataException($"Implausible height {heightField}.");
         }
 
         var isVolume = depthField > 0;
         var depth = isVolume ? depthField : 1;
         if (depth > TextureLayout.MaxDimension)
         {
-            throw new InvalidDataException($"KTX: implausible depth {depthField}.");
+            throw new InvalidDataException($"Implausible depth {depthField}.");
         }
 
         if (faceCount is < 1 or > 6)
         {
-            throw new InvalidDataException($"KTX: implausible face count {faceCount}.");
+            throw new InvalidDataException($"Implausible face count {faceCount}.");
         }
 
         var arrayCount = arrayField == 0 ? 1 : arrayField;
         if (arrayCount is < 1 or > 0xFFFF)
         {
-            throw new InvalidDataException($"KTX: implausible array size {arrayField}.");
+            throw new InvalidDataException($"Implausible array size {arrayField}.");
         }
 
         var mipLevels = mipField == 0 ? 1 : mipField; // 0 means "generate"; we keep the one stored level
         var maxMips = TextureLayout.MaxMipLevels(width, height, depth);
         if (mipLevels < 1 || mipLevels > maxMips)
         {
-            throw new InvalidDataException($"KTX: mip count {mipLevels} is invalid for {width}x{height}x{depth} (max {maxMips}).");
+            throw new InvalidDataException($"Mip count {mipLevels} is invalid for {width}x{height}x{depth} (max {maxMips}).");
         }
         
         if (kvByteLength < 0 || HeaderSize + (long)kvByteLength > span.Length)
         {
-            throw new InvalidDataException("KTX: key/value data runs past the end of the file.");
+            throw new InvalidDataException("Key/value data runs past the end of the file.");
         }
 
         var dataOffset = HeaderSize + kvByteLength;
@@ -155,7 +155,7 @@ public static class KtxReader
         for (var mip = 0; mip < mipLevels; mip++)
         {
             if (offset + 4 > fileLength)
-                throw new InvalidDataException($"KTX: truncated before mip {mip} image size.");
+                throw new InvalidDataException($"Truncated before mip {mip} image size.");
 
             var imageSize = Read32(span, (int)offset, bigEndian);
             offset += 4;
@@ -170,7 +170,7 @@ public static class KtxReader
                 // imageSize is per-face here; validate it agrees with our own sizing.
                 if (imageSize != surfaceSize)
                 {
-                    throw new InvalidDataException($"KTX: mip {mip} face size {imageSize} != expected {surfaceSize}.");
+                    throw new InvalidDataException($"Mip {mip} face size {imageSize} != expected {surfaceSize}.");
                 }
 
                 for (var face = 0; face < 6; face++)
@@ -190,7 +190,7 @@ public static class KtxReader
                 var expected = checked(imageBytes * arrayCount * faceCount);
                 if (imageSize != expected)
                 {
-                    throw new InvalidDataException($"KTX: mip {mip} image size {imageSize} != expected {expected}.");
+                    throw new InvalidDataException($"Mip {mip} image size {imageSize} != expected {expected}.");
                 }
 
                 for (var layer = 0; layer < arrayCount; layer++)
@@ -213,7 +213,7 @@ public static class KtxReader
     {
         if (offset + size > fileLength)
         {
-            throw new InvalidDataException($"KTX: subresource (layer {layer}, face {face}, mip {mip}) runs past the end of the file.");
+            throw new InvalidDataException($"Subresource (layer {layer}, face {face}, mip {mip}) runs past the end of the file.");
         }
 
         subresources.Add(new Subresource

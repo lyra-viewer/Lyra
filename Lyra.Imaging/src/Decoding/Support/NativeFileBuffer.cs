@@ -31,7 +31,7 @@ internal sealed class NativeFileBuffer : IDisposable
 
         var length = stream.Length;
         if (length <= 0)
-            throw new IOException($"[NativeFileBuffer] Refusing to read an empty or unsized file: {path}");
+            throw new IOException($"Refusing to read an empty or unsized file: {path}");
 
         var data = Marshal.AllocHGlobal((nint)length);
         var start = Stopwatch.GetTimestamp();
@@ -85,7 +85,7 @@ internal sealed class NativeFileBuffer : IDisposable
         if (sizeInBytes <= ceiling)
             return true;
 
-        Logger.Info($"[NativeFileBuffer] {sizeInBytes / (1024 * 1024)} MB is over the {ceiling / (1024 * 1024)} MB buffering ceiling; decoding from the path instead, without measuring the read.");
+        Logger.Info(typeof(NativeFileBuffer), $"{sizeInBytes / (1024 * 1024)} MB is over the {ceiling / (1024 * 1024)} MB buffering ceiling; decoding from the path instead, without measuring the read.");
         return false;
     }
 }

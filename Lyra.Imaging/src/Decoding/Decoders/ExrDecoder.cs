@@ -30,16 +30,13 @@ internal class ExrDecoder : FloatRgbaDecoderBase
             }
 
             if (ExrNative.MemoryLoadAvailable)
-                throw new InvalidOperationException($"[ExrDecoder] Native error: {NativeErrors.GetUtf8ZOrAnsiZ(ExrNative.get_last_exr_error())}");
+                throw NativeErrors.DecodeFailed(ExrNative.get_last_exr_error(), path);
 
-            Logger.Warning("[ExrDecoder] Native library has no memory entry point; falling back to path decode.");
+            Logger.Warning(typeof(ExrDecoder), "Native library has no memory entry point; falling back to path decode.");
         }
 
         if (!ExrNative.load_exr_rgba(path, out ptr, out width, out height, out info) || ptr == IntPtr.Zero)
-        {
-            var error = NativeErrors.GetUtf8ZOrAnsiZ(ExrNative.get_last_exr_error());
-            throw new InvalidOperationException($"[ExrDecoder] Native error: {error}");
-        }
+            throw NativeErrors.DecodeFailed(ExrNative.get_last_exr_error(), path);
 
         Describe(composite, info);
 

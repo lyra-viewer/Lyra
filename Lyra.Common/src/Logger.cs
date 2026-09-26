@@ -23,6 +23,19 @@ public static class Logger
             LogInternal(message, LogLevelInternal.Debug, preventRepeat);
     }
 
+    public static void Info(Type source, string message) => Info(Tagged(source, message));
+    public static void Warning(Type source, string message) => Warning(Tagged(source, message));
+    public static void Error(Type source, string message) => Error(Tagged(source, message));
+    public static void Debug(Type source, string message, bool preventRepeat = false) => Debug(Tagged(source, message), preventRepeat);
+
+    internal static string Tagged(Type source, string message)
+    {
+        var name = source.Name;
+        var arity = name.IndexOf('`');
+
+        return $"[{(arity < 0 ? name : name[..arity])}] {message}";
+    }
+
     private static void LogInternal(string message, LogLevelInternal level, bool preventRepeat)
     {
         if (_currentStrategy == LogStrategy.Disabled)

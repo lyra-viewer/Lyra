@@ -27,7 +27,7 @@ internal sealed class DdsDecoder : DecoderBase, IThumbnailDecoder
         composite.Structure = DdsStructure.Describe(bytes, texture);
 
         ct.ThrowIfCancellationRequested();
-        DecoderValidation.RequireSaneDimensions(nameof(DdsDecoder), surface.Width, surface.Height, TextureBitmap.BytesPerDecodedPixel(texture));
+        DecoderValidation.RequireSaneDimensions(surface.Width, surface.Height, TextureBitmap.BytesPerDecodedPixel(texture));
 
         composite.Content = TextureBitmap.DecodeToContent(texture, surface, composite, ct, flipVertical: false);
     }

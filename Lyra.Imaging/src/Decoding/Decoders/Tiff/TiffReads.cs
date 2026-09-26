@@ -20,6 +20,10 @@ internal readonly record struct TiffRead(bool Ok, IntPtr Pixels, bool TimedOut, 
 
     public string Reason => TimedOut ? TiffReads.TimedOutReason : Error;
 
+    /// <summary>A timeout is the source's fault, anything else the file's.</summary>
+    public LoadFailureException ToFailure(string what) =>
+        new(TimedOut ? LoadFailureKind.SourceUnavailable : LoadFailureKind.DecodeFailed, $"{what} {Reason}");
+
     public static TiffRead Failed(string error) => new(false, IntPtr.Zero, false, error);
 }
 

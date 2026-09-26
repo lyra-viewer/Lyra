@@ -43,7 +43,7 @@ internal static class TiffRegion
         var width = (int)info.Width;
         var height = (int)info.Height;
 
-        DecoderValidation.RequireSaneDimensions(nameof(TiffDecoder), width, height);
+        DecoderValidation.RequireSaneDimensions(width, height);
 
         var saving = $"[TiffDecoder] {Path.GetFileName(path)} is {width}x{height} at {info.BitsPerSample}-bit " +
                      $"{(IsColour(info) ? "colour" : "grey")}: " +
@@ -70,7 +70,7 @@ internal static class TiffRegion
         }
 
         if (!read.HasPixels)
-            throw new InvalidOperationException($"[TiffDecoder] Failed to decode {path} at native depth. {read.Reason}");
+            throw read.ToFailure($"Failed to decode {path} at native depth.");
 
         try
         {
@@ -97,12 +97,13 @@ internal static class TiffRegion
         var width = (int)info.Width;
         var height = (int)info.Height;
 
-        DecoderValidation.RequireSaneDimensions(nameof(TiffDecoder), width, height);
+        DecoderValidation.RequireSaneDimensions(width, height);
 
-        Logger.Debug($"[TiffDecoder] {Path.GetFileName(path)} is {width}x{height} at {info.BitsPerSample}-bit " +
-                     $"{(IsColour(info) ? "colour" : "grey")} - " +
-                     $"{(long)width * height * info.RegionSamples / (1024 * 1024)} MB if it were held whole. Streaming a preview and " +
-                     "decoding tiles by region instead.");
+        Logger.Debug(typeof(TiffDecoder),
+            $"{Path.GetFileName(path)} is {width}x{height} at {info.BitsPerSample}-bit " +
+            $"{(IsColour(info) ? "colour" : "grey")} - " +
+            $"{(long)width * height * info.RegionSamples / (1024 * 1024)} MB if it were held whole. Streaming a preview and " +
+            "decoding tiles by region instead.");
 
         var content = new RasterLargeContent(width, height);
 
@@ -164,7 +165,7 @@ internal static class TiffRegion
         var width = (int)info.Width;
         var height = (int)info.Height;
 
-        DecoderValidation.RequireSaneDimensions(nameof(TiffDecoder), width, height);
+        DecoderValidation.RequireSaneDimensions(width, height);
 
         return StreamingPreview.Build(
             width, height, maxDimension, maxDimension,
@@ -250,7 +251,7 @@ internal static class TiffRegion
         var rows = PreviewBandRowsFor(info, encodedBytesPerRow, source);
 
         if (source is { } speed && rows < PreviewBandRowsFor(info))
-            Logger.Debug($"[TiffDecoder] Reading {Path.GetFileName(path)} {rows} rows at a time to suit its source (~{speed.BytesPerMs * 1000 / (1024 * 1024):F1} MB/s).");
+            Logger.Debug(typeof(TiffDecoder), $"Reading {Path.GetFileName(path)} {rows} rows at a time to suit its source (~{speed.BytesPerMs * 1000 / (1024 * 1024):F1} MB/s).");
 
         return rows;
     }

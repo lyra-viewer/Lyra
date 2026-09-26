@@ -1,3 +1,4 @@
+using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders.Tiff;
 using Lyra.Imaging.Interop;
 using Xunit;
@@ -59,9 +60,10 @@ public class NativeLayoutBudgetTests
 
         Assert.True(TiffNativeLayout.PeakBytes(info, isFloat: false) > TiffNativeLayout.BudgetBytes);
 
-        var ex = Assert.Throws<InvalidOperationException>(() => TiffNativeLayout.RequireWithinBudget("sheet.tif", info, isFloat: false));
+        var ex = Assert.Throws<LoadFailureException>(() => TiffNativeLayout.RequireWithinBudget("sheet.tif", info, isFloat: false));
 
         Assert.Contains("at peak", ex.Message);
+        Assert.Equal(LoadFailureKind.TooLarge, ex.Kind);
     }
     
     [Fact]

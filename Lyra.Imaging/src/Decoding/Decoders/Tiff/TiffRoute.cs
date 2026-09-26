@@ -73,10 +73,12 @@ internal static class TiffRoute
             return RasterContentBuilder.Build(TiffWholeImage.ToBitmap(read, tagColorSpace: true, ct), composite);
 
         if (!RetryAtNativeLayout(info, read))
-            throw new InvalidOperationException($"[TiffDecoder] Failed to decode directory {directory} of {path}. {read.Reason}");
+            throw read.ToFailure($"Failed to decode directory {directory} of {path}.");
 
-        Logger.Debug($"[TiffDecoder] The RGBA interface accepted directory {directory} of {Path.GetFileName(path)} and then " +
-                     $"refused it ({read.Reason}); reading it at its own layout instead.");
+        Logger.Debug(typeof(TiffDecoder),
+            $"The RGBA interface accepted directory {directory} of {Path.GetFileName(path)} and then " +
+            $"refused it ({read.Reason}); reading it at its own layout instead."
+        );
 
         return TiffNativeLayout.Decode(path, directory, info, composite, ct);
     }
@@ -104,7 +106,7 @@ internal static class TiffRoute
             return ThumbnailScaler.ResizeToThumbnail(TiffWholeImage.ToBitmap(read, tagColorSpace: false, ct), maxDimension);
 
         if (!RetryAtNativeLayout(info, read))
-            throw new InvalidOperationException($"[TiffDecoder] Failed to thumbnail directory {directory} of {path}. {read.Reason}");
+            throw read.ToFailure($"Failed to thumbnail directory {directory} of {path}.");
 
         return TiffNativeLayout.Thumbnail(path, directory, info, maxDimension, ct);
     }

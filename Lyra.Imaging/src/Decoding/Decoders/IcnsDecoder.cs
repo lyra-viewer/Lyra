@@ -99,6 +99,8 @@ internal sealed class IcnsDecoder : IconContainerDecoder<IcnsEntry>
 
     private static unsafe SKBitmap? DecodeJpeg2000(byte[] data, IcnsEntry entry)
     {
+        J2KHeader.RequireDeclaredSizeFits(data.AsSpan(entry.PayloadOffset, entry.PayloadLength));
+
         var nativePixels = IntPtr.Zero;
         var nativeIcc = IntPtr.Zero;
 
@@ -125,8 +127,8 @@ internal sealed class IcnsDecoder : IconContainerDecoder<IcnsEntry>
                     return null;
                 }
 
-                DecoderValidation.RequireSaneDimensions("IcnsDecoder", width, height);
-                DecoderValidation.RequireValidStride("IcnsDecoder", strideBytes, width);
+                DecoderValidation.RequireSaneDimensions(width, height);
+                DecoderValidation.RequireValidStride(strideBytes, width);
 
                 var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
                 var bitmap = new SKBitmap(info);

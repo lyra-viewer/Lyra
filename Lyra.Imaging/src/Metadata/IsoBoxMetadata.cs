@@ -16,7 +16,7 @@ namespace Lyra.Imaging.Metadata;
 internal static class IsoBoxMetadata
 {
     private static ReadOnlySpan<byte> JxlSignature => [0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A];
-    private static ReadOnlySpan<byte> Jp2Signature => [0x00, 0x00, 0x00, 0x0C, 0x6A, 0x50, 0x20, 0x20, 0x0D, 0x0A, 0x87, 0x0A];
+    internal static ReadOnlySpan<byte> Jp2Signature => [0x00, 0x00, 0x00, 0x0C, 0x6A, 0x50, 0x20, 0x20, 0x0D, 0x0A, 0x87, 0x0A];
 
     // "JpgTiffExif->JP2", the UUID JP2 writers agreed on for an embedded TIFF/EXIF block.
     private static ReadOnlySpan<byte> ExifUuid => [0x4A, 0x70, 0x67, 0x54, 0x69, 0x66, 0x66, 0x45, 0x78, 0x69, 0x66, 0x2D, 0x3E, 0x4A, 0x50, 0x32];
@@ -82,7 +82,7 @@ internal static class IsoBoxMetadata
     /// malformed - a truncated or lying size ends the walk rather than throwing, because this
     /// runs on files that may well be damaged.
     /// </summary>
-    private static bool TryReadBox(ReadOnlySpan<byte> data, ref int offset, out string type, out ReadOnlySpan<byte> payload)
+    internal static bool TryReadBox(ReadOnlySpan<byte> data, ref int offset, out string type, out ReadOnlySpan<byte> payload)
     {
         type = string.Empty;
         payload = default;

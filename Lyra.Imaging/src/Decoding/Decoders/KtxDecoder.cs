@@ -31,7 +31,7 @@ internal sealed class KtxDecoder : DecoderBase, IThumbnailDecoder
         composite.Structure = KtxStructure.Describe(bytes, texture);
 
         ct.ThrowIfCancellationRequested();
-        DecoderValidation.RequireSaneDimensions(nameof(KtxDecoder), surface.Width, surface.Height, TextureBitmap.BytesPerDecodedPixel(texture));
+        DecoderValidation.RequireSaneDimensions(surface.Width, surface.Height, TextureBitmap.BytesPerDecodedPixel(texture));
 
         composite.Content = TextureBitmap.DecodeToContent(texture, surface, composite, ct, flipVertical: texture.Origin == TextureOrigin.BottomLeft);
     }
@@ -58,7 +58,7 @@ internal sealed class KtxDecoder : DecoderBase, IThumbnailDecoder
     private static void DecodeBasis(Composite composite, byte[] bytes)
     {
         var bitmap = BasisTranscoder.Decode(bytes);
-        DecoderValidation.RequireSaneDimensions(nameof(KtxDecoder), bitmap.Width, bitmap.Height);
+        DecoderValidation.RequireSaneDimensions(bitmap.Width, bitmap.Height);
 
         composite.AddFormatSpecific("Format", BasisTranscoder.CodecName(bytes));
         composite.AddFormatSpecific("Has Alpha", HasTranslucentPixels(bitmap) ? "Yes" : "No");
@@ -75,7 +75,7 @@ internal sealed class KtxDecoder : DecoderBase, IThumbnailDecoder
         if (KtxShared.IsKtx1(bytes))
             return KtxReader.Read(bytes);
 
-        throw new InvalidDataException("KTX: missing or unrecognized Khronos Texture identifier.");
+        throw new InvalidDataException("Missing or unrecognized Khronos Texture identifier.");
     }
 
     private static SKBitmap DecodeToBitmap(TextureData texture, in Subresource surface, CancellationToken ct)
