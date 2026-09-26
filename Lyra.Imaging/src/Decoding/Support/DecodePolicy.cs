@@ -54,6 +54,13 @@ internal static class DecodePolicy
     public const long PreviewBandBudgetBytes = 192L * 1024 * 1024;
 
     /// <summary>
+    /// How long fetching one band of a streaming pass should take. On a slow source the memory
+    /// budget above allows bands that take many seconds to arrive, and a band is the unit
+    /// everything else waits on: a preload stepping aside, a cancelled read's leftover traffic.
+    /// </summary>
+    public const double SlowSourceBandTargetMs = 2000;
+
+    /// <summary>
     /// How much larger than the display a preview is built, so it stays sharp at fit-to-window
     /// with headroom for a little zoom before tiles take over.
     /// </summary>

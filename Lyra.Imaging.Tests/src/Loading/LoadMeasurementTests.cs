@@ -85,4 +85,30 @@ public class LoadMeasurementTests
         Assert.Equal(40, timing.TransferMs!.Value, precision: 3);
         Assert.Equal(2000, timing.TransferBytesRead);
     }
+
+    [Fact]
+    public void TimeAPreloadSpentPausedIsNotLearnedAsDecode()
+    {
+        var timing = Loading();
+
+        timing.CompleteTransfer(1000, 5);
+        Thread.Sleep(60);
+        timing.AddPause(50);
+        timing.MarkComplete();
+
+        Assert.Equal(50, timing.PausedMs, precision: 3);
+        Assert.Equal(timing.CompleteMs!.Value - 5 - 50, timing.DecodeMs!.Value, precision: 3);
+    }
+
+    [Fact]
+    public void APauseBeforeTheLoadBeganIsIgnored()
+    {
+        var timing = new LoadMeasurement();
+
+        timing.AddPause(500);
+        timing.Begin();
+        timing.MarkComplete();
+
+        Assert.Equal(0, timing.PausedMs);
+    }
 }

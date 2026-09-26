@@ -14,10 +14,10 @@ public class PreviewStrideTests
         for (var preview = 64; preview <= 4096; preview += 64)
         for (var source = preview; source <= preview * 64; source += Math.Max(1, preview / 8))
         {
-            var stride = StreamingGrayPreview.StrideFor(source, preview);
+            var stride = StreamingPreview.StrideFor(source, preview);
             var samples = (double)source / preview / stride;
 
-            Assert.True(samples <= StreamingGrayPreview.MaxSamplesPerAxis + 1e-9, $"{source}->{preview} at stride {stride} averages {samples:F2} samples an axis");
+            Assert.True(samples <= StreamingPreview.MaxSamplesPerAxis + 1e-9, $"{source}->{preview} at stride {stride} averages {samples:F2} samples an axis");
         }
     }
     
@@ -27,13 +27,13 @@ public class PreviewStrideTests
         for (var preview = 64; preview <= 4096; preview += 64)
         for (var source = preview * 2; source <= preview * 64; source += Math.Max(1, preview / 8))
         {
-            var stride = StreamingGrayPreview.StrideFor(source, preview);
+            var stride = StreamingPreview.StrideFor(source, preview);
             if (stride == 1)
                 continue;
 
             var looser = (double)source / preview / (stride - 1);
 
-            Assert.True(looser > StreamingGrayPreview.MaxSamplesPerAxis, $"{source}->{preview} could have used stride {stride - 1} and still obeyed the ceiling");
+            Assert.True(looser > StreamingPreview.MaxSamplesPerAxis, $"{source}->{preview} could have used stride {stride - 1} and still obeyed the ceiling");
         }
     }
 
@@ -41,7 +41,7 @@ public class PreviewStrideTests
     public void TheRatioThatUsedToTruncateToOne()
     {
         // A 35,900-row sheet previewed at 5,760 on a 5K display.
-        Assert.Equal(2, StreamingGrayPreview.StrideFor(35900, 5760));
+        Assert.Equal(2, StreamingPreview.StrideFor(35900, 5760));
     }
 
     [Theory]
@@ -50,7 +50,7 @@ public class PreviewStrideTests
     [InlineData(1000, 4000)]
     public void NoDownsampleMeansNoStride(int source, int preview)
     {
-        Assert.Equal(1, StreamingGrayPreview.StrideFor(source, preview));
+        Assert.Equal(1, StreamingPreview.StrideFor(source, preview));
     }
 
     [Theory]
@@ -59,6 +59,6 @@ public class PreviewStrideTests
     [InlineData(0, 100)]
     public void ADegeneratePreviewIsHarmless(int source, int preview)
     {
-        Assert.Equal(1, StreamingGrayPreview.StrideFor(source, preview));
+        Assert.Equal(1, StreamingPreview.StrideFor(source, preview));
     }
 }

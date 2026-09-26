@@ -46,20 +46,12 @@ public sealed class DecodeTimeSamples
 
     private const string BytesTableKey = "bytes";
     private const string PixelsTableKey = "pixels";
-    private const string LoadBytesTableKey = "load-bytes";
-    private const string LoadPixelsTableKey = "load-pixels";
     
     private enum Metric
     {
         Bytes,
-        Pixels,
-        LoadBytes,
-        LoadPixels
+        Pixels
     }
-
-    private static Metric ByteMetric(bool includesTransfer) => includesTransfer ? Metric.LoadBytes : Metric.Bytes;
-
-    private static Metric PixelMetric(bool includesTransfer) => includesTransfer ? Metric.LoadPixels : Metric.Pixels;
 
     private readonly string _filePath;
 
@@ -75,15 +67,15 @@ public sealed class DecodeTimeSamples
         Load();
     }
     
-    public void Record(string extension, long sizeInBytes, long? pixels, double ms, bool includesTransfer = false)
+    public void Record(string extension, long sizeInBytes, long? pixels, double ms)
     {
         if (ms <= 0 || !TryGetFormat(extension, out var format))
             return;
 
-        RecordSample(format, ByteMetric(includesTransfer), Bucket(sizeInBytes, BytesPerBucketUnit), sizeInBytes, ms);
+        RecordSample(format, Metric.Bytes, Bucket(sizeInBytes, BytesPerBucketUnit), sizeInBytes, ms);
 
         if (pixels is > 0)
-            RecordSample(format, PixelMetric(includesTransfer), Bucket(pixels.Value, PixelsPerBucketUnit), pixels.Value, ms);
+            RecordSample(format, Metric.Pixels, Bucket(pixels.Value, PixelsPerBucketUnit), pixels.Value, ms);
 
         if (Interlocked.Increment(ref _unsavedChanges) >= UnsavedChangesThreshold)
         {
@@ -115,49 +107,32 @@ public sealed class DecodeTimeSamples
         if (!TryGetFormat(extension, out var format))
             return LoadEstimate.None;
 
-        var decode = Best(format, includesTransfer: false, sizeInBytes, pixels);
-        var whole = Best(format, includesTransfer: true, sizeInBytes, pixels);
-
-        if (!whole.Estimate.IsKnown)
-            return decode.Estimate;
-
-        if (!decode.Estimate.IsKnown)
-            return whole.Estimate;
-        
-        return whole.Distance < decode.Distance ? whole.Estimate : decode.Estimate;
-    }
-
-    private (LoadEstimate Estimate, int Distance) Best(string format, bool includesTransfer, long sizeInBytes, long? pixels)
-    {
         if (pixels is > 0)
         {
-            var byPixels = EstimateFor(format, PixelMetric(includesTransfer), pixels.Value, PixelsPerBucketUnit);
-            if (byPixels.Ms > 0)
-                return (new LoadEstimate(byPixels.Ms, includesTransfer), byPixels.Distance);
+            var byPixels = EstimateFor(format, Metric.Pixels, pixels.Value, PixelsPerBucketUnit);
+            if (byPixels > 0)
+                return new LoadEstimate(byPixels);
         }
 
-        var byBytes = EstimateFor(format, ByteMetric(includesTransfer), sizeInBytes, BytesPerBucketUnit);
-        return (new LoadEstimate(byBytes.Ms, includesTransfer), byBytes.Distance);
+        return new LoadEstimate(EstimateFor(format, Metric.Bytes, sizeInBytes, BytesPerBucketUnit));
     }
-    
-    private (double Ms, int Distance) EstimateFor(string format, Metric metric, long magnitude, long unit)
+
+    private double EstimateFor(string format, Metric metric, long magnitude, long unit)
     {
         var bucket = Bucket(magnitude, unit);
 
         if (_samples.TryGetValue((format, metric, bucket), out var exact))
-            return (Typical(exact), 0);
+            return Typical(exact);
 
         var nearest = NearestBucket(format, metric, bucket);
         if (nearest <= 0 || !_samples.TryGetValue((format, metric, nearest), out var fallback))
-            return (0, int.MaxValue);
+            return 0;
 
         var typical = Typical(fallback);
         if (typical <= 0)
-            return (0, int.MaxValue);
+            return 0;
 
-        var octaves = Math.Abs(BitOperations.Log2((uint)nearest) - BitOperations.Log2((uint)bucket));
-
-        return (Math.Min(MaxEstimateMs, typical * bucket / nearest), octaves);
+        return Math.Min(MaxEstimateMs, typical * bucket / nearest);
     }
     
     private int NearestBucket(string format, Metric metric, int bucket)
@@ -255,7 +230,7 @@ public sealed class DecodeTimeSamples
         {
             var formatTable = new TomlTable();
 
-            foreach (var metric in (Metric[])[Metric.Bytes, Metric.Pixels, Metric.LoadBytes, Metric.LoadPixels])
+            foreach (var metric in (Metric[])[Metric.Bytes, Metric.Pixels])
             {
                 var metricTable = new TomlTable();
                 var wroteBucket = false;
@@ -380,13 +355,7 @@ public sealed class DecodeTimeSamples
         }
     }
 
-    private static string MetricKey(Metric metric) => metric switch
-    {
-        Metric.Pixels => PixelsTableKey,
-        Metric.LoadBytes => LoadBytesTableKey,
-        Metric.LoadPixels => LoadPixelsTableKey,
-        _ => BytesTableKey
-    };
+    private static string MetricKey(Metric metric) => metric == Metric.Pixels ? PixelsTableKey : BytesTableKey;
 
     private static bool TryReadMetric(string key, out Metric metric)
     {
@@ -397,12 +366,6 @@ public sealed class DecodeTimeSamples
                 return true;
             case PixelsTableKey:
                 metric = Metric.Pixels;
-                return true;
-            case LoadBytesTableKey:
-                metric = Metric.LoadBytes;
-                return true;
-            case LoadPixelsTableKey:
-                metric = Metric.LoadPixels;
                 return true;
             default:
                 metric = default;

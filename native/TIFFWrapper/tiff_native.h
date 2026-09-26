@@ -59,13 +59,16 @@ typedef struct TiffDirectoryInfo {
     uint8_t  region_capable;    // non-zero => load_tiff_*_region can read it by rectangle
     uint8_t  region_samples;    // bytes per pixel a region comes back as: 1 grey, 4 RGBA
     uint8_t  region_premul;     // non-zero => a colour region's alpha is associated
-} TiffDirectoryInfo;            // sizeof 48 (1 byte tail padding), alignof 4
+    uint8_t  traits;            // bit 0: the directory embeds an ICC profile; bits 1-3: ORIENTATION - 1.
+} TiffDirectoryInfo;            // sizeof 48, alignof 4
 
 TIFF_API const char *get_last_tiff_error(void);
 
 TIFF_API uint64_t get_last_tiff_io_microseconds(void);
 
 TIFF_API uint64_t get_last_tiff_io_bytes(void);
+
+TIFF_API void set_tiff_io_progress(uint64_t *counter);
 
 TIFF_API bool describe_tiff_directories(const char *path, TiffDirectoryInfo **out_dirs, int *out_count);
 
@@ -93,6 +96,10 @@ TIFF_API bool load_tiff_gray_region(const char *path, int directory, uint32_t x,
 TIFF_API bool load_tiff_rgba_region(const char *path, int directory,
                                     uint32_t x, uint32_t y, uint32_t width, uint32_t height,
                                     uint8_t **out_pixels, uint32_t *out_stride);
+
+TIFF_API bool load_tiff_region_mem(const uint8_t *data, uint64_t size, int directory, int rgba,
+                                   uint32_t x, uint32_t y, uint32_t width, uint32_t height,
+                                   uint8_t **out_pixels, uint32_t *out_stride);
 
 typedef enum TiffOutputKind {
     TIFF_OUT_GRAY8 = 0,    // one byte per pixel

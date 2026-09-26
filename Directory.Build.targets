@@ -1,0 +1,13 @@
+<Project>
+
+    <Target Name="LyraCheckNativeWrappersFresh" BeforeTargets="Build"
+            Condition="'$(UsingMicrosoftNETSdk)' == 'true' AND !$([MSBuild]::IsOSPlatform('Windows')) AND Exists('$(MSBuildThisFileDirectory)release/native/check-native-fresh.sh')">
+        <Exec Command="bash &quot;$(MSBuildThisFileDirectory)release/native/check-native-fresh.sh&quot;" />
+    </Target>
+
+    <Target Name="LyraCheckNativeWrappersFreshWindows" BeforeTargets="Build"
+            Condition="'$(UsingMicrosoftNETSdk)' == 'true' AND $([MSBuild]::IsOSPlatform('Windows')) AND Exists('$(MSBuildThisFileDirectory)release\native\check-native-fresh.ps1')">
+        <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)release\native\check-native-fresh.ps1&quot;" />
+    </Target>
+
+</Project>

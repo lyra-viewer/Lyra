@@ -10,10 +10,9 @@ public sealed class LoadMeasurement
     private long _transferBytesLive;
     private long _transferMicroseconds;
     private int _transferReads;
+    private long _pausedMicroseconds;
     
     public double DecodeEstimateMs { get; internal set; }
-    
-    public bool EstimateIncludesTransfer { get; internal set; }
 
     public long TransferBytesTotal { get; internal set; }
 
@@ -31,15 +30,11 @@ public sealed class LoadMeasurement
         ? Volatile.Read(ref _transferMicroseconds) / 1000.0
         : null;
     
-    public double? DecodeMs => CompleteMs is { } total && TransferMs is { } transfer
-        ? Math.Max(0, total - transfer)
-        : null;
+    public double PausedMs => Volatile.Read(ref _pausedMicroseconds) / 1000.0;
 
-    public (double Ms, bool IncludesTransfer)? Learnable => DecodeMs is { } decode
-        ? (decode, false)
-        : CompleteMs is { } total
-            ? (total, true)
-            : null;
+    public double? DecodeMs => CompleteMs is { } total && TransferMs is { } transfer
+        ? Math.Max(0, total - transfer - PausedMs)
+        : null;
 
     internal void Begin()
     {
@@ -52,6 +47,13 @@ public sealed class LoadMeasurement
         Volatile.Write(ref _transferBytesLive, 0);
         Volatile.Write(ref _transferMicroseconds, 0);
         Volatile.Write(ref _transferReads, 0);
+        Volatile.Write(ref _pausedMicroseconds, 0);
+    }
+
+    internal void AddPause(double ms)
+    {
+        if (Measuring && ms > 0)
+            Interlocked.Add(ref _pausedMicroseconds, (long)(ms * 1000));
     }
     
     private bool Measuring => _stopwatch is { IsRunning: true };

@@ -77,6 +77,9 @@ internal class ImageLoader : IDisposable
     /// <summary>Returns a stable Composite immediately. Starts async load if needed (non-blocking).</summary>
     public Composite GetImage(string path)
     {
+        // Cleared first so the load started below never yields to the outgoing image.
+        _currentImage = null;
+
         var lazy = _images.GetOrAdd(path, p => CreateLazyJob(p, isPreload: false));
 
         ImageJob job;
@@ -94,6 +97,11 @@ internal class ImageLoader : IDisposable
         _currentImage = job.Composite;
         return job.Composite;
     }
+
+    public bool IsLoading(string path) =>
+        _images.TryGetValue(path, out var lazy)
+        && lazy.IsValueCreated
+        && lazy.Value.Composite.State is CompositeState.Pending or CompositeState.Loading;
 
     /// <summary>Preload adjacent images in the background with bounded concurrency.</summary>
     public void PreloadAdjacent(string[] paths)
@@ -258,9 +266,29 @@ internal class ImageLoader : IDisposable
     private Lazy<ImageJob> CreateLazyJob(string path, bool isPreload) =>
         new(() => StartJob(path, isPreload), LazyThreadSafetyMode.ExecutionAndPublication);
 
+    private const double PreloadTransferCeilingMs = 10_000;
+
+    /// <summary>Applies until the source's speed has been measured.</summary>
+    private const long UnmeasuredPreloadCeilingBytes = 256L * 1024 * 1024;
+
+    internal static bool WorthPreloading(long fileBytes, TransferEstimate? estimate, out double expectedMs)
+    {
+        if (estimate is { } source)
+        {
+            expectedMs = source.MsFor(fileBytes);
+            return expectedMs <= PreloadTransferCeilingMs;
+        }
+
+        expectedMs = 0;
+        return fileBytes <= UnmeasuredPreloadCeilingBytes;
+    }
+
     private void TryPreload(string path)
     {
         if (ImageFormat.IsPreloadDisabled(Path.GetExtension(path)))
+            return;
+
+        if (!_images.ContainsKey(path) && !WorthPreloadingNow(path))
             return;
 
         var lazy = _images.GetOrAdd(path, p => CreateLazyJob(p, isPreload: true));
@@ -277,6 +305,50 @@ internal class ImageLoader : IDisposable
         }
     }
 
+    private readonly ConcurrentDictionary<string, byte> _preloadSkipsReported = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool WorthPreloadingNow(string path)
+    {
+        long fileBytes;
+        try
+        {
+            fileBytes = new FileInfo(path).Length;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"[ImageLoader] Could not size {path} for preload: {ex.Message}");
+            return true;
+        }
+
+        var estimate = SourceThroughputEstimator.EstimateTransfer(path);
+        if (WorthPreloading(fileBytes, estimate, out var expectedMs))
+            return true;
+
+        if (!_preloadSkipsReported.TryAdd(path, 0))
+            return false;
+
+        Logger.Debug(estimate is null
+            ? $"[ImageLoader] Not preloading {Path.GetFileName(path)}: {fileBytes / (1024 * 1024)} MB from a source whose speed is not known yet. It loads when opened."
+            : $"[ImageLoader] Not preloading {Path.GetFileName(path)}: {fileBytes / (1024 * 1024)} MB would take about {expectedMs / 1000:F0}s to fetch. It loads when opened.");
+
+        return false;
+    }
+
+    /// <summary>Ordinary images load within this, so browsing them never makes other loads wait.</summary>
+    private const double YieldAfterMs = 500;
+
+    private bool ForegroundBusy(Composite load) => ShouldYield(_currentImage, load);
+
+    /// <summary>
+    /// Only an image already <see cref="CompositeState.Loading"/> is yielded to: one still pending
+    /// may be queued behind the very workers that would wait for it.
+    /// </summary>
+    internal static bool ShouldYield(Composite? onScreen, Composite load, double yieldAfterMs = YieldAfterMs) =>
+        onScreen is { } current
+        && !ReferenceEquals(current, load)
+        && current.State == CompositeState.Loading
+        && current.Timing.ElapsedMs >= yieldAfterMs;
+
     private async Task LoadImageAsync(Composite composite, CancellationToken ct)
     {
         var extension = composite.FileInfo.Extension;
@@ -290,9 +362,14 @@ internal class ImageLoader : IDisposable
         composite.Completed += OnCompleted;
         composite.PixelCountReported += OnPixelCountReported;
 
+        using var yielding = ForegroundYield.EnterLoad(composite.FileInfo.Name, () => ForegroundBusy(composite), composite.Timing.AddPause);
+
         try
         {
             var decoder = DecoderManager.GetDecoder(composite.ImageFormatType);
+
+            ForegroundYield.WaitForForeground(ct);
+
             composite.State = CompositeState.Loading;
             composite.BeginLoadTiming();
 
@@ -360,8 +437,8 @@ internal class ImageLoader : IDisposable
 
         void OnCompleted(Composite c)
         {
-            if (fileSize is { } bytes && c.Timing.Learnable is { } learnable)
-                DecodeTimeEstimator.RecordDecodeTime(extension, bytes, PixelsOf(c), learnable.Ms, learnable.IncludesTransfer);
+            if (fileSize is { } bytes && c.Timing.DecodeMs is { } decodeMs)
+                DecodeTimeEstimator.RecordDecodeTime(extension, bytes, PixelsOf(c), decodeMs);
 
             if (c.Timing.TransferMs is { } transfer)
                 SourceThroughputEstimator.RecordTransfer(c.FileInfo.FullName, c.Timing.TransferBytesRead, transfer);
@@ -378,7 +455,6 @@ internal class ImageLoader : IDisposable
             : LoadEstimate.None;
 
         composite.Timing.DecodeEstimateMs = estimate.Ms;
-        composite.Timing.EstimateIncludesTransfer = estimate.IncludesTransfer;
     }
 
     private static long? PixelsOf(Composite composite)

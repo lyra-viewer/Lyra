@@ -289,7 +289,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     {
         var textColor = _viewState.BackgroundMode == BackgroundMode.White ? SKColors.Black : SKColors.White;
         
-        UIManager.SetLoadProgress(_loadProgress.Update(LoadSnapshot.Of(_composite)), textColor);
+        var load = LoadSnapshot.Of(_composite);
+        UIManager.SetLoadProgress(_loadProgress.Update(load), textColor);
 
         if (_closing)
         {
@@ -318,7 +319,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
         if (_composite.State == CompositeState.Loading)
         {
-            UIManager.SetStatusOverlay("Loading...", textColor);
+            UIManager.SetStatusOverlay(LoadStatusText.For(load), textColor);
             return;
         }
 

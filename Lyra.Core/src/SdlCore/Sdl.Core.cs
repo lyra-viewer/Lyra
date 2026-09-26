@@ -453,7 +453,7 @@ public partial class SdlCore : IDisposable
 
     private void PurgeNotExistingFiles(NavigationDirection direction = NavigationDirection.None)
     {
-        while (DirectoryNavigator.GetCurrent() is { } candidate && !File.Exists(candidate))
+        while (DirectoryNavigator.GetCurrent() is { } candidate && !ImageStore.IsLoading(candidate) && !File.Exists(candidate))
         {
             DirectoryNavigator.Purge(candidate);
             ImageStore.Purge(candidate);

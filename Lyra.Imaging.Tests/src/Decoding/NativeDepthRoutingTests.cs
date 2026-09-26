@@ -1,4 +1,4 @@
-using Lyra.Imaging.Decoding.Decoders;
+using Lyra.Imaging.Decoding.Decoders.Tiff;
 using Lyra.Imaging.Interop;
 using Xunit;
 
@@ -28,34 +28,34 @@ public class NativeDepthRoutingTests
     [Fact]
     public void ALargeFormatScanTakesTheNativePath()
     {
-        Assert.True(TiffDecoder.WantsNativeDepth(Gray(23390, 33110))); // A1 at 1000 DPI
-        Assert.True(TiffDecoder.WantsNativeDepth(Gray(66220, 93620))); // A0 at 2000 DPI
+        Assert.True(TiffRegion.WantsNativeDepth(Gray(23390, 33110))); // A1 at 1000 DPI
+        Assert.True(TiffRegion.WantsNativeDepth(Gray(66220, 93620))); // A0 at 2000 DPI
     }
 
     [Fact]
     public void ASmallGreyFileKeepsTheExistingPath()
     {
-        Assert.False(TiffDecoder.WantsNativeDepth(Gray(2480, 3508)));  // A4 at 300 DPI
+        Assert.False(TiffRegion.WantsNativeDepth(Gray(2480, 3508)));  // A4 at 300 DPI
     }
 
     [Fact]
     public void ALargeColourScanTakesItToo()
     {
-        Assert.True(TiffDecoder.WantsNativeDepth(Color(23390, 33110)));
+        Assert.True(TiffRegion.WantsNativeDepth(Color(23390, 33110)));
     }
 
     [Fact]
     public void ALayoutWithNoRegionReaderIsLeftAlone()
     {
-        Assert.False(TiffDecoder.WantsNativeDepth(Gray(66220, 93620, capable: 0)));
+        Assert.False(TiffRegion.WantsNativeDepth(Gray(66220, 93620, capable: 0)));
     }
 
     [Fact]
     public void ADegenerateDirectoryIsRefused()
     {
-        Assert.False(TiffDecoder.WantsNativeDepth(Gray(0, 33110)));
-        Assert.False(TiffDecoder.WantsNativeDepth(Gray(23390, 0)));
-        Assert.False(TiffDecoder.WantsNativeDepth(default));
+        Assert.False(TiffRegion.WantsNativeDepth(Gray(0, 33110)));
+        Assert.False(TiffRegion.WantsNativeDepth(Gray(23390, 0)));
+        Assert.False(TiffRegion.WantsNativeDepth(default));
     }
 
     [Fact]
@@ -65,6 +65,6 @@ public class NativeDepthRoutingTests
         var info = Gray(23390, 33110);
 
         Assert.True((long)info.Width * info.Height * 4 > int.MaxValue);
-        Assert.True(TiffDecoder.WantsNativeDepth(info));
+        Assert.True(TiffRegion.WantsNativeDepth(info));
     }
 }

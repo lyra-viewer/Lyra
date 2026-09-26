@@ -1,4 +1,4 @@
-using Lyra.Imaging.Decoding.Decoders;
+using Lyra.Imaging.Decoding.Decoders.Tiff;
 using Lyra.Imaging.Interop;
 using Xunit;
 
@@ -21,7 +21,7 @@ public class NativeLayoutBudgetTests
     public void ThePeakCountsThePackedFormAndTheConvertedOne()
     {
         // 64 Mpx at 12-bit x3 packs to 288 MB and converts to 256 MB of RGBA8.
-        var peak = TiffDecoder.NativeLayoutPeakBytes(Odd(8192, 8192, 12, 3), isFloat: false);
+        var peak = TiffNativeLayout.PeakBytes(Odd(8192, 8192, 12, 3), isFloat: false);
 
         Assert.Equal(288L * 1024 * 1024 + 256L * 1024 * 1024, peak);
     }
@@ -31,7 +31,7 @@ public class NativeLayoutBudgetTests
     {
         var info = Odd(1024, 1024, 32, 3, format: 3);
 
-        Assert.Equal(12L * 1024 * 1024 + 16L * 1024 * 1024, TiffDecoder.NativeLayoutPeakBytes(info, isFloat: true));
+        Assert.Equal(12L * 1024 * 1024 + 16L * 1024 * 1024, TiffNativeLayout.PeakBytes(info, isFloat: true));
     }
 
     [Fact]
@@ -40,13 +40,13 @@ public class NativeLayoutBudgetTests
         // 1 Mpx at 14-bit: 1.75 MB packed, 1 MB of Gray8.
         var info = Odd(1024, 1024, 14, 1);
 
-        Assert.Equal(1835008L + 1048576L, TiffDecoder.NativeLayoutPeakBytes(info, isFloat: false));
+        Assert.Equal(1835008L + 1048576L, TiffNativeLayout.PeakBytes(info, isFloat: false));
     }
     
     [Fact]
     public void ThePeakSurvivesAnImageThatOverflowsAnInt()
     {
-        var peak = TiffDecoder.NativeLayoutPeakBytes(Odd(40000, 40000, 12, 3), isFloat: false);
+        var peak = TiffNativeLayout.PeakBytes(Odd(40000, 40000, 12, 3), isFloat: false);
 
         Assert.True(peak > int.MaxValue);
         Assert.Equal(1_600_000_000L * 9 / 2 + 1_600_000_000L * 4, peak);
@@ -57,9 +57,9 @@ public class NativeLayoutBudgetTests
     {
         var info = Odd(40000, 40000, 12, 3);
 
-        Assert.True(TiffDecoder.NativeLayoutPeakBytes(info, isFloat: false) > TiffDecoder.NativeLayoutBudgetBytes);
+        Assert.True(TiffNativeLayout.PeakBytes(info, isFloat: false) > TiffNativeLayout.BudgetBytes);
 
-        var ex = Assert.Throws<InvalidOperationException>(() => TiffDecoder.RequireNativeLayoutWithinBudget("sheet.tif", info, isFloat: false));
+        var ex = Assert.Throws<InvalidOperationException>(() => TiffNativeLayout.RequireWithinBudget("sheet.tif", info, isFloat: false));
 
         Assert.Contains("at peak", ex.Message);
     }
@@ -69,16 +69,16 @@ public class NativeLayoutBudgetTests
     {
         var info = Odd(4096, 4096, 12, 3);
 
-        Assert.True(TiffDecoder.NativeLayoutPeakBytes(info, isFloat: false) <= TiffDecoder.NativeLayoutBudgetBytes);
+        Assert.True(TiffNativeLayout.PeakBytes(info, isFloat: false) <= TiffNativeLayout.BudgetBytes);
 
-        TiffDecoder.RequireNativeLayoutWithinBudget("scan.tif", info, isFloat: false);
+        TiffNativeLayout.RequireWithinBudget("scan.tif", info, isFloat: false);
     }
     
     [Fact]
     public void ADegenerateDirectoryIsRefused()
     {
-        Assert.Throws<InvalidOperationException>(() => TiffDecoder.RequireNativeLayoutWithinBudget("empty.tif", Odd(0, 4096, 12, 3), isFloat: false));
-        Assert.Throws<InvalidOperationException>(() => TiffDecoder.RequireNativeLayoutWithinBudget("empty.tif", Odd(4096, 0, 12, 3), isFloat: false));
-        Assert.Throws<InvalidOperationException>(() => TiffDecoder.RequireNativeLayoutWithinBudget("huge.tif", Odd(uint.MaxValue, 4096, 12, 3), isFloat: false));
+        Assert.Throws<InvalidOperationException>(() => TiffNativeLayout.RequireWithinBudget("empty.tif", Odd(0, 4096, 12, 3), isFloat: false));
+        Assert.Throws<InvalidOperationException>(() => TiffNativeLayout.RequireWithinBudget("empty.tif", Odd(4096, 0, 12, 3), isFloat: false));
+        Assert.Throws<InvalidOperationException>(() => TiffNativeLayout.RequireWithinBudget("huge.tif", Odd(uint.MaxValue, 4096, 12, 3), isFloat: false));
     }
 }

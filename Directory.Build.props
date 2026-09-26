@@ -1,0 +1,10 @@
+<Project>
+
+    <PropertyGroup>
+        <LyraVersionFile>$(MSBuildThisFileDirectory)release/VERSION</LyraVersionFile>
+        <LyraVersion Condition="Exists('$(LyraVersionFile)')">$([System.IO.File]::ReadAllText('$(LyraVersionFile)').Trim())</LyraVersion>
+        <LyraVersion Condition="'$(LyraVersion)' == ''">0.0.0-dev</LyraVersion>
+        <Version>$(LyraVersion)</Version>
+    </PropertyGroup>
+
+</Project>

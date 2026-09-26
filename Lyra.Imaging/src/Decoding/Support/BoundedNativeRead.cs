@@ -1,4 +1,5 @@
 using Lyra.Common;
+using Lyra.Imaging.Loading;
 
 namespace Lyra.Imaging.Decoding.Support;
 
@@ -41,21 +42,33 @@ internal static class BoundedNativeRead
     internal delegate bool ReadWithBuffer(out IntPtr pixels);
 
     /// <summary>
-    /// Runs <paramref name="read"/> to completion or to its bound, whichever comes first.
-    /// A timeout is reported as a failed read, which every caller already handles the way it would
-    /// a real native decode failure; it is never rethrown.
+    /// Runs <paramref name="read"/> to completion, to its bound, or to <paramref name="ct"/> being
+    /// canceled, whichever comes first.
     /// </summary>
-    public static bool Run(string context, long expectedBytes, ReadWithBuffer read, out IntPtr pixels, out bool timedOut, Action<IntPtr> releaseLate, TimeSpan? timeout = null)
+    public static bool Attempt(string context, long expectedBytes, ReadWithBuffer read, out IntPtr pixels, out bool timedOut, Action<IntPtr> releaseLate, TimeSpan? timeout = null, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
+
+        // Preload work steps aside here, between reads, while the image on screen loads.
+        ForegroundYield.WaitForForeground(ct);
+
         var bound = timeout ?? BoundFor(expectedBytes);
 
-        var task = Task.Run(() =>
-        {
-            var ok = read(out var buffer);
-            return (Ok: ok, Pixels: buffer);
-        });
+        var task = LaunchAtCallerPriority(read);
 
-        if (Task.WaitAny([task], bound) == 0)
+        int finished;
+        try
+        {
+            finished = Task.WaitAny([task], (int)Math.Min(int.MaxValue, bound.TotalMilliseconds), ct);
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.Debug($"[BoundedNativeRead] {context} was cancelled mid-read; abandoning it.");
+            ReleaseWhenDone(task, context, releaseLate);
+            throw;
+        }
+
+        if (finished == 0)
         {
             var (ok, buffer) = task.GetAwaiter().GetResult();
 
@@ -68,7 +81,57 @@ internal static class BoundedNativeRead
         pixels = IntPtr.Zero;
 
         Logger.Warning($"[BoundedNativeRead] {context} did not return within {bound.TotalSeconds:F0}s; abandoning it rather than waiting further.");
-        
+
+        ReleaseWhenDone(task, context, releaseLate);
+
+        return false;
+    }
+
+    /// <summary>
+    /// Starts the read off the calling thread, at the calling thread's priority. A pool thread
+    /// would do at Normal, but a preload worker runs below that so the image on screen gets the
+    /// CPU first - and handing its reads to the pool would quietly undo that for all the work
+    /// that matters. Pool threads are shared, so their priority is left alone and the read gets
+    /// a thread of its own instead.
+    /// </summary>
+    private static Task<(bool Ok, IntPtr Pixels)> LaunchAtCallerPriority(ReadWithBuffer read)
+    {
+        var priority = Thread.CurrentThread.Priority;
+
+        if (priority == ThreadPriority.Normal)
+            return Task.Run(() => Invoke(read));
+
+        var done = new TaskCompletionSource<(bool Ok, IntPtr Pixels)>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                done.SetResult(Invoke(read));
+            }
+            catch (Exception ex)
+            {
+                done.SetException(ex);
+            }
+        })
+        {
+            IsBackground = true,
+            Priority = priority,
+            Name = $"BoundedRead-{Thread.CurrentThread.Name ?? priority.ToString()}"
+        };
+
+        thread.Start();
+        return done.Task;
+    }
+
+    private static (bool Ok, IntPtr Pixels) Invoke(ReadWithBuffer read)
+    {
+        var ok = read(out var buffer);
+        return (ok, buffer);
+    }
+
+    /// <summary>Frees whatever an abandoned read hands back, whenever it gets round to it.</summary>
+    private static void ReleaseWhenDone(Task<(bool Ok, IntPtr Pixels)> task, string context, Action<IntPtr> releaseLate) =>
         task.ContinueWith(finished =>
         {
             if (finished is { IsCompletedSuccessfully: true, Result.Ok: true, Result.Pixels: var late } && late != IntPtr.Zero)
@@ -77,7 +140,4 @@ internal static class BoundedNativeRead
                 Logger.Debug($"[BoundedNativeRead] {context} returned after it was abandoned; its buffer was freed.");
             }
         }, TaskScheduler.Default);
-
-        return false;
-    }
 }

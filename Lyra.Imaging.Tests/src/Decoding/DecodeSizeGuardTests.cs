@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders;
+using Lyra.Imaging.Decoding.Decoders.Tiff;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Tests.Support;
@@ -44,13 +45,13 @@ public class DecodeSizeGuardTests
     [InlineData(23170u, 23170u)] // 2,147,395,600 bytes: just under an int
     [InlineData(1u, 1u)]
     public void RequireRgbaWithinOneBitmap_AllowsWhatItHolds(uint width, uint height) =>
-        TiffDecoder.RequireRgbaWithinOneBitmap("x.tif", new TiffNative.DirectoryInfo { Width = width, Height = height });
+        TiffWholeImage.RequireWithinOneBitmap("x.tif", new TiffNative.DirectoryInfo { Width = width, Height = height });
 
     [Fact]
     public void RequireRgbaWithinOneBitmap_RefusesBeforeLibtiffAllocates()
     {
         Assert.Throws<InvalidOperationException>(() =>
-            TiffDecoder.RequireRgbaWithinOneBitmap("x.tif", new TiffNative.DirectoryInfo { Width = 40000, Height = 35900 }));
+            TiffWholeImage.RequireWithinOneBitmap("x.tif", new TiffNative.DirectoryInfo { Width = 40000, Height = 35900 }));
     }
 
     [Fact]

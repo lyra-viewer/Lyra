@@ -176,7 +176,7 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 | `F`                   | Toggle fullscreen                                 |
 | `B`                   | Toggle background mode                            |
 | `I`                   | Toggle image information overlay                  |
-| `H`                   | Toggle help bar                                   |
+| `H`                   | Toggle help overlay                               |
 | `Return`              | Reveal image or directory in native file explorer |
 | `Esc`                 | Cancel an operation, or exit application          |
 

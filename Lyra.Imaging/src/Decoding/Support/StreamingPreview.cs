@@ -6,7 +6,7 @@ namespace Lyra.Imaging.Decoding.Support;
 /// <summary>
 /// Builds a downsampled preview of a large image without ever holding the whole of it.
 /// </summary>
-internal static class StreamingGrayPreview
+internal static class StreamingPreview
 {
     /// <summary>Reads a band of full-width rows, or returns false.</summary>
     internal delegate bool BandReader(uint firstRow, uint rowCount, out IntPtr pixels, out uint stride);
@@ -64,7 +64,7 @@ internal static class StreamingGrayPreview
                 var rows = (uint)Math.Min(rowsPerBand, height - bandTop);
                 if (!read(bandTop, rows, out var pixels, out var stride) || pixels == IntPtr.Zero)
                 {
-                    Logger.Warning($"[StreamingGrayPreview] Could not read rows {bandTop}..{bandTop + rows}; the preview will be short.");
+                    Logger.Warning($"[StreamingPreview] Could not read rows {bandTop}..{bandTop + rows}; the preview will be short.");
                     bitmap.Dispose();
                     return null;
                 }

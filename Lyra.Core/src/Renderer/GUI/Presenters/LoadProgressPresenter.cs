@@ -5,7 +5,7 @@ namespace Lyra.Renderer.GUI.Presenters;
 
 public readonly record struct LoadProgress(bool Visible, float Value, bool Indeterminate);
 
-public readonly record struct LoadSnapshot(object? Identity, bool Active, double ElapsedMs, double DecodeEstimateMs, bool EstimateIncludesTransfer, long BytesTotal, long BytesRead, TransferEstimate? Source)
+public readonly record struct LoadSnapshot(object? Identity, bool Active, double ElapsedMs, double DecodeEstimateMs, long BytesTotal, long BytesRead, TransferEstimate? Source)
 {
     public static LoadSnapshot Of(Composite? composite)
     {
@@ -17,7 +17,6 @@ public readonly record struct LoadSnapshot(object? Identity, bool Active, double
             Active: true,
             composite.Timing.ElapsedMs,
             composite.Timing.DecodeEstimateMs,
-            composite.Timing.EstimateIncludesTransfer,
             composite.Timing.TransferBytesTotal,
             composite.Timing.TransferBytesRead,
             SourceThroughputEstimator.EstimateTransfer(composite.FileInfo.FullName)
@@ -26,11 +25,8 @@ public readonly record struct LoadSnapshot(object? Identity, bool Active, double
 }
 
 /// <summary>
-/// Turns a load in progress into a bar, from the two halves of it that are measured separately:
-/// the bytes coming from storage and the decode that follows.
-///
-/// The bar fills against the prediction, rests briefly at the end, and then sweeps for as long as
-/// the load outlives it.
+/// Turns a load into a bar: the transfer part follows the bytes read, the decode part follows the
+/// decode estimate. The bar rests briefly at the end, then sweeps for as long as the load outlives it.
 /// </summary>
 public sealed class LoadProgressPresenter
 {
@@ -68,7 +64,17 @@ public sealed class LoadProgressPresenter
         if (snapshot.ElapsedMs < ShowAfterMs)
             return default;
 
-        if (_estimateSpent || Fraction(snapshot) is not { } fraction)
+        var measured = Fraction(snapshot);
+        
+        if (!_followingBytes && BytesArriving(snapshot) && measured is { } first)
+        {
+            _followingBytes = true;
+            _estimateSpent = false;
+            _fullSinceMs = null;
+            _value = first;
+        }
+
+        if (_estimateSpent || measured is not { } fraction)
             return Sweeping();
 
         _value = Math.Max(_value, fraction);
@@ -106,21 +112,60 @@ public sealed class LoadProgressPresenter
         _fullSinceMs = null;
         _partialShown = false;
         _estimateSpent = false;
+        _transferDoneAtMs = null;
+        _shareAtTransferDone = null;
+        _followingBytes = false;
     }
 
-    private static float? Fraction(LoadSnapshot s)
+    private bool _followingBytes;
+
+    private static bool BytesArriving(LoadSnapshot s) => s.BytesTotal > 0 && s.BytesRead > 0 && s.BytesRead < s.BytesTotal;
+
+    private double? _transferDoneAtMs;
+
+    private double? _shareAtTransferDone;
+
+    private float? Fraction(LoadSnapshot s)
     {
+        if (s.BytesTotal > 0 && s.BytesRead > 0)
+            return FollowingBytes(s);
+
         if (s.DecodeEstimateMs <= 0 || s.BytesTotal <= 0 || s.Source is not { } source)
             return null;
-        
-        var transferMs = s.EstimateIncludesTransfer ? 0 : source.MsFor(s.BytesTotal);
+
+        var transferMs = source.MsFor(s.BytesTotal);
         var totalMs = transferMs + s.DecodeEstimateMs;
-        if (totalMs <= 0)
-            return null;
 
-        var byteShare = (float)(transferMs / totalMs) * Math.Clamp((float)s.BytesRead / s.BytesTotal, 0f, 1f);
-        var timeShare = (float)(s.ElapsedMs / totalMs);
+        return totalMs > 0 ? Math.Min(1f, (float)(s.ElapsedMs / totalMs)) : null;
+    }
 
-        return Math.Min(1f, Math.Max(byteShare, timeShare));
+    private float FollowingBytes(LoadSnapshot s)
+    {
+        var share = TransferShare(s);
+
+        if (s.BytesRead < s.BytesTotal)
+            return (float)(share * s.BytesRead / s.BytesTotal);
+
+        var decodeMs = s.DecodeEstimateMs;
+        if (share >= 1 || decodeMs <= 0)
+            return 1f;
+        
+        _transferDoneAtMs ??= s.ElapsedMs;
+        _shareAtTransferDone ??= share;
+
+        var decoded = Math.Clamp((s.ElapsedMs - _transferDoneAtMs.Value) / decodeMs, 0, 1);
+        return (float)Math.Min(1, _shareAtTransferDone.Value + (1 - _shareAtTransferDone.Value) * decoded);
+    }
+
+    /// <summary>Predicted from the source's measured speed, or from this load's own rate until there is one.</summary>
+    private static double TransferShare(LoadSnapshot s)
+    {
+        var transferMs = s.Source is { } source
+            ? source.MsFor(s.BytesTotal)
+            : s.ElapsedMs * s.BytesTotal / s.BytesRead;
+
+        var decodeMs = s.DecodeEstimateMs;
+
+        return decodeMs <= 0 || transferMs <= 0 ? 1 : transferMs / (transferMs + decodeMs);
     }
 }

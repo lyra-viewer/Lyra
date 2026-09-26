@@ -227,86 +227,19 @@ public class DecodeTimeSamplesTests
         Assert.Equal(50, samples.Estimate(Png, OneMb, 4_000_000).Ms, precision: 6);
     }
 
-    // ------------------------------------------------------------------
-    //  Loads whose read cannot be told apart from their decode
-    // ------------------------------------------------------------------
-    
     [Fact]
-    public void ALoadWhoseReadCannotBeTimedIsStillLearnedFrom()
+    public void OldWholeLoadTimings_AreIgnored_AndDroppedOnTheNextSave()
     {
-        var samples = NewSamples();
-        samples.Record(Tiff, 4_000_000_000, 1_436_000_000, 2660, includesTransfer: true);
-
-        var estimate = samples.Estimate(Tiff, 4_000_000_000, 1_436_000_000);
-
-        Assert.Equal(2660, estimate.Ms, precision: 6);
-        Assert.True(estimate.IsKnown);
-    }
-    
-    [Fact]
-    public void AWholeLoadEstimateSaysSo()
-    {
-        var samples = NewSamples();
-        samples.Record(Tiff, 4_000_000_000, 1_436_000_000, 2660, includesTransfer: true);
-
-        Assert.True(samples.Estimate(Tiff, 4_000_000_000, 1_436_000_000).IncludesTransfer);
-    }
-
-    [Fact]
-    public void ADecodeEstimateIsNotMarked()
-    {
-        var samples = NewSamples();
-        samples.Record(Tiff, OneMb, 4_000_000, 120);
-
-        Assert.False(samples.Estimate(Tiff, OneMb, 4_000_000).IncludesTransfer);
-    }
-    
-    [Fact]
-    public void TheTwoKindsNeverMix()
-    {
-        var samples = NewSamples();
-
-        samples.Record(Tiff, OneMb, 4_000_000, 100);
-        samples.Record(Tiff, OneMb, 4_000_000, 9000, includesTransfer: true);
-
-        var estimate = samples.Estimate(Tiff, OneMb, 4_000_000);
-
-        Assert.Equal(100, estimate.Ms, precision: 6);
-        Assert.False(estimate.IncludesTransfer);
-    }
-    
-    [Fact]
-    public void TheSizeDecidesWhichKindAnswers()
-    {
-        var samples = NewSamples();
-
-        samples.Record(Tiff, OneMb, 4_000_000, 100);                                      // small: measured
-        samples.Record(Tiff, 4_000_000_000, 1_436_000_000, 2660, includesTransfer: true); // large: streamed
-
-        var small = samples.Estimate(Tiff, OneMb, 4_000_000);
-        var large = samples.Estimate(Tiff, 4_000_000_000, 1_436_000_000);
-
-        Assert.False(small.IncludesTransfer);
-        Assert.Equal(100, small.Ms, precision: 6);
-
-        Assert.True(large.IncludesTransfer);
-        Assert.Equal(2660, large.Ms, precision: 6);
-    }
-
-    [Fact]
-    public void BothKindsSurviveARoundTrip()
-    {
-        using var file = new TempFile([]);
-
-        var written = new DecodeTimeSamples(file.Path);
-        written.Record(Tiff, OneMb, 4_000_000, 100);
-        written.Record(Tiff, 4_000_000_000, 1_436_000_000, 2660, includesTransfer: true);
-        written.Save(suppressLogging: true);
+        using var file = new TempFile("version = 4\n\n[tiff]\n\n[tiff.load-bytes]\n4 = [9000.0]\n\n[tiff.load-pixels]\n64 = [9000.0]\n"u8.ToArray());
 
         var read = new DecodeTimeSamples(file.Path);
 
-        Assert.False(read.Estimate(Tiff, OneMb, 4_000_000).IncludesTransfer);
-        Assert.True(read.Estimate(Tiff, 4_000_000_000, 1_436_000_000).IncludesTransfer);
+        Assert.False(read.Estimate(Tiff, OneMb, 4_000_000).IsKnown);
+
+        read.Record(Tiff, OneMb, 4_000_000, 100);
+        read.Save(suppressLogging: true);
+
+        Assert.DoesNotContain("load-", File.ReadAllText(file.Path));
     }
 
     [Fact]

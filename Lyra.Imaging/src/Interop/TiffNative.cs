@@ -55,6 +55,21 @@ internal static class TiffNative
         /// the color channels come back already multiplied by it.
         /// </summary>
         public byte RegionPremultiplied;
+
+        /// <summary>
+        /// Bit 0: the directory embeds an ICC profile. Bits 1-3: its ORIENTATION less one. Read through
+        /// <see cref="HasIcc"/> and <see cref="Orientation"/>.
+        /// </summary>
+        public byte Traits;
+
+        public readonly bool HasIcc => (Traits & 1) != 0;
+
+        /// <summary>The TIFF ORIENTATION value, 1 (top-left, as stored) to 8.</summary>
+        public readonly int Orientation => ((Traits >> 1) & 7) + 1;
+
+        /// <summary>Packs <see cref="Traits"/> as the native side does.</summary>
+        internal static byte PackTraits(bool hasIcc, int orientation = 1) =>
+            (byte)((hasIcc ? 1 : 0) | ((Math.Clamp(orientation, 1, 8) - 1) << 1));
     }
 
     /// <summary>What <see cref="LoadNative"/> should produce. Mirrors <c>TiffOutputKind</c>.</summary>
@@ -156,6 +171,34 @@ internal static class TiffNative
             Volatile.Write(ref _ioEntryPointsMissing, true);
             Logger.Info($"[TiffNative] {nameof(get_last_tiff_io_microseconds)} is missing; this build cannot separate fetch time from decode time for TIFFs it reads by path.");
             return null;
+        }
+    }
+
+    [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
+    private static extern void set_tiff_io_progress(IntPtr counter);
+
+    private static bool _progressEntryPointMissing;
+
+    /// <summary>
+    /// Has the calling thread's reads counted into <paramref name="counter"/> as they happen, or
+    /// stops that with <see cref="IntPtr.Zero"/>.
+    /// </summary>
+    /// <param name="counter">Eight aligned bytes that outlive every call made while set.</param>
+    public static bool SetIoProgress(IntPtr counter)
+    {
+        if (Volatile.Read(ref _progressEntryPointMissing))
+            return false;
+
+        try
+        {
+            set_tiff_io_progress(counter);
+            return true;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            Volatile.Write(ref _progressEntryPointMissing, true);
+            MissingEntryPoint(nameof(set_tiff_io_progress));
+            return false;
         }
     }
 
@@ -326,6 +369,35 @@ internal static class TiffNative
         catch (EntryPointNotFoundException)
         {
             return MissingEntryPoint(nameof(load_tiff_gray_region));
+        }
+    }
+
+    [DllImport("libtiff_native", CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private static extern bool load_tiff_region_mem(IntPtr data, ulong size, int directory, int rgba, uint x, uint y, uint width, uint height, out IntPtr pixels, out uint stride);
+
+    private static bool _memoryRegionEntryPointMissing;
+    
+    public static bool MemoryRegionAvailable => !Volatile.Read(ref _memoryRegionEntryPointMissing);
+    
+    public static bool LoadRegionFromMemory(IntPtr data, ulong size, int directory, bool colour, uint x, uint y, uint width, uint height,
+        out IntPtr pixels, out uint stride)
+    {
+        pixels = IntPtr.Zero;
+        stride = 0;
+
+        if (!MemoryRegionAvailable)
+            return false;
+
+        try
+        {
+            return load_tiff_region_mem(data, size, directory, colour ? 1 : 0, x, y, width, height, out pixels, out stride);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            Volatile.Write(ref _memoryRegionEntryPointMissing, true);
+            MissingEntryPoint(nameof(load_tiff_region_mem));
+            return false;
         }
     }
 

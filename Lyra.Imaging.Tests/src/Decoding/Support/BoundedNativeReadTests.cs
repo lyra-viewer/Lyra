@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Lyra.Imaging.Decoding.Support;
+using Lyra.Imaging.Loading;
 using Xunit;
 
 namespace Lyra.Imaging.Tests.Decoding.Support;
@@ -17,13 +18,13 @@ public class BoundedNativeReadTests
     {
         var freed = new List<IntPtr>();
 
-        var ok = BoundedNativeRead.Run("fast read", ExpectedBytes,
+        var ok = BoundedNativeRead.Attempt("fast read", ExpectedBytes,
             (out IntPtr pixels) =>
             {
                 pixels = Buffer;
                 return true;
             },
-            out var returned, out var timedOut, freed.Add, ShortBound);
+            out var returned, out var timedOut, freed.Add, ShortBound, TestContext.Current.CancellationToken);
 
         Assert.True(ok);
         Assert.False(timedOut);
@@ -34,13 +35,13 @@ public class BoundedNativeReadTests
     [Fact]
     public void ReadThatFails_IsNotReportedAsATimeout()
     {
-        var ok = BoundedNativeRead.Run("failing read", ExpectedBytes,
+        var ok = BoundedNativeRead.Attempt("failing read", ExpectedBytes,
             (out IntPtr pixels) =>
             {
                 pixels = IntPtr.Zero;
                 return false;
             },
-            out var returned, out var timedOut, _ => { }, ShortBound);
+            out var returned, out var timedOut, _ => { }, ShortBound, TestContext.Current.CancellationToken);
 
         Assert.False(ok);
         Assert.False(timedOut);
@@ -56,14 +57,14 @@ public class BoundedNativeReadTests
 
         try
         {
-            var ok = BoundedNativeRead.Run("stalled read", ExpectedBytes,
+            var ok = BoundedNativeRead.Attempt("stalled read", ExpectedBytes,
                 (out IntPtr pixels) =>
                 {
                     pixels = IntPtr.Zero;
                     wedged.Wait();
                     return true;
                 },
-                out var returned, out var timedOut, _ => { }, ShortBound);
+                out var returned, out var timedOut, _ => { }, ShortBound, TestContext.Current.CancellationToken);
 
             sw.Stop();
 
@@ -86,7 +87,7 @@ public class BoundedNativeReadTests
 
         var freed = new List<IntPtr>();
 
-        var ok = BoundedNativeRead.Run("late read", ExpectedBytes,
+        var ok = BoundedNativeRead.Attempt("late read", ExpectedBytes,
             (out IntPtr pixels) =>
             {
                 pixels = Buffer;
@@ -97,7 +98,7 @@ public class BoundedNativeReadTests
             {
                 freed.Add(late);
                 freedLate.Set();
-            }, ShortBound);
+            }, ShortBound, TestContext.Current.CancellationToken);
 
         Assert.False(ok);
         Assert.True(timedOut);
@@ -109,6 +110,121 @@ public class BoundedNativeReadTests
         Assert.Equal([Buffer], freed);
     }
     
+    [Fact]
+    public void CancelledRead_StopsWaitingAtOnce_AndStillFreesTheLateBuffer()
+    {
+        using var wedged = new ManualResetEventSlim(false);
+        using var started = new ManualResetEventSlim(false);
+        using var freedLate = new ManualResetEventSlim(false);
+        using var cts = new CancellationTokenSource();
+
+        var freed = new List<IntPtr>();
+        var longBound = TimeSpan.FromMinutes(5);
+
+        var sw = Stopwatch.StartNew();
+
+        var run = Task.Run(() => BoundedNativeRead.Attempt("cancelled read", ExpectedBytes,
+            (out IntPtr pixels) =>
+            {
+                pixels = Buffer;
+                started.Set();
+                wedged.Wait();
+                return true;
+            },
+            out _, out _, late =>
+            {
+                freed.Add(late);
+                freedLate.Set();
+            }, longBound, cts.Token), TestContext.Current.CancellationToken);
+
+        Assert.True(started.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "The read should have started");
+        cts.Cancel();
+
+        Assert.ThrowsAny<OperationCanceledException>(() => run.GetAwaiter().GetResult());
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), $"Cancellation should not wait out the bound, took {sw.Elapsed}");
+
+        wedged.Set();
+
+        Assert.True(freedLate.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "A late buffer should have been freed");
+        Assert.Equal([Buffer], freed);
+    }
+
+    [Fact]
+    public void AlreadyCancelled_NeverStartsTheRead()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var started = false;
+
+        Assert.ThrowsAny<OperationCanceledException>(() => BoundedNativeRead.Attempt("pre-cancelled read", ExpectedBytes,
+            (out IntPtr pixels) =>
+            {
+                started = true;
+                pixels = IntPtr.Zero;
+                return true;
+            },
+            out _, out _, _ => { }, ShortBound, cts.Token));
+
+        Assert.False(started);
+    }
+
+    [Fact]
+    public void ReadFromALowPriorityThread_RunsAtThatPriority()
+    {
+        ThreadPriority? readAt = null;
+        Exception? failure = null;
+
+        var caller = new Thread(() =>
+        {
+            try
+            {
+                BoundedNativeRead.Attempt("preload read", ExpectedBytes,
+                    (out IntPtr pixels) =>
+                    {
+                        readAt = Thread.CurrentThread.Priority;
+                        pixels = IntPtr.Zero;
+                        return false;
+                    },
+                    out _, out _, _ => { }, ShortBound, TestContext.Current.CancellationToken);
+            }
+            catch (Exception ex)
+            {
+                failure = ex;
+            }
+        })
+        {
+            Priority = ThreadPriority.BelowNormal
+        };
+
+        caller.Start();
+        Assert.True(caller.Join(TimeSpan.FromSeconds(10)), "The read should have finished");
+
+        Assert.Null(failure);
+        Assert.Equal(ThreadPriority.BelowNormal, readAt);
+    }
+
+    [Fact]
+    public void ReadInPreloadWork_WaitsForTheForegroundBeforeStarting()
+    {
+        var busyUntil = Stopwatch.StartNew();
+        long startedAt = -1;
+
+        using (ForegroundYield.EnterLoad("neighbor.tif", () => busyUntil.ElapsedMilliseconds < 200, _ => { }))
+        {
+            BoundedNativeRead.Attempt("preload read", ExpectedBytes,
+                (out IntPtr pixels) =>
+                {
+                    startedAt = busyUntil.ElapsedMilliseconds;
+                    pixels = IntPtr.Zero;
+                    return false;
+                },
+                out _, out _, _ => { }, ShortBound, TestContext.Current.CancellationToken);
+        }
+
+        Assert.True(startedAt >= 200, $"The read started at {startedAt} ms, while the foreground was still loading");
+    }
+
     [Fact]
     public void Bound_ClearsWhatARealBandTakesOnASlowShare()
     {

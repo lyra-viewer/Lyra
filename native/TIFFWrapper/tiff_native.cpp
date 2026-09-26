@@ -12,6 +12,7 @@
 #include <mutex>
 #include <vector>
 #include <algorithm>
+#include <atomic>
 
 #ifdef __clang__
 #define THREAD_LOCAL __thread
@@ -135,6 +136,10 @@ namespace {
 
     THREAD_LOCAL uint64_t io_microseconds = 0;
     THREAD_LOCAL uint64_t io_bytes = 0;
+    
+    THREAD_LOCAL std::atomic<uint64_t> *io_progress = nullptr;
+    
+    constexpr size_t read_chunk = 1u << 20;
 
     inline uint64_t now_microseconds() {
         using namespace std::chrono;
@@ -147,10 +152,26 @@ namespace {
         if (count <= 0)
             return 0;
 
-        const uint64_t started = now_microseconds();
-        const size_t got = std::fread(buffer, 1, static_cast<size_t>(count), f->fp);
-        io_microseconds += now_microseconds() - started;
-        io_bytes += got;
+        auto *out = static_cast<uint8_t *>(buffer);
+        const size_t wanted = static_cast<size_t>(count);
+        size_t got = 0;
+
+        while (got < wanted) {
+            const size_t ask = (wanted - got) < read_chunk ? (wanted - got) : read_chunk;
+
+            const uint64_t started = now_microseconds();
+            const size_t chunk = std::fread(out + got, 1, ask, f->fp);
+            io_microseconds += now_microseconds() - started;
+
+            io_bytes += chunk;
+            got += chunk;
+
+            if (io_progress)
+                io_progress->fetch_add(chunk, std::memory_order_relaxed);
+
+            if (chunk < ask)
+                break; // end of file or an error; libtiff judges a short read itself
+        }
 
         return static_cast<tmsize_t>(got);
     }
@@ -531,6 +552,13 @@ TIFF_API uint64_t get_last_tiff_io_microseconds(void) { return io_microseconds; 
 
 TIFF_API uint64_t get_last_tiff_io_bytes(void) { return io_bytes; }
 
+TIFF_API void set_tiff_io_progress(uint64_t *counter) {
+    static_assert(sizeof(std::atomic<uint64_t>) == sizeof(uint64_t) && std::atomic<uint64_t>::is_always_lock_free,
+                  "the counter is a plain 64-bit word the caller reads atomically from another thread");
+
+    io_progress = reinterpret_cast<std::atomic<uint64_t> *>(counter);
+}
+
 TIFF_API bool load_tiff_rgba_at(const char *path, int directory, uint8_t **out_pixels, int *width, int *height, uint8_t **out_icc, int *out_icc_size) {
     begin_tiff_load(out_pixels, width, height, out_icc, out_icc_size);
 
@@ -628,6 +656,17 @@ static bool describe_open_tiff(TIFF *tif, TiffDirectoryInfo **out_dirs, uint64_t
         info.region_capable = (grayRegion || rgbRegion) ? 1 : 0;
         info.region_samples = grayRegion ? 1 : (rgbRegion ? 4 : 0);
         info.region_premul = (rgbRegion && rgb_region_alpha(tif, info.samples_per_pixel) == rgb_alpha::associated) ? 1 : 0;
+
+        uint32_t icc_size = 0;
+        void *icc = nullptr;
+        const bool has_icc = TIFFGetField(tif, TIFFTAG_ICCPROFILE, &icc_size, &icc) && icc && icc_size > 0;
+
+        uint16_t orientation = ORIENTATION_TOPLEFT;
+        TIFFGetFieldDefaulted(tif, TIFFTAG_ORIENTATION, &orientation);
+        if (orientation < ORIENTATION_TOPLEFT || orientation > ORIENTATION_LEFTBOT)
+            orientation = ORIENTATION_TOPLEFT;
+
+        info.traits = static_cast<uint8_t>((has_icc ? 1 : 0) | ((orientation - 1) << 1));
 
         char why[1024] = "";
         info.rgba_capable = TIFFRGBAImageOK(tif, why) ? 1 : 0;
@@ -966,20 +1005,9 @@ static bool begin_region(uint8_t **out_pixels, uint32_t *out_stride, uint32_t wi
     return true;
 }
 
-static TIFF *open_for_region(const char *path, int directory, bool rgba) {
-    if (!path) {
-        set_error("No TIFF path given.");
-        return nullptr;
-    }
-
-    TIFF *tif = open_tiff_measured(path);
-    if (!tif) {
-        if (last_tiff_error[0] == '\0')
-            set_error("Failed to open TIFF: %s", path);
-        return nullptr;
-    }
-
-    if (!seek_directory(tif, path, directory)) {
+// Moves an open TIFF to the directory and checks it can be read by region; closes it if not.
+static TIFF *prepare_region(TIFF *tif, const char *label, int directory, bool rgba) {
+    if (!seek_directory(tif, label, directory)) {
         TIFFClose(tif);
         return nullptr;
     }
@@ -993,6 +1021,22 @@ static TIFF *open_for_region(const char *path, int directory, bool rgba) {
     }
 
     return tif;
+}
+
+static TIFF *open_for_region(const char *path, int directory, bool rgba) {
+    if (!path) {
+        set_error("No TIFF path given.");
+        return nullptr;
+    }
+
+    TIFF *tif = open_tiff_measured(path);
+    if (!tif) {
+        if (last_tiff_error[0] == '\0')
+            set_error("Failed to open TIFF: %s", path);
+        return nullptr;
+    }
+
+    return prepare_region(tif, path, directory, rgba);
 }
 
 TIFF_API bool load_tiff_gray_region(const char *path, int directory, uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint8_t **out_pixels, uint32_t *out_stride) {
@@ -1017,6 +1061,34 @@ TIFF_API bool load_tiff_rgba_region(const char *path, int directory, uint32_t x,
         return false;
 
     const bool ok = read_region(tif, x, y, width, height, true, out_pixels, out_stride);
+    TIFFClose(tif);
+    return ok;
+}
+
+TIFF_API bool load_tiff_region_mem(const uint8_t *data, uint64_t size, int directory, int rgba, uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint8_t **out_pixels, uint32_t *out_stride) {
+    if (!begin_region(out_pixels, out_stride, width, height))
+        return false;
+
+    if (!data || size == 0) {
+        set_error("Empty TIFF buffer.");
+        return false;
+    }
+
+    memory_tiff client = {data, size, 0};
+
+    TIFF *tif = TIFFClientOpen("<memory>", "r", (thandle_t) &client, mem_read, mem_write, mem_seek, mem_close, mem_size, mem_map, mem_unmap);
+    if (!tif) {
+        if (last_tiff_error[0] == '\0')
+            set_error("Failed to open TIFF from memory.");
+        
+        return false;
+    }
+
+    tif = prepare_region(tif, "<memory>", directory, rgba != 0);
+    if (!tif)
+        return false;
+
+    const bool ok = read_region(tif, x, y, width, height, rgba != 0, out_pixels, out_stride);
     TIFFClose(tif);
     return ok;
 }
