@@ -84,6 +84,64 @@ public class VariantFailureTests
     }
 
     [Fact]
+    public void AFailedPage_SaysWhy()
+    {
+        using var set = new VariantRasterContent(Variants(3), active: 0, new FakeContent(),
+            new FakeProvider(_ => throw new UnauthorizedAccessException("denied")), residentByteBudget: long.MaxValue);
+
+        Assert.True(SelectAndSettle(set, 2));
+
+        Assert.Equal(LoadFailureKind.AccessDenied, set.FailureOf(2)?.Kind);
+        Assert.Null(set.FailureOf(1));
+
+        var last = Assert.NotNull(set.LastFailure);
+        Assert.Equal(2, last.Index);
+        Assert.Equal("denied", last.Failure.Detail);
+    }
+
+    [Fact]
+    public void APageThatDecodesToNothing_StillSaysWhy()
+    {
+        using var set = new VariantRasterContent(Variants(2), active: 0, new FakeContent(),
+            new FakeProvider(_ => null!), residentByteBudget: long.MaxValue);
+
+        Assert.True(SelectAndSettle(set, 1));
+
+        Assert.Equal(LoadFailureKind.DecodeFailed, set.FailureOf(1)?.Kind);
+    }
+
+    [Fact]
+    public void APageThatArrivesOnRetry_ClearsItsFailure()
+    {
+        var attempts = 0;
+
+        using var set = new VariantRasterContent(Variants(2), active: 0, new FakeContent(),
+            new FakeProvider(_ => ++attempts == 1 ? throw new IOException("share went away") : new FakeContent()), residentByteBudget: long.MaxValue);
+
+        Assert.True(SelectAndSettle(set, 1));
+        var failedVersion = set.FailureVersion;
+
+        Assert.False(SelectAndSettle(set, 1));
+
+        Assert.Null(set.FailureOf(1));
+        Assert.Null(set.LastFailure);
+        Assert.NotEqual(failedVersion, set.FailureVersion);
+    }
+
+    [Fact]
+    public void ShowingAnotherPage_ClearsTheLastFailure_ButKeepsTheFailedPageMarked()
+    {
+        using var set = new VariantRasterContent(Variants(3), active: 0, new FakeContent(),
+            new FakeProvider(index => index == 1 ? throw new InvalidOperationException("unreadable page") : new FakeContent()), residentByteBudget: long.MaxValue);
+
+        Assert.True(SelectAndSettle(set, 1));
+        Assert.False(SelectAndSettle(set, 2));
+
+        Assert.Null(set.LastFailure);
+        Assert.Equal(LoadFailureKind.DecodeFailed, set.FailureOf(1)?.Kind);
+    }
+
+    [Fact]
     public void AnArrivedPage_IsTheOneShown()
     {
         using var set = new VariantRasterContent(Variants(2), active: 0, new FakeContent(),

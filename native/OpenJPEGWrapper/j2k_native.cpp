@@ -40,7 +40,7 @@ static void opj_error_callback(const char *msg, void * /*client_data*/) {
     if (!msg)
         return;
 
-    int written = std::snprintf(last_j2k_error, sizeof(last_j2k_error), "OpenJPEG: %s", msg);
+    int written = std::snprintf(last_j2k_error, sizeof(last_j2k_error), "%s", msg);
     if (written < 0)
         return;
 

@@ -155,6 +155,37 @@ public class IcnsDecoderTests
     // ------------------------------------------------------------------
 
     [Fact]
+    public void Decoder_SkipsAJpeg2000EntryDeclaringAnImpossibleSize_WithoutDecodingIt()
+    {
+        var impossible = Convert.FromHexString(
+            "FF4FFF51002F0000000000CB0020009800000000000000000000" +
+            "00CB00000098000000000000000000030701010701010701");
+
+        var icns = Container(
+            Chunk("ic10", impossible),
+            Chunk("ic07", PngBytes(128))
+        );
+
+        var path = Path.Combine(Path.GetTempPath(), $"lyra-icns-{Guid.NewGuid():N}.icns");
+        File.WriteAllBytes(path, icns);
+
+        try
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+
+            using var composite = new Composite(new FileInfo(path));
+            new IcnsDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
+
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), $"took {clock.Elapsed}");
+            Assert.Equal(128f, composite.Content!.DecodedWidth);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Decoder_PublishesOneVariantPerIcon_LargestActive()
     {
         var icns = Container(

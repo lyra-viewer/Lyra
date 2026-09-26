@@ -31,8 +31,8 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
 
         composite.ReportPixelCount(codec.Info.Width, codec.Info.Height);
 
-        DecoderValidation.RequireSaneDimensions(Name, codec.Info.Width, codec.Info.Height);
-        DecoderValidation.RequireAvailableMemory(Name, codec.Info.Width, codec.Info.Height);
+        DecoderValidation.RequireSaneDimensions(codec.Info.Width, codec.Info.Height);
+        DecoderValidation.RequireAvailableMemory(codec.Info.Width, codec.Info.Height);
 
         var srcColorSpace = codec.Info.ColorSpace ?? SKColorSpace.CreateSrgb();
         var info = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Rgba8888, SKAlphaType.Premul, srcColorSpace);
@@ -131,7 +131,7 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
         var desiredScale = Math.Min(1f, (float)maxDimension / Math.Max(fullWidth, fullHeight));
         var scaled = codec.GetScaledDimensions(desiredScale);
 
-        DecoderValidation.RequireAvailableMemory(nameof(SkiaDecoder), scaled.Width, scaled.Height);
+        DecoderValidation.RequireAvailableMemory(scaled.Width, scaled.Height);
 
         var info = new SKImageInfo(scaled.Width, scaled.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
         var bitmap = new SKBitmap(info);

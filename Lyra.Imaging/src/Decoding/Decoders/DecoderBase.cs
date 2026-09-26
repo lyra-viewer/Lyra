@@ -20,21 +20,9 @@ internal abstract class DecoderBase : IImageDecoder
         composite.DecoderName = Name;
         Logger.Debug($"[{Name}] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
 
-        try
-        {
-            ct.ThrowIfCancellationRequested();
+        ct.ThrowIfCancellationRequested();
 
-            Decode(composite, path, ct);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception e)
-        {
-            Logger.Warning($"[{Name}] Image could not be loaded: {path}\n{e.Message}");
-            throw;
-        }
+        Decode(composite, path, ct);
 
         return Task.CompletedTask;
     }

@@ -36,9 +36,9 @@ internal static class TiffNativeLayout
     internal static void RequireWithinBudget(string path, TiffNative.DirectoryInfo info, bool isFloat)
     {
         if (info.Width == 0 || info.Height == 0 || info.Width > int.MaxValue || info.Height > int.MaxValue)
-            throw new InvalidOperationException($"[TiffDecoder] {Path.GetFileName(path)} declares dimensions this path cannot read: {info.Width}x{info.Height}.");
+            throw new InvalidOperationException($"{Path.GetFileName(path)} declares dimensions this path cannot read: {info.Width}x{info.Height}.");
 
-        DecoderValidation.RequireSaneDimensions(nameof(TiffDecoder), (int)info.Width, (int)info.Height);
+        DecoderValidation.RequireSaneDimensions((int)info.Width, (int)info.Height);
 
         var peak = PeakBytes(info, isFloat);
         var budget = BudgetBytes;
@@ -46,10 +46,11 @@ internal static class TiffNativeLayout
         if (peak <= budget)
             return;
 
-        throw new InvalidOperationException($"[TiffDecoder] {Path.GetFileName(path)} is {info.Width}x{info.Height} at {info.BitsPerSample}-bit " +
-                                            $"x{info.SamplesPerPixel}, which the RGBA interface refuses and which reading at its own layout would " +
-                                            $"cost {peak / (1024 * 1024)} MB at peak, over the {budget / (1024 * 1024)} MB this machine allows. " +
-                                            "Layouts read this way are held whole; nothing streams them.");
+        throw new LoadFailureException(LoadFailureKind.TooLarge,
+            $"{Path.GetFileName(path)} is {info.Width}x{info.Height} at {info.BitsPerSample}-bit " +
+            $"x{info.SamplesPerPixel}, which the RGBA interface refuses and which reading at its own layout would " +
+            $"cost {peak / (1024 * 1024)} MB at peak, over the {budget / (1024 * 1024)} MB this machine allows. " +
+            "Layouts read this way are held whole; nothing streams them.");
     }
 
     public static ICompositeContent Decode(string path, int directory, TiffNative.DirectoryInfo info, Composite composite, CancellationToken ct)
@@ -63,7 +64,7 @@ internal static class TiffNativeLayout
         {
             ct.ThrowIfCancellationRequested();
 
-            DecoderValidation.RequireSaneDimensions(nameof(TiffDecoder), read.Width, read.Height);
+            DecoderValidation.RequireSaneDimensions(read.Width, read.Height);
 
             if (kind == TiffNative.OutputKind.RgbaFloat)
             {
@@ -93,7 +94,7 @@ internal static class TiffNativeLayout
         {
             ct.ThrowIfCancellationRequested();
 
-            DecoderValidation.RequireSaneDimensions(nameof(TiffDecoder), read.Width, read.Height);
+            DecoderValidation.RequireSaneDimensions(read.Width, read.Height);
 
             var bitmap = kind == TiffNative.OutputKind.RgbaFloat
                 ? ClampedFloatBitmap(read)
@@ -129,7 +130,7 @@ internal static class TiffNativeLayout
         var read = TiffReads.NativeLayout(path, directory, kind, PeakBytes(info, isFloat), ct, tally);
 
         if (!read.HasPixels)
-            throw new InvalidOperationException($"[TiffDecoder] Failed to decode {path} at its own layout. {read.Reason}");
+            throw read.ToFailure($"Failed to decode {path} at its own layout.");
 
         return (read, kind);
     }

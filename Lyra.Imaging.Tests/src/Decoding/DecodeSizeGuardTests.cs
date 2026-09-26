@@ -10,9 +10,7 @@ using Xunit;
 
 namespace Lyra.Imaging.Tests.Decoding;
 
-/// <summary>
-/// Oversized rasters are refused before anything is allocated for them, rather than after.
-/// </summary>
+/// <summary>Oversized rasters are refused before anything is allocated for them, rather than after.</summary>
 public class DecodeSizeGuardTests
 {
     private const long Gigabyte = 1024L * 1024 * 1024;
@@ -21,25 +19,26 @@ public class DecodeSizeGuardTests
     [InlineData(1000, 1000, 4, Gigabyte)]
     [InlineData(16384, 16384, 4, Gigabyte)] // exactly 1 GB
     public void RequireAvailableMemory_AllowsWhatFits(long width, long height, int bytesPerPixel, long available) =>
-        DecoderValidation.RequireAvailableMemory("Test", width, height, bytesPerPixel, available);
+        DecoderValidation.RequireAvailableMemory(width, height, bytesPerPixel, available);
 
     [Fact]
     public void RequireAvailableMemory_RefusesMoreThanTheMachineHas()
     {
-        var thrown = Assert.Throws<InvalidOperationException>(() =>
-            DecoderValidation.RequireAvailableMemory("Test", 16385, 16384, 4, Gigabyte));
+        var thrown = Assert.Throws<LoadFailureException>(() =>
+            DecoderValidation.RequireAvailableMemory(16385, 16384, 4, Gigabyte));
 
         Assert.Contains("more than", thrown.Message);
+        Assert.Equal(LoadFailureKind.TooLarge, thrown.Kind);
     }
 
     [Fact]
     public void RequireAvailableMemory_DoesNotOverflowOnHugeDimensions() =>
-        Assert.Throws<InvalidOperationException>(() =>
-            DecoderValidation.RequireAvailableMemory("Test", uint.MaxValue, uint.MaxValue, 16, Gigabyte));
+        Assert.Throws<LoadFailureException>(() =>
+            DecoderValidation.RequireAvailableMemory(uint.MaxValue, uint.MaxValue, 16, Gigabyte));
 
     [Fact]
     public void RequireAvailableMemory_UnknownMemoryRefusesNothing() =>
-        DecoderValidation.RequireAvailableMemory("Test", uint.MaxValue, uint.MaxValue, 16, availableBytes: 0);
+        DecoderValidation.RequireAvailableMemory(uint.MaxValue, uint.MaxValue, 16, availableBytes: 0);
 
     [Theory]
     [InlineData(23170u, 23170u)] // 2,147,395,600 bytes: just under an int
@@ -50,7 +49,7 @@ public class DecodeSizeGuardTests
     [Fact]
     public void RequireRgbaWithinOneBitmap_RefusesBeforeLibtiffAllocates()
     {
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<LoadFailureException>(() =>
             TiffWholeImage.RequireWithinOneBitmap("x.tif", new TiffNative.DirectoryInfo { Width = 40000, Height = 35900 }));
     }
 
@@ -64,10 +63,11 @@ public class DecodeSizeGuardTests
         {
             using var composite = new Composite(new FileInfo(path));
 
-            var thrown = Assert.Throws<InvalidOperationException>(() =>
+            var thrown = Assert.Throws<LoadFailureException>(() =>
                 new SkiaDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken).GetAwaiter().GetResult());
 
             Assert.Contains("more than", thrown.Message);
+            Assert.Equal(LoadFailureKind.TooLarge, thrown.Kind);
             Assert.Null(composite.Content);
         }
         finally

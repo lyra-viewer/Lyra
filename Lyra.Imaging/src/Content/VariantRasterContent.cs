@@ -18,6 +18,10 @@ public sealed class VariantRasterContent : ICompositeContent
     private int _pendingIndex = -1;
     private bool _disposed;
 
+    private readonly Dictionary<int, LoadFailure> _failures = new();
+    private int _lastFailedIndex = -1;
+    private int _failureVersion;
+
     /// <summary>
     /// Every rendition decoded up front. For containers small enough that laziness would only add
     /// failure modes.
@@ -115,6 +119,27 @@ public sealed class VariantRasterContent : ICompositeContent
         }
     }
 
+    public LoadFailure? FailureOf(int index)
+    {
+        lock (_gate)
+            return _failures.GetValueOrDefault(index);
+    }
+
+    /// <summary>The rendition last asked for that failed, until another is shown or asked for.</summary>
+    public (int Index, LoadFailure Failure)? LastFailure
+    {
+        get
+        {
+            lock (_gate)
+                return _lastFailedIndex >= 0 && _failures.TryGetValue(_lastFailedIndex, out var failure)
+                    ? (_lastFailedIndex, failure)
+                    : null;
+        }
+    }
+
+    /// <summary>Changes whenever a rendition's failure is recorded or cleared.</summary>
+    public int FailureVersion => Volatile.Read(ref _failureVersion);
+
     /// <summary>Raised on a background thread when a requested rendition becomes drawable.</summary>
     public event Action<VariantRasterContent>? VariantReady;
 
@@ -172,6 +197,7 @@ public sealed class VariantRasterContent : ICompositeContent
                 return false;
 
             ActiveIndex = index;
+            _lastFailedIndex = -1;
 
             _pending?.Cancel();
             _pending = new CancellationTokenSource();
@@ -187,6 +213,7 @@ public sealed class VariantRasterContent : ICompositeContent
     private void Fetch(int index, CancellationToken ct)
     {
         ICompositeContent? decoded = null;
+        LoadFailure? failure = null;
 
         try
         {
@@ -195,8 +222,16 @@ public sealed class VariantRasterContent : ICompositeContent
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            Logger.Warning($"[VariantRasterContent] Rendition {index} failed to decode: {ex.Message}");
+            failure = LoadFailure.From(ex);
+
+            if (failure.IsExpected)
+                Logger.Warning(typeof(VariantRasterContent), $"{Variants[index].Label}: {failure.Message}. Detail: {failure.Detail}");
+            else
+                Logger.Error(typeof(VariantRasterContent), $"{Variants[index].Label} failed to decode: {ex}");
         }
+
+        if (decoded is null && failure is null && !ct.IsCancellationRequested)
+            failure = LoadFailure.NothingDecoded;
 
         var publish = false;
         var failed = false;
@@ -215,6 +250,9 @@ public sealed class VariantRasterContent : ICompositeContent
                     {
                         ActiveIndex = _shownIndex;
                         failed = true;
+
+                        if (failure is not null)
+                            RecordFailure(index, failure);
                     }
                 }
             }
@@ -239,9 +277,20 @@ public sealed class VariantRasterContent : ICompositeContent
     {
         _shownIndex = index;
         _pendingIndex = -1;
+        _lastFailedIndex = -1;
+
+        if (_failures.Remove(index))
+            Interlocked.Increment(ref _failureVersion);
 
         _recent.Remove(index);
         _recent.Add(index);
+    }
+
+    private void RecordFailure(int index, LoadFailure failure)
+    {
+        _failures[index] = failure;
+        _lastFailedIndex = index;
+        Interlocked.Increment(ref _failureVersion);
     }
 
     /// <summary>

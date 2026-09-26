@@ -113,8 +113,8 @@ internal class HeifDecoder : DecoderBase, IThumbnailDecoder
 
         var srcStride = plane.Stride;
 
-        DecoderValidation.RequireSaneDimensions("HeifDecoder", width, height);
-        DecoderValidation.RequireValidStride("HeifDecoder", srcStride, width);
+        DecoderValidation.RequireSaneDimensions(width, height);
+        DecoderValidation.RequireValidStride(srcStride, width);
         
         var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul, colorSpace);
         var bitmap = new SKBitmap(info);

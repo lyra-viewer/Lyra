@@ -88,7 +88,7 @@ internal abstract class IconContainerDecoder<TEntry> : DecoderBase
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warning($"[{Name}] Entry {Describe(entry)} failed to decode: {ex.Message}");
+                    Logger.Warning($"[{Name}] Entry {Describe(entry)} failed to decode. Detail: {ex.Message}");
                 }
 
                 if (bitmap is null)

@@ -19,7 +19,7 @@ public static class ImageStore
     public static Composite GetImage(string path)
     {
         if (!IsLoading(path) && !File.Exists(path))
-            throw new FileNotFoundException($"[ImageStore] File not found: {path}");
+            throw new FileNotFoundException($"File not found: {path}");
 
         return ImageLoader.GetImage(path);
     }

@@ -20,9 +20,10 @@ internal static class TiffWholeImage
         if (bytes <= int.MaxValue)
             return;
 
-        throw new InvalidOperationException($"[TiffDecoder] {Path.GetFileName(path)} is {info.Width}x{info.Height}, " +
-                                            $"{bytes / (1024 * 1024)} MB as RGBA: more than one bitmap holds, in a layout " +
-                                            "that cannot be read by region.");
+        throw new LoadFailureException(LoadFailureKind.TooLarge,
+            $"{Path.GetFileName(path)} is {info.Width}x{info.Height}, " +
+            $"{bytes / (1024 * 1024)} MB as RGBA: more than one bitmap holds, in a layout " +
+            "that cannot be read by region.");
     }
 
     /// <summary>
@@ -83,7 +84,7 @@ internal static class TiffWholeImage
         {
             ct.ThrowIfCancellationRequested();
 
-            DecoderValidation.RequireSaneDimensions(nameof(TiffDecoder), read.Width, read.Height);
+            DecoderValidation.RequireSaneDimensions(read.Width, read.Height);
 
             var colorSpace = tagColorSpace ? IccColorSpace.FromNative(read.Icc, read.IccSize, nameof(TiffDecoder)) : null;
 

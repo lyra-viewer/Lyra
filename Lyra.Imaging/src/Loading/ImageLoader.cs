@@ -66,8 +66,10 @@ internal class ImageLoader : IDisposable
     {
         _preloadTaskFactory = new TaskFactory(_preloadScheduler);
 
-        Logger.Info($"[ImageLoader] Decoded-image cache budget: {CacheByteBudget / 1024 / 1024} MB " +
-                    $"(of {GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1024 / 1024} MB available).");
+        Logger.Info(typeof(ImageLoader),
+            $"Decoded-image cache budget: {CacheByteBudget / 1024 / 1024} MB " +
+            $"(of {GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1024 / 1024} MB available)."
+        );
     }
 
     #endregion
@@ -79,6 +81,9 @@ internal class ImageLoader : IDisposable
     {
         // Cleared first so the load started below never yields to the outgoing image.
         _currentImage = null;
+
+        if (FailedTransiently(path))
+            RemoveMatching(key => key == path, "Retrying:");
 
         var lazy = _images.GetOrAdd(path, p => CreateLazyJob(p, isPreload: false));
 
@@ -97,6 +102,12 @@ internal class ImageLoader : IDisposable
         _currentImage = job.Composite;
         return job.Composite;
     }
+
+    private bool FailedTransiently(string path) =>
+        _images.TryGetValue(path, out var lazy) && lazy.IsValueCreated && IsWorthRetrying(lazy.Value.Composite);
+
+    internal static bool IsWorthRetrying(Composite composite) =>
+        composite is { State: CompositeState.Failed, Failure.IsTransient: true };
 
     public bool IsLoading(string path) =>
         _images.TryGetValue(path, out var lazy)
@@ -150,8 +161,10 @@ internal class ImageLoader : IDisposable
             RemoveMatching(key => PathComparer.Equals(key, candidate.Path), "Budget:");
             resident -= candidate.Bytes;
 
-            Logger.Debug($"[ImageLoader] Evicted {Path.GetFileName(candidate.Path)} " +
-                         $"({candidate.Bytes / 1024 / 1024} MB, {candidate.Distance} away) to stay in budget.");
+            Logger.Debug(typeof(ImageLoader),
+                $"Evicted {Path.GetFileName(candidate.Path)} " +
+                $"({candidate.Bytes / 1024 / 1024} MB, {candidate.Distance} away) to stay in budget."
+            );
         }
     }
 
@@ -316,7 +329,7 @@ internal class ImageLoader : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Debug($"[ImageLoader] Could not size {path} for preload: {ex.Message}");
+            Logger.Debug(typeof(ImageLoader), $"Could not size {path} for preload: {ex.Message}");
             return true;
         }
 
@@ -327,9 +340,10 @@ internal class ImageLoader : IDisposable
         if (!_preloadSkipsReported.TryAdd(path, 0))
             return false;
 
-        Logger.Debug(estimate is null
+        Logger.Debug(typeof(ImageLoader), estimate is null
             ? $"[ImageLoader] Not preloading {Path.GetFileName(path)}: {fileBytes / (1024 * 1024)} MB from a source whose speed is not known yet. It loads when opened."
-            : $"[ImageLoader] Not preloading {Path.GetFileName(path)}: {fileBytes / (1024 * 1024)} MB would take about {expectedMs / 1000:F0}s to fetch. It loads when opened.");
+            : $"[ImageLoader] Not preloading {Path.GetFileName(path)}: {fileBytes / (1024 * 1024)} MB would take about {expectedMs / 1000:F0}s to fetch. It loads when opened."
+        );
 
         return false;
     }
@@ -348,6 +362,16 @@ internal class ImageLoader : IDisposable
         && !ReferenceEquals(current, load)
         && current.State == CompositeState.Loading
         && current.Timing.ElapsedMs >= yieldAfterMs;
+
+    private static string DecodedBy(Composite composite) => composite.DecoderName is { } decoder ? $" ({decoder})" : string.Empty;
+
+    private static void Fail(Composite composite, LoadFailure failure)
+    {
+        if (failure.IsExpected)
+            Logger.Warning(typeof(ImageLoader), $"{failure.Message}: {composite.FileInfo.FullName}{DecodedBy(composite)}. Detail: {failure.Detail}");
+
+        composite.Fail(failure);
+    }
 
     private async Task LoadImageAsync(Composite composite, CancellationToken ct)
     {
@@ -381,7 +405,7 @@ internal class ImageLoader : IDisposable
 
             if (composite.IsEmpty)
             {
-                composite.State = CompositeState.Failed;
+                Fail(composite, LoadFailure.NothingDecoded);
                 return;
             }
 
@@ -423,8 +447,12 @@ internal class ImageLoader : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Error($"[ImageLoader] Failed to load image {composite.FileInfo.FullName}: {ex}");
-            composite.State = CompositeState.Failed;
+            var failure = LoadFailure.From(ex, composite.FileInfo.FullName);
+
+            if (!failure.IsExpected)
+                Logger.Error(typeof(ImageLoader), $"Failed to load image {composite.FileInfo.FullName}{DecodedBy(composite)}: {ex}");
+
+            Fail(composite, failure);
         }
 
         return;
@@ -512,7 +540,7 @@ internal class ImageLoader : IDisposable
         var background = composite.BackgroundDecodeTask;
         if (!background.IsCompleted)
         {
-            Logger.Debug($"[ImageLoader] {context} waiting for background decode before dispose: {key}");
+            Logger.Debug(typeof(ImageLoader), $"{context} waiting for background decode before dispose: {key}");
             background.ContinueWith(
                 _ =>
                 {
@@ -584,19 +612,19 @@ internal class ImageLoader : IDisposable
 
         if (state == CompositeState.Cancelled)
         {
-            Logger.Debug($"[ImageLoader] {context} cancelled decode: {key}");
+            Logger.Debug(typeof(ImageLoader), $"{context} cancelled decode: {key}");
             return;
         }
 
         if (task.IsFaulted)
         {
-            Logger.Warning($"[ImageLoader] {context} failed decode: {key}: {task.Exception}");
+            Logger.Warning(typeof(ImageLoader), $"{context} failed decode: {key}: {task.Exception}");
             return;
         }
 
         if (state != CompositeState.Complete)
         {
-            Logger.Warning($"[ImageLoader] {context} not complete: {key} (state={state}).");
+            Logger.Warning(typeof(ImageLoader), $"{context} not complete: {key} (state={state}).");
         }
     }
 

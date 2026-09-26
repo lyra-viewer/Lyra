@@ -31,17 +31,6 @@ internal static class DecoderIO
             FileOptions.RandomAccess
         );
 
-    /// <summary>
-    /// Reads a whole file into memory, checking <paramref name="ct"/> between chunks and reporting
-    /// the running byte total to <paramref name="onProgress"/>.
-    /// </summary>
-    /// <param name="elapsedMs">
-    /// How long the read took. Handed back rather than recorded anywhere: what a caller does with
-    /// a duration is its business, and this stays an IO helper that knows nothing about images.
-    /// Not set when the read throws - a failed read's timing has no consumer.
-    /// </param>
-    /// <exception cref="OperationCanceledException">Cancellation was requested mid-read.</exception>
-    /// <exception cref="IOException">The file does not fit in a single array.</exception>
     public static byte[] ReadAllBytes(string path, CancellationToken ct, out double elapsedMs, Action<long>? onProgress = null)
     {
         var start = Stopwatch.GetTimestamp();
@@ -49,7 +38,7 @@ internal static class DecoderIO
 
         var length = SafeLength(stream, path);
         if (length > Array.MaxLength)
-            throw new IOException($"[DecoderIO] File is too large to read into memory ({length} bytes): {path}");
+            throw new IOException($"File is too large to read into memory ({length} bytes): {path}");
 
         var buffer = new byte[length > 0 ? length : UnsizedInitialBuffer];
         var total = 0;
@@ -61,7 +50,7 @@ internal static class DecoderIO
             if (total == buffer.Length)
             {
                 if (buffer.Length >= Array.MaxLength)
-                    throw new IOException($"[DecoderIO] File is too large to read into memory: {path}");
+                    throw new IOException($"File is too large to read into memory: {path}");
 
                 Array.Resize(ref buffer, (int)Math.Min((long)buffer.Length * 2, Array.MaxLength));
             }
@@ -86,7 +75,7 @@ internal static class DecoderIO
         }
         catch (Exception ex)
         {
-            Logger.Debug($"[DecoderIO] Length unavailable, reading until EOF: {path} ({ex.Message})");
+            Logger.Debug(typeof(DecoderIO), $"[DecoderIO] Length unavailable, reading until EOF: {path} ({ex.Message})");
             return 0;
         }
     }

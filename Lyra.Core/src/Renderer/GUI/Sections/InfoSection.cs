@@ -44,6 +44,11 @@ public sealed class InfoSection : IUISection
     private readonly Label _largeImagePreviewLabel;
     private readonly Label _largeImageTilesLabel;
 
+    // Error row
+    private readonly HStack _errorRow;
+    private readonly Label _errorMessageLabel;
+    private readonly Label _errorDetailLabel;
+
     public IComponent Root => _root;
 
     public InfoSection()
@@ -92,13 +97,19 @@ public sealed class InfoSection : IUISection
             DimPrefix("Tiles:"),
             _largeImageTilesLabel = ForegroundLabel());
 
+        _errorRow = BuildRow().Children(
+            DimPrefix("[Error]       "),
+            _errorMessageLabel = new Label("").Color(Palette.Danger).Transient(),
+            Separator(),
+            _errorDetailLabel = ForegroundLabel());
+
         _root = new VStack()
             .ExpandH()
             .ShrinkV()
             .Align(HAlign.Left)
             .Spacing(2)
             .Padding(8)
-            .Children(_fileRow, _imageRow, _collectionRow, _displayingRow, _largeImageRow);
+            .Children(_fileRow, _imageRow, _collectionRow, _displayingRow, _largeImageRow, _errorRow);
     }
 
     public void Refresh(UIState state)
@@ -110,6 +121,7 @@ public sealed class InfoSection : IUISection
             _displayingRow.Present = false;
             _collectionRow.Present = false;
             _largeImageRow.Present = false;
+            _errorRow.Present = false;
             return;
         }
 
@@ -183,6 +195,27 @@ public sealed class InfoSection : IUISection
         {
             _largeImageRow.Present = false;
         }
+
+        // Error row
+        if (composite is { State: CompositeState.Failed, Failure: { } failure })
+        {
+            ShowError(failure.Message, failure.Description);
+        }
+        else if (composite.Content is VariantRasterContent { LastFailure: { } page } pages)
+        {
+            ShowError($"{pages.Variants[page.Index].Label}: {page.Failure.Message}", page.Failure.Description);
+        }
+        else
+        {
+            _errorRow.Present = false;
+        }
+    }
+
+    private void ShowError(string message, string detail)
+    {
+        _errorMessageLabel.Text = message;
+        _errorDetailLabel.Text = detail;
+        _errorRow.Present = true;
     }
 
     // ----- helpers -----------------------------------------------------------

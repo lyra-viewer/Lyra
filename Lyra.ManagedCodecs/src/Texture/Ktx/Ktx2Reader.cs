@@ -23,12 +23,12 @@ public static class Ktx2Reader
         var span = file.Span;
         if (span.Length < FixedHeaderSize)
         {
-            throw new InvalidDataException("KTX2: file is too small to contain a header.");
+            throw new InvalidDataException("File is too small to contain a header.");
         }
 
         if (!KtxShared.IsKtx2(span))
         {
-            throw new InvalidDataException("KTX2: missing or unrecognized KTX 2.0 identifier.");
+            throw new InvalidDataException("Missing or unrecognized KTX 2.0 identifier.");
         }
 
         var vkFormat = Read32(span, 12);
@@ -44,60 +44,60 @@ public static class Ktx2Reader
 
         if (!KtxSupercompression.IsSupported(supercompression))
         {
-            throw new NotSupportedException($"KTX2: {DescribeSupercompression(supercompression)} is not yet supported.");
+            throw new NotSupportedException($"{DescribeSupercompression(supercompression)} is not yet supported.");
         }
 
         var format = KtxFormatMap.FromVk(vkFormat);
         if (format == TextureFormat.Unknown)
         {
-            throw new NotSupportedException($"KTX2: unsupported {KtxFormatMap.DescribeUnsupportedVk(vkFormat)}.");
+            throw new NotSupportedException($"Unsupported {KtxFormatMap.DescribeUnsupportedVk(vkFormat)}.");
         }
 
         if (width is <= 0 or > TextureLayout.MaxDimension)
         {
-            throw new InvalidDataException($"KTX2: implausible width {width}.");
+            throw new InvalidDataException($"Implausible width {width}.");
         }
 
         var height = heightField == 0 ? 1 : heightField; // 0 marks a 1D texture
         if (height is <= 0 or > TextureLayout.MaxDimension)
         {
-            throw new InvalidDataException($"KTX2: implausible height {heightField}.");
+            throw new InvalidDataException($"Implausible height {heightField}.");
         }
 
         var isVolume = depthField > 0;
         var depth = isVolume ? depthField : 1;
         if (depth > TextureLayout.MaxDimension)
         {
-            throw new InvalidDataException($"KTX2: implausible depth {depthField}.");
+            throw new InvalidDataException($"Implausible depth {depthField}.");
         }
 
         if (faceCount is not (1 or 6))
         {
-            throw new InvalidDataException($"KTX2: implausible face count {faceCount}.");
+            throw new InvalidDataException($"Implausible face count {faceCount}.");
         }
 
         var arrayCount = layerField == 0 ? 1 : layerField;
         if (arrayCount is < 1 or > 0xFFFF)
         {
-            throw new InvalidDataException($"KTX2: implausible layer count {layerField}.");
+            throw new InvalidDataException($"Implausible layer count {layerField}.");
         }
 
         // levelCount 0 requests runtime mip generation (Basis), which has no level index to read.
         if (levelField < 1)
         {
-            throw new NotSupportedException("KTX2: files with no stored levels (level count 0) are not supported.");
+            throw new NotSupportedException("Files with no stored levels (level count 0) are not supported.");
         }
 
         var maxMips = TextureLayout.MaxMipLevels(width, height, depth);
         if (levelField > maxMips)
         {
-            throw new InvalidDataException($"KTX2: level count {levelField} exceeds the maximum {maxMips} for {width}x{height}x{depth}.");
+            throw new InvalidDataException($"Level count {levelField} exceeds the maximum {maxMips} for {width}x{height}x{depth}.");
         }
 
         var levelIndexEnd = FixedHeaderSize + (long)levelField * LevelIndexEntrySize;
         if (levelIndexEnd > span.Length)
         {
-            throw new InvalidDataException("KTX2: file is truncated before the end of the level index.");
+            throw new InvalidDataException("File is truncated before the end of the level index.");
         }
 
         var origin = ReadOrigin(span, kvdByteOffset, kvdByteLength);
@@ -147,7 +147,7 @@ public static class Ktx2Reader
 
             if (byteOffset > (ulong)fileLength || byteLength > (ulong)fileLength - byteOffset)
             {
-                throw new InvalidDataException($"KTX2: level {level} data runs past the end of the file.");
+                throw new InvalidDataException($"Level {level} data runs past the end of the file.");
             }
 
             var w = Math.Max(1, width >> level);
@@ -162,7 +162,7 @@ public static class Ktx2Reader
             // sets uncompressedByteLength == byteLength, so this covers both paths.
             if ((ulong)expected != uncompressedLength)
             {
-                throw new InvalidDataException($"KTX2: level {level} size {uncompressedLength} != expected {expected}.");
+                throw new InvalidDataException($"Level {level} size {uncompressedLength} != expected {expected}.");
             }
 
             ReadOnlyMemory<byte> levelData;

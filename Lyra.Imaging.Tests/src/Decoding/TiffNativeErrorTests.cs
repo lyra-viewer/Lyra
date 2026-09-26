@@ -1,3 +1,4 @@
+using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Tests.Support;
@@ -22,7 +23,9 @@ public class TiffNativeErrorTests : IDisposable
         bytes[2] = 42;
         File.WriteAllBytes(_corrupt, bytes);
 
-        var thrown = Assert.Throws<InvalidOperationException>(() => new TiffDecoder().DecodeThumbnail(_corrupt, 64, TestContext.Current.CancellationToken));
+        var thrown = Assert.Throws<LoadFailureException>(() => new TiffDecoder().DecodeThumbnail(_corrupt, 64, TestContext.Current.CancellationToken));
+
+        Assert.Equal(LoadFailureKind.DecodeFailed, thrown.Kind);
 
         var reason = thrown.Message[(thrown.Message.IndexOf(_corrupt, StringComparison.Ordinal) + _corrupt.Length)..].TrimStart('.', ' ');
 

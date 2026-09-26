@@ -45,12 +45,10 @@ internal class JxlDecoder : DecoderBase
 
                     if (!ok || nativePixels == IntPtr.Zero)
                     {
-                        var err = NativeErrors.GetUtf8ZOrAnsiZ(JxlNative.get_last_jxl_error());
-                        Logger.Error($"[JxlDecoder] Native decode failed: {err}");
-                        throw new InvalidOperationException($"[JxlDecoder] Failed to decode: {path}");
+                        throw NativeErrors.DecodeFailed(JxlNative.get_last_jxl_error(), path);
                     }
 
-                    DecoderValidation.RequireSaneDimensions("JxlDecoder", width, height);
+                    DecoderValidation.RequireSaneDimensions(width, height);
 
                     composite.ReportPixelCount(width, height);
 

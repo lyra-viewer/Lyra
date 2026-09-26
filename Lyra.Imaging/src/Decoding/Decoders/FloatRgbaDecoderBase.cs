@@ -19,7 +19,7 @@ internal abstract class FloatRgbaDecoderBase : DecoderBase
 
         var width = pixels.Width;
         var height = pixels.Height;
-        DecoderValidation.RequireSaneDimensions(Name, width, height, bytesPerPixel: sizeof(float) * 4);
+        DecoderValidation.RequireSaneDimensions(width, height, bytesPerPixel: sizeof(float) * 4);
 
         composite.ReportPixelCount(width, height);
         

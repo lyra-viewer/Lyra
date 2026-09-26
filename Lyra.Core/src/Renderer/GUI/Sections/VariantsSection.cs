@@ -18,6 +18,9 @@ public sealed class VariantsSection : IUISection, IDisposable
     private IReadOnlyList<ImageVariant>? _lastVariants;
     private int _lastActive = -1;
 
+    private VariantRasterContent? _set;
+    private int _lastFailureVersion = -1;
+
     private readonly ValueSlider _jump;
 
     /// <summary>
@@ -36,7 +39,7 @@ public sealed class VariantsSection : IUISection, IDisposable
 
     public VariantsSection()
     {
-        _list = new ListView<ImageVariant>([], RenderRow)
+        _list = new ListView<ImageVariant>([], (variant, isPicked) => RenderRow(variant, isPicked, FailureOf(variant)))
         {
             HorizontalSize = SizeMode.Expand,
             VerticalSize = SizeMode.Flexible,
@@ -82,6 +85,7 @@ public sealed class VariantsSection : IUISection, IDisposable
     internal void Refresh(VariantRasterContent? set)
     {
         var variants = set?.Variants;
+        _set = set;
 
         if (variants is null || variants.Count == 0)
         {
@@ -105,6 +109,12 @@ public sealed class VariantsSection : IUISection, IDisposable
             _lastActive = -1;
             _list.UpdateData([.. variants]);
             RebuildJump(set);
+        }
+
+        if (set.FailureVersion != _lastFailureVersion)
+        {
+            _lastFailureVersion = set.FailureVersion;
+            _list.InvalidateRows();
         }
 
         var active = set.ActiveIndex;
@@ -183,7 +193,10 @@ public sealed class VariantsSection : IUISection, IDisposable
         return -1;
     }
 
-    internal static HStack RenderRow(ImageVariant variant, bool isPicked)
+    private LoadFailure? FailureOf(ImageVariant variant) =>
+        IndexOf(_lastVariants, variant) is var index and >= 0 ? _set?.FailureOf(index) : null;
+
+    internal static HStack RenderRow(ImageVariant variant, bool isPicked, LoadFailure? failure = null)
     {
         var titleColumn = new VStack
         {
@@ -196,10 +209,9 @@ public sealed class VariantsSection : IUISection, IDisposable
             Color = isPicked ? Palette.SelectedForeground : Palette.Foreground
         });
 
-        titleColumn.AddComponent(new Label(variant.Detail)
-        {
-            Color = Palette.Dim
-        });
+        titleColumn.AddComponent(failure is null
+            ? new Label(variant.Detail) { Color = Palette.Dim }
+            : new Label(failure.Message) { Color = Palette.Danger });
 
         return new HStack
             {
