@@ -116,7 +116,7 @@ internal static class HdrImageBuilder
                 fixed (float* srcPin = rgba)
                 {
                     var src = (nint)srcPin;
-                    var dst = (nint)bitmap.GetPixels();
+                    var dst = bitmap.GetPixels();
                     var dstRowBytes = bitmap.RowBytes;
                     var options = new ParallelOptions { CancellationToken = ct };
 
@@ -240,7 +240,7 @@ internal static class HdrImageBuilder
             fixed (float* srcPin = rgba)
             {
                 var src = (nint)srcPin;
-                var dst = (nint)bitmap.GetPixels();
+                var dst = bitmap.GetPixels();
                 var dstRowBytes = bitmap.RowBytes;
                 var options = new ParallelOptions { CancellationToken = ct };
 

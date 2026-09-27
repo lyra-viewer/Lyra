@@ -53,6 +53,10 @@ internal static class PixelCopy
     /// Skia draws. Native decoders that hand back unassociated alpha - OpenJPEG, libjxl - all land
     /// here rather than each carrying the same loop.
     /// </summary>
+    /// <param name="source">Straight-alpha RGBA8 rows, at least as large as <paramref name="bitmap"/>.</param>
+    /// <param name="sourceStride">Bytes between the starts of consecutive source rows.</param>
+    /// <param name="bitmap">Destination; its size decides how much is copied.</param>
+    /// <param name="ct">Checked between rows.</param>
     /// <param name="isGrayscale">
     /// Whether every pixel has R == G == B, which decoders publish as metadata. Measured here
     /// because the copy is already touching every pixel.

@@ -20,6 +20,10 @@ internal static class StreamingPreview
     /// Streams <paramref name="width"/> x <paramref name="height"/> into a preview no larger than
     /// the given bounds.
     /// </summary>
+    /// <param name="width">Source width in pixels.</param>
+    /// <param name="height">Source height in pixels.</param>
+    /// <param name="maxWidth">Upper bound on the preview width.</param>
+    /// <param name="maxHeight">Upper bound on the preview height.</param>
     /// <param name="read">Reads a band; the caller owns the buffer and frees it after each call.</param>
     /// <param name="release">Frees what <paramref name="read"/> returned.</param>
     /// <param name="rowsPerBand">
@@ -27,6 +31,7 @@ internal static class StreamingPreview
     /// underlying strips are decoded whole regardless.
     /// </param>
     /// <param name="channels">Bytes per pixel the band reader produces: 1 for gray, 4 for RGBA.</param>
+    /// <param name="ct">Checked between bands.</param>
     /// <param name="premultiplied">
     /// Whether the color channels arrive already multiplied by alpha, which only changes how the
     /// result is tagged - averaging associated values is correct as it stands, and averaging
@@ -117,7 +122,7 @@ internal static class StreamingPreview
                 if (sourceRow % (uint)strideY != 0)
                     continue;
 
-                var previewRow = Math.Min(previewHeight - 1, (int)((long)sourceRow * previewHeight / height));
+                var previewRow = Math.Min(previewHeight - 1, (int)(sourceRow * previewHeight / height));
                 if (previewRow != currentRow)
                 {
                     Flush(bitmap, previewWidth, channels, currentRow, rowSums, rowCounts);

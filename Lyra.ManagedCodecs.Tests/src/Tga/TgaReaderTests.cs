@@ -57,7 +57,7 @@ public class TgaReaderTests
     [Fact]
     public void Decodes32BitTrueColorWithAlpha()
     {
-        List<byte> tga = TgaTestImage.Header(0, 2, 0, 0, 2, 2, 32, (byte)(TgaTestImage.TopLeft | 8));
+        List<byte> tga = TgaTestImage.Header(0, 2, 0, 0, 2, 2, 32, TgaTestImage.TopLeft | 8);
         tga.AddRange([0, 0, 255, 255, /**/ 0, 255, 0, 128]); // red a=255, green a=128 (BGRA)
         tga.AddRange([255, 0, 0, 64, /**/ 255, 255, 255, 0]); // blue a=64, white a=0 (BGRA)
 

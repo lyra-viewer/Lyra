@@ -16,8 +16,6 @@ public partial class SdlCore
         public volatile bool InProgress;
         public volatile bool AcceptFiles = true;
 
-        public Task? Worker;
-
         public void Dispose() => Cts.Dispose();
     }
 
@@ -68,7 +66,7 @@ public partial class SdlCore
         };
 
         _drop = session;
-        session.Worker = Task.Run(() => ProcessDropAsync(session));
+        _ = Task.Run(() => ProcessDropAsync(session));
     }
 
     private void OnDropFile(Event e)

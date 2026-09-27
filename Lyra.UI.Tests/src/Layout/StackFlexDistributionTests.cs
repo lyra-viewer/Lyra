@@ -1,3 +1,4 @@
+using Lyra.UI.Components;
 using Lyra.UI.Components.Layout;
 using Lyra.UI.SupportingTypes;
 using SkiaSharp;
@@ -34,7 +35,7 @@ public class StackFlexDistributionTests
         return flexible;
     }
 
-    private static HStack Row(params Lyra.UI.Components.IComponent[] children)
+    private static HStack Row(params IComponent[] children)
     {
         var row = new HStack { HorizontalSize = SizeMode.Expand };
         row.AddComponents(children);

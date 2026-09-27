@@ -29,7 +29,7 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
         var pages = TiffPageSet.Pages(directories);
 
         if (pages.Count > 0 && directories.Count > pages[0])
-            composite.ReportPixelCount((long)directories[pages[0]].Width, (long)directories[pages[0]].Height);
+            composite.ReportPixelCount(directories[pages[0]].Width, directories[pages[0]].Height);
 
         if (pages.Count > 1)
         {

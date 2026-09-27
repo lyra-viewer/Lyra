@@ -5,11 +5,6 @@ using SkiaSharp;
 
 namespace Lyra.UI.Components.Controls;
 
-/// <summary>
-/// A labelled check box: an SVG box icon (checked / blank) followed by a caption.
-/// Behaves like a single click target with the same hover / pressed background
-/// feedback as <see cref="Button.Button"/> (Ghost variant).
-/// </summary>
 public class CheckBox : ComponentBase
 {
     private const float ContentPadH = 6f;

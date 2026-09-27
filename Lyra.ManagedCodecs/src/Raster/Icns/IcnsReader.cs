@@ -45,7 +45,7 @@ public static class IcnsReader
 
             // A chunk that does not span its own header, or claims to run past the container,
             // means the walk has lost sync - there is no way to find the next boundary.
-            if (length < ChunkHeaderSize || offset + (long)length > end)
+            if (length < ChunkHeaderSize || offset + length > end)
                 break;
 
             var payloadOffset = offset + ChunkHeaderSize;

@@ -34,6 +34,11 @@ internal static class TiffRegion
 
     #region Whole directory
 
+    /// <param name="path">The TIFF file.</param>
+    /// <param name="directory">Index of the directory (page) to decode.</param>
+    /// <param name="info">What <see cref="TiffNative.DescribeDirectories(string, IntPtr, ulong)"/> reported for that directory.</param>
+    /// <param name="composite">Receives the byte and timing tally when the file is read from disk.</param>
+    /// <param name="ct">Cancels the decode.</param>
     /// <param name="fetched">The file already in memory; read from the path when null.</param>
     public static SKBitmap DecodeWhole(string path, int directory, TiffNative.DirectoryInfo info, Composite composite, CancellationToken ct,
         NativeFileBuffer? fetched = null)

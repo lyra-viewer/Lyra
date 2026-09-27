@@ -92,7 +92,9 @@ public class BigTiffMetadataReaderTests
     {
         var ifd0 = Ifd0(Build(true, [Entry.Shorts(0x0102, [8, 8, 8])]));
 
-        Assert.Equal([8, 8, 8], ifd0.GetInt32Array(0x0102));
+        var values = ifd0.GetInt32Array(0x0102);
+        Assert.NotNull(values);
+        Assert.Equal([8, 8, 8], values);
     }
 
     [Fact]

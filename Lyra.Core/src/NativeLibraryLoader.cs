@@ -1,12 +1,14 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using HarfBuzzSharp;
 using LibHeifSharp;
 using Lyra.Common;
 using Lyra.Imaging;
 using SDL3;
+#if !DEBUG
+using HarfBuzzSharp;
 using SkiaSharp;
+#endif
 
 namespace Lyra;
 
@@ -263,6 +265,7 @@ internal static class NativeLibraryLoader
         };
     }
 
+#if !DEBUG
     private static IntPtr ResolveSkia(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
         return libraryName switch
@@ -280,6 +283,7 @@ internal static class NativeLibraryLoader
             _ => IntPtr.Zero
         };
     }
+#endif
 
     private static IntPtr ResolveHeif(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {

@@ -45,6 +45,12 @@ public sealed class LazyTileSource : ITileSource
 
     private readonly int _bytesPerPixel;
 
+    /// <param name="tilesX">Tile columns at full resolution.</param>
+    /// <param name="tilesY">Tile rows at full resolution.</param>
+    /// <param name="tileWidth">Width of one full-resolution tile, in image pixels.</param>
+    /// <param name="tileHeight">Height of one full-resolution tile, in image pixels.</param>
+    /// <param name="provider">Decodes tiles on demand; owned and disposed by this source.</param>
+    /// <param name="residentByteBudget">How many decoded bytes may stay resident before eviction starts.</param>
     /// <param name="bytesPerPixel">
     /// What one decoded pixel costs, so the renderer can be told what a viewport <em>would</em>
     /// cost before any of it exists.

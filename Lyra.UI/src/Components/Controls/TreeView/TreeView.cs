@@ -137,6 +137,7 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
     /// objects stay shared on purpose - TreeNode is the data model and carries
     /// expand state - but reordering or adding to the caller's list no longer
     /// desyncs the rows. Call UpdateData to publish structural changes.</param>
+    /// <param name="rowFactory">Builds the row for a node; the flag is whether that row is picked.</param>
     public TreeView(List<TreeNode<T>> roots, Func<TreeNode<T>, bool, IComponent> rowFactory)
     {
         ArgumentNullException.ThrowIfNull(roots);

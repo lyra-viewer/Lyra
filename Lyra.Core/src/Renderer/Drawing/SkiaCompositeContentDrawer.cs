@@ -182,6 +182,7 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
     /// </summary>
     /// <param name="visibleTileBytes">Base-level texture bytes for the tiles that would be drawn.</param>
     /// <param name="mipmapped">Whether sampling will build mip chains, which cost a third again.</param>
+    /// <param name="budgetBytes">The GPU resource cache budget the tiles must fit within.</param>
     internal static bool TilesFitBudget(long visibleTileBytes, bool mipmapped, long budgetBytes)
     {
         if (visibleTileBytes <= 0)

@@ -233,7 +233,7 @@ public sealed class PathUtilsTest : IDisposable
         // root/a/b/c2/y.png
         // root/a/x/z.png
         var a = MakeDir("a");
-        var b = MakeDir(Path.Combine("a", "b"));
+        MakeDir(Path.Combine("a", "b"));
         var c1 = MakeDir(Path.Combine("a", "b", "c1"));
         var c2 = MakeDir(Path.Combine("a", "b", "c2"));
         var ax = MakeDir(Path.Combine("a", "x"));
@@ -498,7 +498,7 @@ public sealed class PathUtilsTest : IDisposable
 
     private string MakeFile(string fullPath)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         File.WriteAllText(fullPath, "x");
         return fullPath;
     }

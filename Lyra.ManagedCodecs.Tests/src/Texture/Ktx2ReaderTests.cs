@@ -11,7 +11,6 @@ public class Ktx2ReaderTests
     private const uint VkRgba8Unorm = 37;
     private const uint VkR8Uint = 13;
     private const uint VkR8Sint = 14;
-    private const uint VkRgba8Srgb = 43;
     private const uint VkBc1RgbaUnorm = 133;
     private const uint VkBc7Srgb = 146;
     private const uint VkEtc2Rgb8 = 147;

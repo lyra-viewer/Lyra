@@ -26,7 +26,7 @@ public class ScratchFileCopyTests : IDisposable
         using (var scratch = ScratchFileCopy.TryCreate(_source, size, CancellationToken.None, out var elapsedMs))
         {
             Assert.NotNull(scratch);
-            path = scratch!.Path;
+            path = scratch.Path;
 
             Assert.Equal(size, scratch.BytesCopied);
             Assert.Equal(File.ReadAllBytes(_source), File.ReadAllBytes(path));
@@ -35,7 +35,7 @@ public class ScratchFileCopyTests : IDisposable
             var token = ScratchSession.CurrentToken;
             
             Assert.NotNull(token);
-            Assert.StartsWith(token!, Path.GetFileName(path), StringComparison.Ordinal);
+            Assert.StartsWith(token, Path.GetFileName(path), StringComparison.Ordinal);
             Assert.True(File.Exists(Path.Combine(LyraIO.GetScratchDir(), token + ScratchSession.LockSuffix)));
             
             ScratchFileCopy.Sweep(LyraIO.GetScratchDir());

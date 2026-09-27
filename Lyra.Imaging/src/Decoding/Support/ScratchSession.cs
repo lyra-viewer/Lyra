@@ -48,7 +48,7 @@ internal static class ScratchSession
             Release();
 
             var token = Guid.NewGuid().ToString("N");
-            var path = System.IO.Path.Combine(directory, token + LockSuffix);
+            var path = Path.Combine(directory, token + LockSuffix);
 
             try
             {

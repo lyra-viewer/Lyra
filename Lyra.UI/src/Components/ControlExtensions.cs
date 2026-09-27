@@ -121,32 +121,32 @@ public static class ControlExtensions
     //  Button
     // --------------------------------------------------------
 
-    public static Button Variant(this Controls.Button.Button c, ButtonVariant value)
+    public static Button Variant(this Button c, ButtonVariant value)
     {
         c.Variant = value;
         return c;
     }
 
-    public static Button CornerRadius(this Controls.Button.Button c, float value)
+    public static Button CornerRadius(this Button c, float value)
     {
         c.CornerRadius = value;
         return c;
     }
 
-    public static Button ContentAlign(this Controls.Button.Button c, HAlign value)
+    public static Button ContentAlign(this Button c, HAlign value)
     {
         c.ContentAlign = value;
         return c;
     }
 
-    public static Button Icon(this Controls.Button.Button c, ButtonIcon position, ImageBase image)
+    public static Button Icon(this Button c, ButtonIcon position, ImageBase image)
     {
         c.Icon = position;
         c.IconImage = image;
         return c;
     }
 
-    public static Button Content(this Controls.Button.Button c, IComponent value)
+    public static Button Content(this Button c, IComponent value)
     {
         c.Content = value;
         return c;

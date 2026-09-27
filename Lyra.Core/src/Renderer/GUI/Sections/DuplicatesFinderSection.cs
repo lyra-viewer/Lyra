@@ -3,7 +3,6 @@ using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Controls.Button;
 using Lyra.UI.Components.Layout;
 using Lyra.UI.Components.Primitives;
-using Lyra.UI.SupportingTypes;
 using Lyra.UI.Theme;
 
 namespace Lyra.Renderer.GUI.Sections;

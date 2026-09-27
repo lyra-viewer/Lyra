@@ -154,26 +154,23 @@ public partial class UIContext
     /// <summary>
     /// Call from HandlePointerMove when not dragging.
     /// Updates the cursor based on resize edge proximity.
-    /// Returns the cursor that was set.
     /// </summary>
-    private CursorType UpdateResizeCursor(SKPoint point)
+    private void UpdateResizeCursor(SKPoint point)
     {
         if (IsOverScrollbar(point))
         {
             RequestCursor(CursorType.Default);
-            return CursorType.Default;
+            return;
         }
 
         var target = FindResizeTargetAcrossLayers(point);
         if (target is null)
         {
             RequestCursor(CursorType.Default);
-            return CursorType.Default;
+            return;
         }
 
-        var cursor = GetCursorForEdge(target.Value.edge);
-        RequestCursor(cursor);
-        return cursor;
+        RequestCursor(GetCursorForEdge(target.Value.edge));
     }
 
     // --------------------------------------------------------

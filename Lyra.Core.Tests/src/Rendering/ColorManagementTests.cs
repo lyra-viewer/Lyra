@@ -25,7 +25,7 @@ public class ColorManagementTests
             srgbPixel.SetPixel(0, 0, new SKColor(255, 0, 0));
             using var srgbImage = SKImage.FromBitmap(srgbPixel);
             using var canvas = new SKCanvas(bitmap);
-            canvas.DrawImage(srgbImage, new SKRect(1, 0, 2, 1)); // sRGB red -> P3 encoding
+            canvas.DrawImage(srgbImage, new SKRect(1, 0, 2, 1), SKSamplingOptions.Default); // sRGB red -> P3 encoding
         }
 
         return SKImage.FromBitmap(bitmap);
@@ -43,7 +43,7 @@ public class ColorManagementTests
     {
         var info = new SKImageInfo(2, 1, SKColorType.Rgba8888, SKAlphaType.Premul, surfaceColorSpace);
         using var surface = SKSurface.Create(info);
-        surface.Canvas.DrawImage(image, 0, 0);
+        surface.Canvas.DrawImage(image, 0, 0, SKSamplingOptions.Default);
 
         using var snapshot = surface.Snapshot();
         using var readback = new SKBitmap(info);

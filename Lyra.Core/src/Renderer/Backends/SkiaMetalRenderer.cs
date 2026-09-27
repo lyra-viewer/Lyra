@@ -1,5 +1,4 @@
 using Lyra.Common;
-using Lyra.Common.Settings;
 using Lyra.DropStatusProvider;
 using Lyra.DuplicateStatusProvider;
 using Lyra.SdlCore;

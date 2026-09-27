@@ -88,7 +88,7 @@ public class DecodeSizeGuardTests
         using var thumbnail = new TiffDecoder().DecodeThumbnail(file.Path, 32, TestContext.Current.CancellationToken);
 
         Assert.NotNull(thumbnail);
-        Assert.Equal(32, Math.Max(thumbnail!.Width, thumbnail.Height));
+        Assert.Equal(32, Math.Max(thumbnail.Width, thumbnail.Height));
         Assert.Equal(200, thumbnail.GetPixel(thumbnail.Width / 2, thumbnail.Height / 2).Red);
     }
 

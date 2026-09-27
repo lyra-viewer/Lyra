@@ -1,5 +1,3 @@
-using Lyra.UI;
-using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Controls.TreeView;
 using Lyra.UI.Components.Layout;
@@ -13,10 +11,10 @@ namespace Lyra.UI.Tests.Context;
 
 public class InvalidationTests
 {
-    private static Label Attached(UIContext context, out VStack root)
+    private static Label Attached(UIContext context)
     {
         var label = new Label("initial");
-        root = new VStack();
+        var root = new VStack();
         root.AddComponent(label);
         context.Root = root;
         context.ClearDirty();
@@ -144,7 +142,7 @@ public class InvalidationTests
     public void ChangingTextInvalidates()
     {
         using var context = new UIContext();
-        var label = Attached(context, out _);
+        var label = Attached(context);
 
         label.Text = "changed";
 
@@ -163,7 +161,7 @@ public class InvalidationTests
     public void ChangingALayoutPropertyInvalidates(string property)
     {
         using var context = new UIContext();
-        var label = Attached(context, out _);
+        var label = Attached(context);
 
         switch (property)
         {
@@ -232,7 +230,7 @@ public class InvalidationTests
     public void WritingTheSameValueBackDoesNotInvalidate(string property)
     {
         using var context = new UIContext();
-        var label = Attached(context, out _);
+        var label = Attached(context);
 
         // Establish the value, then write it again - the shape of a Refresh that
         // runs every frame and mostly changes nothing.

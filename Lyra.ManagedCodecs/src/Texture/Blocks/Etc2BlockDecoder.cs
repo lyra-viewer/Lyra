@@ -321,7 +321,7 @@ internal static class Etc2BlockDecoder
         if (signed)
         {
             var sbase = (sbyte)((high >> 24) & 0xFF);
-            var sb = sbase < -127 ? -127 : (int)sbase;
+            var sb = sbase < -127 ? -127 : sbase;
             var mult = Math.Max((int)((high >> 20) & 0xF) * 8, 1);
             var value = Math.Clamp((sb * 8) + (mod * mult), -1023, 1023);
             return (byte)(((value + 1023) * 255) / 2046);

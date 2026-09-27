@@ -12,6 +12,7 @@ internal sealed class MeasuredReadStream : Stream
     private long _ticks;
     private bool _disposed;
 
+    /// <param name="inner">The stream being measured; disposed with this one.</param>
     /// <param name="onProgress">Called with the running byte total as the read progresses.</param>
     /// <param name="onCompleted">Called once on dispose with the final byte total and elapsed milliseconds.</param>
     public MeasuredReadStream(Stream inner, Action<long>? onProgress = null, Action<long, double>? onCompleted = null)

@@ -25,7 +25,6 @@ public class DropDownMenu<T> : ComponentBase, IContainer
     where T : notnull
 {
     private readonly IPopupHost _popupHost;
-    private readonly Func<T, string> _displayName;
     private readonly Func<T, string> _headerDisplay;
 
     private readonly Button.Button _headerButton;
@@ -67,7 +66,6 @@ public class DropDownMenu<T> : ComponentBase, IContainer
         ArgumentNullException.ThrowIfNull(displayName);
 
         _popupHost = popupHost;
-        _displayName = displayName;
         _headerDisplay = headerDisplay ?? displayName;
         _selected = initialSelection;
 

@@ -1,4 +1,3 @@
-using Lyra.UI;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Layout;

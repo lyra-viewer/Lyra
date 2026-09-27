@@ -5,7 +5,7 @@ namespace Lyra.Imaging.Decoding.Support;
 /// array or a block of native memory, exposing them uniformly as a <see cref="Span{T}"/>. Native
 /// memory is released on <see cref="Dispose"/>; managed buffers need no cleanup.
 ///
-/// This lets <see cref="FloatRgbaDecoderBase"/> drive both pure-managed decoders (which produce a
+/// This lets <see cref="Decoders.FloatRgbaDecoderBase"/> drive both pure-managed decoders (which produce a
 /// <c>float[]</c>) and native decoders (which hand back a pointer) through one code path.
 /// </summary>
 internal readonly struct FloatImageBuffer : IDisposable

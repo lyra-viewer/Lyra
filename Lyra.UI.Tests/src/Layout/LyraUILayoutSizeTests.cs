@@ -1,4 +1,3 @@
-using Lyra.UI;
 using Lyra.UI.Components;
 using SkiaSharp;
 using Xunit;

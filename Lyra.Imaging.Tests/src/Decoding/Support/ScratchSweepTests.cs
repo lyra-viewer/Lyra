@@ -128,7 +128,7 @@ public class ScratchSweepTests : IDisposable
         var token = ScratchSession.Claim(_dir);
 
         Assert.NotNull(token);
-        Assert.True(File.Exists(Mark(token!)), "claiming a run should leave the mark that proves it is running");
+        Assert.True(File.Exists(Mark(token)), "claiming a run should leave the mark that proves it is running");
 
         var copy = WriteCopy(token);
         ScratchFileCopy.Sweep(_dir);

@@ -65,7 +65,7 @@ public static class PathTreeBuilder
 
     /// <summary>
     /// Extracts the display name (last path segment) from a
-    /// full path stored in a TreeNode<string>.
+    /// full path stored in a <see cref="TreeNode{T}"/>.
     /// Useful in row factories for display.
     /// </summary>
     public static string DisplayName(string fullPath)

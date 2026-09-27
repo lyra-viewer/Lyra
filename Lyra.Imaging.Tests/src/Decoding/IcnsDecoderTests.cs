@@ -96,7 +96,7 @@ public class IcnsDecoderTests
         var decoded = IcnsReader.Decode(icns, entry);
 
         Assert.NotNull(decoded);
-        Assert.Equal(16, decoded!.Value.Width);
+        Assert.Equal(16, decoded.Value.Width);
 
         var pixels = decoded.Value.Pixels;
         Assert.Equal(0xFF, pixels[0]);           // red channel present across the whole plate
@@ -113,7 +113,7 @@ public class IcnsDecoderTests
         var decoded = IcnsReader.Decode(icns, entry);
 
         Assert.NotNull(decoded);
-        Assert.Equal(0x20, decoded!.Value.Pixels[0]);
+        Assert.Equal(0x20, decoded.Value.Pixels[0]);
         Assert.Equal(0x40, decoded.Value.Pixels[1]);
         Assert.Equal(0x60, decoded.Value.Pixels[2]);
         Assert.Equal(0xFF, decoded.Value.Pixels[3]);
@@ -137,7 +137,7 @@ public class IcnsDecoderTests
         var decoded = IcnsReader.Decode(icns, entry);
 
         Assert.NotNull(decoded);
-        Assert.Equal([0x11, 0x22, 0x33, 0x80], decoded!.Value.Pixels[..4]);
+        Assert.Equal([0x11, 0x22, 0x33, 0x80], decoded.Value.Pixels[..4]);
     }
 
     [Fact]

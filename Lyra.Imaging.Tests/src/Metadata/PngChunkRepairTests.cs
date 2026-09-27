@@ -40,7 +40,7 @@ public class PngChunkRepairTests
         using var repaired = PngChunkRepair.Repair(stream, out _);
 
         Assert.NotNull(repaired);
-        Assert.Equal(["IHDR", "eXIf", "IEND"], ChunkTypes(repaired!.ToArray()));
+        Assert.Equal(["IHDR", "eXIf", "IEND"], ChunkTypes(repaired.ToArray()));
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class PngChunkRepairTests
         using var repaired = PngChunkRepair.Repair(stream, out var repair);
 
         Assert.NotNull(repaired);
-        Assert.Equal(["IHDR", "eXIf", "IEND"], ChunkTypes(repaired!.ToArray()));
+        Assert.Equal(["IHDR", "eXIf", "IEND"], ChunkTypes(repaired.ToArray()));
         Assert.Equal("cut short", repair);
     }
 
@@ -100,7 +100,7 @@ public class PngChunkRepairTests
         using var repaired = PngChunkRepair.Repair(stream, out _);
 
         Assert.NotNull(repaired);
-        Assert.Equal(["IHDR", "IEND"], ChunkTypes(repaired!.ToArray()));
+        Assert.Equal(["IHDR", "IEND"], ChunkTypes(repaired.ToArray()));
     }
 
     [Fact]

@@ -320,7 +320,7 @@ public static class SurfaceDecoder
     {
         for (var i = 0; i < pixels; i++)
         {
-            var v = (byte)src[(i * 2) + 1]; // high byte of the little-endian 16-bit value
+            var v = src[(i * 2) + 1]; // high byte of the little-endian 16-bit value
             var d = i * 4;
             dst[d + 0] = dst[d + 1] = dst[d + 2] = v;
             dst[d + 3] = 255;

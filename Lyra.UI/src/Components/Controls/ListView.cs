@@ -135,6 +135,7 @@ public class ListView<T> : ComponentBase, IContainer, IScrollable
     /// <param name="items">Copied on entry. The control keeps its own list so that
     /// later edits to the caller's list cannot desync the rows and pick index from
     /// the data behind them - call UpdateData to publish changes.</param>
+    /// <param name="rowFactory">Builds the row for an item; the flag is whether that row is picked.</param>
     public ListView(List<T> items, Func<T, bool, IComponent> rowFactory)
     {
         ArgumentNullException.ThrowIfNull(items);

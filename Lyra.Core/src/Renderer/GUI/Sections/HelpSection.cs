@@ -1,4 +1,3 @@
-using Lyra.Imaging.Content;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Layout;
 using Lyra.UI.Components.Primitives;

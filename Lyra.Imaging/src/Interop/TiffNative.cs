@@ -207,7 +207,9 @@ internal static class TiffNative
     /// the entry point is missing - <see cref="DirectoryAccessAvailable"/> then reports that for
     /// the rest of the process - or when the file could not be read.
     /// </summary>
+    /// <param name="path">The TIFF file.</param>
     /// <param name="data">A buffer holding the whole file, or <see cref="IntPtr.Zero"/> to read from the path.</param>
+    /// <param name="size">Length of <paramref name="data"/> in bytes; ignored when reading from the path.</param>
     public static IReadOnlyList<DirectoryInfo> DescribeDirectories(string path, IntPtr data, ulong size) => DescribeDirectories(path, data, size, out _);
 
     public static IReadOnlyList<DirectoryInfo> DescribeDirectories(string path, IntPtr data, ulong size, out long[]? encodedBytes)

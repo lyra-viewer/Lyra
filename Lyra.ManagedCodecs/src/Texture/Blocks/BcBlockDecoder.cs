@@ -4,7 +4,7 @@ namespace Lyra.ManagedCodecs.Texture.Blocks;
 
 /// <summary>
 /// Decodes individual 4x4 BCn (S3TC / RGTC) blocks to 16 RGBA8 pixels in row-major order. Each
-/// method writes exactly 64 bytes (16 px * 4) into <paramref name="dst"/>. Interpolated endpoints
+/// method writes exactly 64 bytes (16 px * 4) into <c>dst</c>. Interpolated endpoints
 /// use round-to-nearest division; BCn is not bit-exact across GPUs, so this matches hardware closely
 /// without claiming a single canonical result.
 /// </summary>

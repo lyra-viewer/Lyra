@@ -1,4 +1,3 @@
-using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
 using Lyra.FileLoader.Enumeration;
 using Lyra.Renderer.GUI.Sections;
@@ -9,6 +8,9 @@ using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Layout;
 using Lyra.UI.SupportingTypes;
 using Lyra.UI.Theme;
+#if !DEBUG
+using Lyra.Common.Settings;
+#endif
 
 namespace Lyra.Renderer.GUI.Layers;
 

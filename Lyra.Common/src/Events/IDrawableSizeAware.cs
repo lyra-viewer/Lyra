@@ -1,5 +1,3 @@
-using static Lyra.Common.Events.EventManager;
-
 namespace Lyra.Common.Events;
 
 public interface IDrawableSizeAware

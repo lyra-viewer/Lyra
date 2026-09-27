@@ -9,7 +9,7 @@ namespace Lyra.UI.Components;
 ///
 /// The child is treated as an external reference — Overlay does
 /// not dispose it. A click that lands inside the overlay but not
-/// on the child fires <see cref="OutsideClicked"/>, which the
+/// on the child fires the <c>outsideClicked</c> callback, which the
 /// popup host uses to dismiss.
 /// </summary>
 public sealed class Overlay : ComponentBase, IContainer

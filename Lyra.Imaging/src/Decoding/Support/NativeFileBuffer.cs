@@ -22,6 +22,8 @@ internal sealed class NativeFileBuffer : IDisposable
     }
 
     /// <summary>Reads a whole file, measuring it exactly as <see cref="DecoderIO.ReadAllBytes"/> does.</summary>
+    /// <param name="path">The file to read.</param>
+    /// <param name="ct">Checked between chunks.</param>
     /// <param name="elapsedMs">How long the read took. Not set when the read throws.</param>
     /// <param name="onProgress">Called with the running byte total as the read progresses.</param>
     /// <exception cref="OperationCanceledException">Cancellation was requested mid-read.</exception>

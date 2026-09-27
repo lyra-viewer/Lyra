@@ -138,7 +138,7 @@ public class LazyTileBorrowTests
 
         source.Dispose();
 
-        Assert.Equal(0, source.GetTiles(Whole, WholeSize, 1f).Count());
+        Assert.Empty(source.GetTiles(Whole, WholeSize, 1f));
         Assert.Equal(0, source.ResidentCount);
         Assert.True(WaitFor(() => provider.LiveCount == 0), $"{provider.LiveCount} tile images were never disposed");
     }
