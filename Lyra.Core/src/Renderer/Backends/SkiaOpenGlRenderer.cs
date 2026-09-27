@@ -41,13 +41,22 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
         GLGetSwapInterval(out var swapInterval);
         Logger.Debug($"[SkiaOpenGlRenderer] GL swap interval = {swapInterval}");
         
-        var glInterface = GRGlInterface.Create(GLGetProcAddress);
+        var glInterface = GRGlInterface.Create(CreateProcAddressResolver());
         if (glInterface is null || !glInterface.Validate())
             throw new InvalidOperationException("Could not assemble an OpenGL function interface for the current GL context.");
 
         _grContext = GRContext.CreateGl(glInterface);
 
         ConfigureResourceCache(_grContext, "SkiaOpenGlRenderer");
+    }
+
+    /// <summary>X11: Hide the EGL names unless SDL actually drives the context through EGL.</summary>
+    private static GRGlGetProcedureAddressDelegate CreateProcAddressResolver()
+    {
+        if (EGLGetCurrentDisplay() != IntPtr.Zero)
+            return GLGetProcAddress;
+
+        return name => name.StartsWith("egl", StringComparison.Ordinal) ? IntPtr.Zero : GLGetProcAddress(name);
     }
 
     protected override bool DisposeSurfaceAfterRender => false;
