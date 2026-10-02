@@ -37,21 +37,28 @@ Lyra is built on .NET 9 with SDL3 for windowing and input, and SkiaSharp for har
 The architecture is designed around fast, non-blocking image loading:
 
 - Decoded images are cached and adjacent files are preloaded in the background, so navigation feels instant even in large
-  directories.
+  directories. The cache budget is an eighth of installed RAM, clamped between 1.5 and 8 GB.
+- Any decoded raster larger than 256 MB - whatever its format - is published as a display-sized preview plus 2048 px
+  tiles, so the GPU only holds what is on screen.
 - Large PSD/PSB files use streaming and tiled decoding to avoid loading entire documents into memory - tested with files
   exceeding 3 GB.
 - Large TIFFs work the same way: BigTIFF is read natively, and a gray or eight-bit color sheet whose raster exceeds 256
   MB is published as a streamed preview plus tiles decoded by region as the view asks for them. Sample layouts libtiff's
   RGBA interface refuses - 10, 12 and 14-bit samples, 32 and 64-bit, IEEE float, one-bit color - are read at their own
   depth instead, so a float TIFF reaches the HDR pipeline scene-referred rather than flattened to eight bits on the way in.
+  Each page of a multi-page TIFF is selectable from the sidebar's **PAGES** section.
+- Slow and network storage is handled without stalling: large reads are cancellable, preloads step aside for the image
+  being shown, and a TIFF too large to buffer in memory is first copied to a local scratch file in managed, cancellable
+  chunks. A load that takes a while shows a progress bar - bytes transferred, then a decode estimate learned from
+  previous loads of the same format.
 
 Decoding is split into two layers. **Lyra.ManagedCodecs** is a pure-managed, dependency-free codec library that
-owns the formats Lyra decodes itself - TGA, Radiance HDR, and the GPU texture containers (DDS, KTX, KTX2) together
-with their block formats (BC1–BC7, BC6H, ETC2 / EAC, ASTC). These readers parse the container structure in C#,
-slice each subresource as a zero-copy view into the source file, treat all input as hostile (every byte range and
-surface size is bounds-checked against overflow), and decode only the surface actually needed - so a thumbnail or a
-perceptual hash never pays to decode a full-resolution mip. Because nothing here links a native library, it behaves
-identically on every platform .NET targets.
+owns the formats Lyra decodes itself - TGA, Radiance HDR, the ICO and ICNS icon containers, and the GPU texture
+containers (DDS, KTX, KTX2) together with their block formats (BC1–BC7, BC6H, ETC2 / EAC, ASTC). These readers parse
+the container structure in C#, slice each subresource as a zero-copy view into the source file, treat all input as
+hostile (every byte range and surface size is bounds-checked against overflow), and decode only the surface actually
+needed - so a thumbnail or a perceptual hash never pays to decode a full-resolution mip. Because nothing here links a
+native library, it behaves identically on every platform .NET targets.
 
 For the remaining formats Lyra integrates lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL, and TIFF
 decoding, delegating format-specific work to focused libraries. The one native exception inside the managed codec layer
@@ -118,6 +125,7 @@ This covers every high-dynamic-range source Lyra decodes:
 |------------------------|----------------------------------------------------------------------------------------------------------------|
 | Scene-referred raster  | OpenEXR `.exr`, Radiance HDR `.hdr`                                                                            |
 | Floating-point JPEG XL | `.jxl` decoded to float                                                                                        |
+| Floating-point TIFF    | `.tif` `.tiff` with IEEE float samples                                                                         |
 | HDR textures           | BC6H (signed + unsigned), RGBA16F / RGBA32F, R16F / R32F, RGB16F, RG11B10, RGB9E5 - in `.dds`, `.ktx`, `.ktx2` |
 
 ### Tone mapping
@@ -154,7 +162,7 @@ can be kept as light:
 | Image size                                                                                                                | Held as                                                                 | Result                                                                                |
 |---------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------|---------------------------------------------------------------------------------------|
 | Up to 32 MP                                                                                                               | One scene-referred half-float texture                                   | Live controls and EDR at every zoom level                                             |
-| Above that, while it fits a quarter of the decoded-image cache (a 128 MP panorama is 1 GB, and does on a typical machine) | Scene-referred preview **plus** scene-referred tiles                    | Live controls and EDR at every zoom level                                             |
+| Above that, while it fits a quarter of the decoded-image cache (a 128 MP panorama is 1 GB, which fits from 32 GB of RAM)  | Scene-referred preview **plus** scene-referred tiles                    | Live controls and EDR at every zoom level                                             |
 | Larger                                                                                                                    | Curve baked in at decode; only the display-sized preview stays as light | Controls and EDR apply at fit-to-window; zooming in steps down to the baked rendering |
 
 When an image is too large to hold as light, the **HDR Decode** section says so in place of the controls rather

@@ -32,6 +32,7 @@
 - [Configuration & Data Files](#configuration--data-files)
     - [Configuration](#configuration)
     - [Data](#data)
+    - [Cache](#cache)
 
 ## Overview
 
@@ -89,8 +90,8 @@ cannot be parallelised, so performance over a NAS or remote share will always be
 - TIFF in depth - BigTIFF, multi-page documents, 1 to 64-bit samples, signed, unsigned or float
 - EXIF metadata
 - PSD layer hierarchy
-- File structure inspector (DDS / KTX / KTX2)
-- Variant picker for files carrying several renditions, such as the sizes inside an `.icns`
+- File structure inspector (PSD / PSB, TIFF, DDS / KTX / KTX2)
+- Variant picker for files carrying several renditions - the sizes inside an `.icns` / `.ico`, the pages of a TIFF
 
 ---
 
@@ -115,13 +116,13 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 
 ### Common Raster Formats (Essential)
 
-| Format      | Description                                      | Extensions                    |
-|-------------|--------------------------------------------------|-------------------------------|
-| PNG         | Lossless raster image format with optional alpha | `.png`                        |
-| JPEG / JFIF | Lossy raster image format (JPEG family)          | `.jpg` `.jpeg` `.jif` `.jfif` |
-| TIFF        | High-precision raster image container            | `.tif` `.tiff`                |
-| Targa       | Raster image format with optional alpha          | `.tga`                        |
-| BMP         | Uncompressed bitmap image format                 | `.bmp`                        |
+| Format      | Description                                      | Extensions                    | Notes                                                         |
+|-------------|--------------------------------------------------|-------------------------------|---------------------------------------------------------------|
+| PNG         | Lossless raster image format with optional alpha | `.png`                        |                                                               |
+| JPEG / JFIF | Lossy raster image format (JPEG family)          | `.jpg` `.jpeg` `.jif` `.jfif` |                                                               |
+| TIFF        | High-precision raster image container            | `.tif` `.tiff`                | See [Technical Details](docs/technical.md#technical-details). |
+| Targa       | Raster image format with optional alpha          | `.tga`                        |                                                               |
+| BMP         | Uncompressed bitmap image format                 | `.bmp`                        |                                                               |
 
 ### Modern / Web-Friendly Formats
 
@@ -141,10 +142,10 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 
 ### High Dynamic Range Formats
 
-| Format       | Description                                     | Extensions | Notes                                                                                                                                                                 |
-|--------------|-------------------------------------------------|------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| OpenEXR      | High-dynamic range, multi-channel raster format | `.exr`     |                                                                                                                                                                       |
-| Radiance HDR | High-dynamic range RGBE format                  | `.hdr`     | EXR and Radiance HDR are kept as scene-referred light and tone-mapped as they are drawn, with the curve and exposure live in the sidebar. See [HDR / EDR](docs/technical.md#hdr--edr). |
+| Format       | Description                                     | Extensions | Notes                                        |
+|--------------|-------------------------------------------------|------------|----------------------------------------------|
+| OpenEXR      | High-dynamic range, multi-channel raster format | `.exr`     |                                              |
+| Radiance HDR | High-dynamic range RGBE format                  | `.hdr`     | See [HDR / EDR](docs/technical.md#hdr--edr). |
 
 ### GPU Formats
 
@@ -157,8 +158,8 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 
 | Format    | Description                 | Extensions                              | Notes                                                                                                                                                                 |
 |-----------|-----------------------------|-----------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ICO       | Icon container format       | `.ico`                                  |                                                                                                                                                                       |
-| ICNS      | Apple icon container format | `.icns`                                 | Every size in the container is decoded and selectable from the sidebar's **Sizes** dropdown. Reads PNG, JPEG 2000, ARGB and the legacy RLE24 plates with their masks. |
+| ICO       | Icon container format       | `.ico`                                  | Every entry in the container is decoded and selectable from the sidebar's **VARIANTS** section. Reads PNG and BMP (DIB) entries with their masks.                  |
+| ICNS      | Apple icon container format | `.icns`                                 | Every size in the container is decoded and selectable from the sidebar's **VARIANTS** section. Reads PNG, JPEG 2000, ARGB and the legacy RLE24 plates with their masks. |
 | JPEG 2000 | Wavelet-based image format  | `.jp2` `.jpg2`<br/>`.j2k` `.j2c` `.jpc` | Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP) are intentionally NOT supported.               |
 
 ---
@@ -177,6 +178,7 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 | `B`                   | Toggle background mode                            |
 | `I`                   | Toggle image information overlay                  |
 | `H`                   | Toggle help overlay                               |
+| `U`                   | Toggle sidebar                                    |
 | `Return`              | Reveal image or directory in native file explorer |
 | `Esc`                 | Cancel an operation, or exit application          |
 
@@ -303,7 +305,7 @@ Prefer not to add a repository? Download `lyra-viewer_<version>_amd64.deb` from 
 directly (`apt` resolves the system dependencies):
 
 ```sh
-sudo apt install ./lyra-viewer_0.5.2_amd64.deb
+sudo apt install ./lyra-viewer_0.6.0_amd64.deb
 ```
 
 > _Note:_ Linux builds are **amd64 (x86-64)** only for now.
@@ -313,7 +315,8 @@ sudo apt install ./lyra-viewer_0.5.2_amd64.deb
 ## Configuration & Data Files
 
 On macOS and Linux, Lyra stores configuration and runtime data in standard XDG-compliant locations. On Windows, both the
-configuration and data files live together under `%LOCALAPPDATA%\lyra-viewer` (the file names below are unchanged).
+configuration and data files live together under `%LOCALAPPDATA%\lyra-viewer`, and the cache under
+`%LOCALAPPDATA%\lyra-viewer\cache` (the file names below are unchanged).
 
 ### Configuration
 
@@ -323,6 +326,7 @@ configuration and data files live together under `%LOCALAPPDATA%\lyra-viewer` (t
 |---------------------|-------------------------------------------------------------------------------------------|
 | `app-settings.toml` | Application settings: renderer, window state, middle mouse button function, text sizes... |
 | `ui-settings.toml`  | UI state - saved automatically on exit                                                    |
+| `themes/`           | Color themes, one `.toml` per theme, selected by `theme` in `app-settings.toml`           |
 
 ### Data
 
@@ -331,7 +335,16 @@ configuration and data files live together under `%LOCALAPPDATA%\lyra-viewer` (t
 | File                  | Description                                                            |
 |-----------------------|------------------------------------------------------------------------|
 | `log.txt`             | Application log output                                                 |
+| `log.previous.txt`    | Log of the previous run                                                |
 | `load-time-data.toml` | Recorded decode times per format, used to estimate loading progress    |
+
+### Cache
+
+```~/.cache/lyra-viewer/```
+
+| Path       | Description                                                                                                                                  |
+|------------|----------------------------------------------------------------------------------------------------------------------------------------------|
+| `scratch/` | Temporary local copies of very large files read from slow or network storage. Can briefly hold multi-GB files; each is deleted after decoding, and leftovers from a crashed run are removed on next start. |
 
 If any configuration file is missing or malformed, Lyra falls back to built-in defaults and recreates the file on next save.
 Deleting everything under these directories is always safe - Lyra will start fresh with default settings.
