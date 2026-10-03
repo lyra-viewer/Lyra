@@ -29,6 +29,7 @@
     - [Windows (Scoop)](#windows-scoop)
     - [Linux (APT)](#linux-apt)
     - [Linux (direct .deb)](#linux-direct-deb)
+    - [Linux (Flatpak)](#linux-flatpak)
 - [Configuration & Data Files](#configuration--data-files)
     - [Configuration](#configuration)
     - [Data](#data)
@@ -56,8 +57,8 @@ Built for anyone who relies on images as a core resource in their workflow:
   forefront of every decision.
 - Lyra does not connect to the internet. It has no telemetry, no update pings, no cloud sync, no nag screens, and no AI
   features. Everything runs locally, offline, on your machine. Updates are manual - check for new releases and install
-  them through your package manager (Homebrew, APT, or Scoop) when you're ready. If there's a format, workflow, or
-  feature you'd like to see, the right place to say so is the [GitHub issue tracker](https://github.com/lyra-viewer/Lyra/issues).
+  them through your package manager (Homebrew, APT, Flatpak, or Scoop) when you're ready. If there's a format, workflow,
+  or feature you'd like to see, the right place to say so is the [GitHub issue tracker](https://github.com/lyra-viewer/Lyra/issues).
 
 ### Recommended hardware & known limitations
 
@@ -243,6 +244,8 @@ Universal transcoder). How those libraries are delivered depends on the platform
 - **Linux** - resolved as APT dependencies of the `.deb`, except for **libjxl**, which is vendored inside the
   package for now. This is a temporary measure until JPEG XL support is more widely available across Ubuntu releases; it
   will be dropped in favor of the system package once that lands.
+- **Linux (Flatpak)** - self-contained: the libraries come from the Freedesktop runtime or are built into the Flatpak,
+  so nothing needs to be installed on the host.
 - **Windows** - bundled with the application. The wrapper DLLs are self-contained and ship inside the distribution, so no
   separate installation is required.
 
@@ -251,7 +254,7 @@ Universal transcoder). How those libraries are delivered depends on the platform
 ## Installation
 
 Lyra Viewer is distributed via **Homebrew** on macOS, an **APT repository** (or a
-direct `.deb`) on Debian/Ubuntu, and **Scoop** on Windows.
+direct `.deb`) on Debian/Ubuntu, a **Flatpak** repository for any Linux distribution, and **Scoop** on Windows.
 
 ### macOS (Homebrew)
 
@@ -308,19 +311,52 @@ directly (`apt` resolves the system dependencies):
 sudo apt install ./lyra-viewer_0.6.0_amd64.deb
 ```
 
-> _Note:_ Linux builds are **amd64 (x86-64)** only for now.
+### Linux (Flatpak)
+
+Works on any distribution with Flatpak. One command adds the signed repository (and Flathub, for the runtime) and
+installs Lyra:
+
+```sh
+flatpak install --user https://lyra-viewer.github.io/flatpak-lyra/lyra-viewer.flatpakref
+```
+
+Updates then arrive through `flatpak update`. A standalone `LyraViewer-linux-x86_64.flatpak` is also attached to each
+[release](https://github.com/lyra-viewer/Lyra/releases/latest); installing it subscribes to the same repository for
+updates:
+
+```sh
+flatpak install --user ./LyraViewer-linux-x86_64.flatpak
+```
+
+The Flatpak has read-only access to your files, so it can browse folders and find duplicates, but never modifies them.
+
+To uninstall:
+
+```sh
+flatpak uninstall --user com.nineveh.LyraViewer
+flatpak remote-delete --user lyra   # if you installed the bundle, `flatpak remotes` shows its remote's name
+```
+
+> _Note:_ Linux builds (`.deb` and Flatpak) are **amd64 (x86-64)** only for now.
 
 ---
 
 ## Configuration & Data Files
 
-On macOS and Linux, Lyra stores configuration and runtime data in standard XDG-compliant locations. On Windows, both the
-configuration and data files live together under `%LOCALAPPDATA%\lyra-viewer`, and the cache under
-`%LOCALAPPDATA%\lyra-viewer\cache` (the file names below are unchanged).
+Where Lyra keeps its files depends on how it was installed:
+
+| Channel              | Configuration                                           | Data                                                  | Cache                                                  |
+|----------------------|---------------------------------------------------------|-------------------------------------------------------|--------------------------------------------------------|
+| macOS (Homebrew)     | `~/.config/lyra-viewer/`                                | `~/.local/share/lyra-viewer/`                         | `~/.cache/lyra-viewer/`                                |
+| Linux (APT / `.deb`) | `~/.config/lyra-viewer/`                                | `~/.local/share/lyra-viewer/`                         | `~/.cache/lyra-viewer/`                                |
+| Linux (Flatpak)      | `~/.var/app/com.nineveh.LyraViewer/config/lyra-viewer/` | `~/.var/app/com.nineveh.LyraViewer/data/lyra-viewer/` | `~/.var/app/com.nineveh.LyraViewer/cache/lyra-viewer/` |
+| Windows (Scoop)      | `%LOCALAPPDATA%\lyra-viewer\`                           | `%LOCALAPPDATA%\lyra-viewer\`                         | `%LOCALAPPDATA%\lyra-viewer\cache\`                    |
+
+On macOS and Linux these follow the XDG base directories, so `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_CACHE_HOME` are
+honored when set. The Flatpak's files are separate from a `.deb` install's: switching between the two starts with default
+settings, unless you copy the `lyra-viewer/` folders across.
 
 ### Configuration
-
-```~/.config/lyra-viewer/```
 
 | File                | Description                                                                               |
 |---------------------|-------------------------------------------------------------------------------------------|
@@ -330,8 +366,6 @@ configuration and data files live together under `%LOCALAPPDATA%\lyra-viewer`, a
 
 ### Data
 
-```~/.local/share/lyra-viewer/```
-
 | File                  | Description                                                            |
 |-----------------------|------------------------------------------------------------------------|
 | `log.txt`             | Application log output                                                 |
@@ -340,13 +374,11 @@ configuration and data files live together under `%LOCALAPPDATA%\lyra-viewer`, a
 
 ### Cache
 
-```~/.cache/lyra-viewer/```
-
 | Path       | Description                                                                                                                                  |
 |------------|----------------------------------------------------------------------------------------------------------------------------------------------|
 | `scratch/` | Temporary local copies of very large files read from slow or network storage. Can briefly hold multi-GB files; each is deleted after decoding, and leftovers from a crashed run are removed on next start. |
 
 If any configuration file is missing or malformed, Lyra falls back to built-in defaults and recreates the file on next save.
-Deleting everything under these directories is always safe - Lyra will start fresh with default settings.
+Deleting everything under these folders is always safe - Lyra will start fresh with default settings.
 
 ---
