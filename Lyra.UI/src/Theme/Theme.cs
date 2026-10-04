@@ -29,6 +29,8 @@ public sealed record Theme
     public required SKColor HoverDanger { get; init; }
     public required SKColor PressedDanger { get; init; }
 
+    public required SKColor Warning { get; init; }
+
     public required SKColor Subtle { get; init; }
     public required SKColor HoverSubtle { get; init; }
     public required SKColor PressedSubtle { get; init; }

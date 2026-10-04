@@ -28,7 +28,7 @@ internal static class TiffDocument
 
         composite.Content = new VariantRasterContent(variants, active: 0, first, new PageProvider(path, pages, directories, composite), DecodePolicy.ResidentPageBudgetBytes)
         {
-            GroupLabel = "PAGES"
+            Kind = VariantKind.Pages
         };
     }
 

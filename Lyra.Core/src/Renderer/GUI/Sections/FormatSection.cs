@@ -27,7 +27,7 @@ public sealed class FormatSection : IUISection
 
     private Composite? _lastComposite;
     private CompositeState _lastState;
-    private int _lastCount = -1;
+    private int _lastVersion = -1;
     private float _keyWidth;
 
     public Collapsible Collapsible => _collapsible;
@@ -55,16 +55,17 @@ public sealed class FormatSection : IUISection
     public void Refresh(UIState state)
     {
         var composite = state.Composite;
-        var metadata = composite?.FormatSpecificSnapshot() ?? [];
+        var version = composite?.FormatSpecificVersion ?? -1;
 
-        // Decoders keep adding entries while the composite identity and state stay put,
-        // so the entry count takes part in the dedup key.
-        if (composite != _lastComposite || state.CompositeState != _lastState || metadata.Count != _lastCount)
+        // Decoders keep adding and updating entries while the composite identity and state stay
+        // put, so the entries' version takes part in the dedup key.
+        if (composite != _lastComposite || state.CompositeState != _lastState || version != _lastVersion)
         {
             _lastComposite = composite;
             _lastState = state.CompositeState;
-            _lastCount = metadata.Count;
+            _lastVersion = version;
 
+            var metadata = composite?.FormatSpecificSnapshot() ?? [];
             ApplyData(composite, metadata);
             _keyWidth = MeasureKeyWidth(metadata);
         }

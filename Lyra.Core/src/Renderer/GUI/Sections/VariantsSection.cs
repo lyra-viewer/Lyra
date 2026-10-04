@@ -20,6 +20,7 @@ public sealed class VariantsSection : IUISection, IDisposable
 
     private VariantRasterContent? _set;
     private int _lastFailureVersion = -1;
+    private int _lastWarningVersion = -1;
 
     private readonly ValueSlider _jump;
 
@@ -39,7 +40,7 @@ public sealed class VariantsSection : IUISection, IDisposable
 
     public VariantsSection()
     {
-        _list = new ListView<ImageVariant>([], (variant, isPicked) => RenderRow(variant, isPicked, FailureOf(variant)))
+        _list = new ListView<ImageVariant>([], (variant, isPicked) => RenderRow(variant, isPicked, FailureOf(variant), WarningOf(variant)))
         {
             HorizontalSize = SizeMode.Expand,
             VerticalSize = SizeMode.Flexible,
@@ -101,7 +102,7 @@ public sealed class VariantsSection : IUISection, IDisposable
         }
 
         _collapsible.Present = true;
-        _collapsible.Title = set!.GroupLabel;
+        _collapsible.Title = TitleFor(set!.Kind);
 
         if (!ReferenceEquals(variants, _lastVariants))
         {
@@ -111,9 +112,10 @@ public sealed class VariantsSection : IUISection, IDisposable
             RebuildJump(set);
         }
 
-        if (set.FailureVersion != _lastFailureVersion)
+        if (set.FailureVersion != _lastFailureVersion || set.WarningVersion != _lastWarningVersion)
         {
             _lastFailureVersion = set.FailureVersion;
+            _lastWarningVersion = set.WarningVersion;
             _list.InvalidateRows();
         }
 
@@ -128,11 +130,21 @@ public sealed class VariantsSection : IUISection, IDisposable
         }
     }
 
+    private static string TitleFor(VariantKind kind) => kind switch
+    {
+        VariantKind.Pages  => "PAGES",
+        VariantKind.Frames => "FRAMES",
+        _                  => "VARIANTS"
+    };
+    
+    private static bool ShowsJump(VariantKind kind, int count) =>
+        count >= (kind == VariantKind.Frames ? 3 : 13);
+
     private void RebuildJump(VariantRasterContent set)
     {
-        _jump.Present = set.IsLong;
+        _jump.Present = ShowsJump(set.Kind, set.Variants.Count);
 
-        if (!set.IsLong)
+        if (!_jump.Present)
             return;
 
         _syncingJump = true;
@@ -196,7 +208,10 @@ public sealed class VariantsSection : IUISection, IDisposable
     private LoadFailure? FailureOf(ImageVariant variant) =>
         IndexOf(_lastVariants, variant) is var index and >= 0 ? _set?.FailureOf(index) : null;
 
-    internal static HStack RenderRow(ImageVariant variant, bool isPicked, LoadFailure? failure = null)
+    private LoadWarning? WarningOf(ImageVariant variant) =>
+        IndexOf(_lastVariants, variant) is var index and >= 0 ? _set?.WarningOf(index) : null;
+    
+    internal static HStack RenderRow(ImageVariant variant, bool isPicked, LoadFailure? failure = null, LoadWarning? warning = null)
     {
         var titleColumn = new VStack
         {
@@ -209,9 +224,10 @@ public sealed class VariantsSection : IUISection, IDisposable
             Color = isPicked ? Palette.SelectedForeground : Palette.Foreground
         });
 
-        titleColumn.AddComponent(failure is null
-            ? new Label(variant.Detail) { Color = Palette.Dim }
-            : new Label(failure.Message) { Color = Palette.Danger });
+        titleColumn.AddComponent(
+            failure is not null ? new Label(failure.Message) { Color = Palette.Danger }
+            : warning is not null ? new Label(warning.Detail) { Color = Palette.Warning }
+            : new Label(variant.Detail) { Color = Palette.Dim });
 
         return new HStack
             {

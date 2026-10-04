@@ -17,6 +17,10 @@ public enum ImageFormatType
     [Description("OpenEXR Image")]
     Exr,
 
+    [FileExtension([".gif"])]
+    [Description("GIF Image")]
+    Gif,
+
     [FileExtension([".hdr"])]
     [Description("Radiance HDR Image")]
     Hdr,

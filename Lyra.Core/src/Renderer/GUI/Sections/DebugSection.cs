@@ -119,11 +119,11 @@ public sealed class DebugSection : IUISection
         // Composite state rows
         _stateRow = BuildRow(keyLabels, "State", "", out _stateValue);
         _decoderRow = BuildRow(keyLabels, "Decoder", "", out _decoderValue);
-        _decodeEstRow = BuildRow(keyLabels, "Decode Est (ms)", "", out _timeEstValue);
-        _timeDecodeRow = BuildRow(keyLabels, "Time Decode (ms)", "", out _timeDecodeValue);
-        _transferEstRow = BuildRow(keyLabels, "Transfer Est (ms)", "", out _transferEstValue);
-        _timeTransferRow = BuildRow(keyLabels, "Time Transfer (ms)", "", out _timeTransferValue);
-        _timeCompleteRow = BuildRow(keyLabels, "Time Complete (ms)", "", out _timeCompleteValue);
+        _decodeEstRow = BuildRow(keyLabels, "Decode Est", "", out _timeEstValue);
+        _timeDecodeRow = BuildRow(keyLabels, "Time Decode", "", out _timeDecodeValue);
+        _transferEstRow = BuildRow(keyLabels, "Transfer Est", "", out _transferEstValue);
+        _timeTransferRow = BuildRow(keyLabels, "Time Transfer", "", out _timeTransferValue);
+        _timeCompleteRow = BuildRow(keyLabels, "Time Complete", "", out _timeCompleteValue);
         _sourceRow = BuildRow(keyLabels, "Source", "", out _sourceValue);
         
         var displayRow = BuildRow(keyLabels, "Display", "-", out _displayValue);
@@ -230,8 +230,8 @@ public sealed class DebugSection : IUISection
             var composite = state.Composite;
             _stateValue.Text = composite.State.Description();
             _decoderValue.Text = composite.DecoderName ?? "-";
-            _timeEstValue.Text = Formatters.MsToStr(composite.Timing.DecodeEstimateMs);
-            _timeCompleteValue.Text = Formatters.MsToStr(composite.Timing.CompleteMs);
+            _timeEstValue.Text = Formatters.DurationToStr(composite.Timing.DecodeEstimateMs);
+            _timeCompleteValue.Text = Formatters.DurationToStr(composite.Timing.CompleteMs);
 
             _timeTransferRow.Present = composite.Timing.TransferMeasured;
             _timeDecodeRow.Present = composite.Timing.TransferMeasured;
@@ -239,7 +239,7 @@ public sealed class DebugSection : IUISection
             if (composite.Timing.TransferMeasured)
             {
                 _timeTransferValue.Text = FormatTransfer(composite);
-                _timeDecodeValue.Text = Formatters.MsToStr(composite.Timing.DecodeMs);
+                _timeDecodeValue.Text = Formatters.DurationToStr(composite.Timing.DecodeMs);
             }
 
             _sourceRow.Present = true;
@@ -323,14 +323,14 @@ public sealed class DebugSection : IUISection
             return "learning";
 
         var rate = Formatters.SizeToStr((long)(source.BytesPerMs * 1000));
-        return $"{Formatters.MsToStr(source.MsFor(bytes))} ({rate}/s +{Formatters.MsToStr(source.LatencyMs)}ms)";
+        return $"{Formatters.DurationToStr(source.MsFor(bytes))} ({rate}/s +{Formatters.DurationToStr(source.LatencyMs)})";
     }
     
     internal static string FormatTransfer(Composite composite)
     {
         var ms = composite.Timing.TransferMs;
         var bytes = composite.Timing.TransferBytesRead;
-        var text = Formatters.MsToStr(ms);
+        var text = Formatters.DurationToStr(ms);
 
         // Below a millisecond the rate is division noise, not a measurement worth printing.
         if (ms is not > 1 || bytes <= 0)

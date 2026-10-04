@@ -92,7 +92,7 @@ cannot be parallelised, so performance over a NAS or remote share will always be
 - EXIF metadata
 - PSD layer hierarchy
 - File structure inspector (PSD / PSB, TIFF, DDS / KTX / KTX2)
-- Variant picker for files carrying several renditions - the sizes inside an `.icns` / `.ico`, the pages of a TIFF
+- Variant picker for files carrying several renditions - the sizes inside an `.icns` / `.ico`, the pages of a TIFF, the frames of a GIF
 
 ---
 
@@ -117,28 +117,29 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 
 ### Common Raster Formats (Essential)
 
-| Format      | Description                                      | Extensions                    | Notes                                                         |
-|-------------|--------------------------------------------------|-------------------------------|---------------------------------------------------------------|
-| PNG         | Lossless raster image format with optional alpha | `.png`                        |                                                               |
-| JPEG / JFIF | Lossy raster image format (JPEG family)          | `.jpg` `.jpeg` `.jif` `.jfif` |                                                               |
-| TIFF        | High-precision raster image container            | `.tif` `.tiff`                | See [Technical Details](docs/technical.md#technical-details). |
-| Targa       | Raster image format with optional alpha          | `.tga`                        |                                                               |
-| BMP         | Uncompressed bitmap image format                 | `.bmp`                        |                                                               |
+| Format      | Description                                      | Extensions                    | Notes                                                          |
+|-------------|--------------------------------------------------|-------------------------------|----------------------------------------------------------------|
+| PNG         | Lossless raster image format with optional alpha | `.png`                        |                                                                |
+| JPEG / JFIF | Lossy raster image format (JPEG family)          | `.jpg` `.jpeg` `.jif` `.jfif` |                                                                |
+| TIFF        | High-precision raster image container            | `.tif` `.tiff`                | See [Technical Details](docs/technical.md#technical-details).  |
+| Targa       | Raster image format with optional alpha          | `.tga`                        |                                                                |
+| BMP         | Uncompressed bitmap image format                 | `.bmp`                        |                                                                |
+| GIF         | Palette image format, still or animated          | `.gif`                        | Not played. Each frame is selectable from the **FRAMES** list. |
 
 ### Modern / Web-Friendly Formats
 
-| Format      | Description                                         | Extensions      | Notes                                                                                                                                                                                |
-|-------------|-----------------------------------------------------|-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| AVIF        | High-efficiency image format based on AV1           | `.avif`         |                                                                                                                                                                                      |
-| HEIF / HEIC | High-efficiency image container format (HEVC-based) | `.heif` `.heic` |                                                                                                                                                                                      |
+| Format      | Description                                         | Extensions      | Notes                                                                                                                                                                                                 |
+|-------------|-----------------------------------------------------|-----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| AVIF        | High-efficiency image format based on AV1           | `.avif`         |                                                                                                                                                                                                       |
+| HEIF / HEIC | High-efficiency image container format (HEVC-based) | `.heif` `.heic` |                                                                                                                                                                                                       |
 | JPEG XL     | JPEG XL Image Coding System                         | `.jxl`          | Lyra displays static JPEG XL images. Animated JXL is decoded to its first frame only (same policy as JPEG 2000). HDR (floating-point) JXL gets the full [HDR / EDR](docs/technical.md#hdr--edr) path. |
-| WebP        | Compressed raster image format with optional alpha  | `.webp`         |                                                                                                                                                                                      |
+| WebP        | Compressed raster image format with optional alpha  | `.webp`         |                                                                                                                                                                                                       |
 
 ### Document / Vector Formats
 
-| Format    | Description              | Extensions    | Notes                                        |
-|-----------|--------------------------|---------------|----------------------------------------------|
-| SVG       | Scalable Vector Graphics | `.svg`        |                                              |
+| Format    | Description              | Extensions    | Notes                                                                     |
+|-----------|--------------------------|---------------|---------------------------------------------------------------------------|
+| SVG       | Scalable Vector Graphics | `.svg`        |                                                                           |
 | Photoshop | Adobe Photoshop document | `.psd` `.psb` | See [PSD / PSB Decoding Model](docs/technical.md#psd--psb-decoding-model) |
 
 ### High Dynamic Range Formats
@@ -150,18 +151,18 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 
 ### GPU Formats
 
-| Format | Description                   | Extensions     | Notes                                                |
-|--------|-------------------------------|----------------|------------------------------------------------------|
-| DDS    | DirectDraw Surface            | `.dds`         | See [DDS & KTX Texture Decoding Model](docs/technical.md#dds--ktx-texture-decoding-model) |
-| KTX    | Khronos GPU texture container | `.ktx` `.ktx2` | KTX 1.x and KTX 2.0; see [the texture decoding model](docs/technical.md#dds--ktx-texture-decoding-model)               |
+| Format | Description                   | Extensions     | Notes                                                                                                    |
+|--------|-------------------------------|----------------|----------------------------------------------------------------------------------------------------------|
+| DDS    | DirectDraw Surface            | `.dds`         | See [DDS & KTX Texture Decoding Model](docs/technical.md#dds--ktx-texture-decoding-model)                |
+| KTX    | Khronos GPU texture container | `.ktx` `.ktx2` | KTX 1.x and KTX 2.0; see [the texture decoding model](docs/technical.md#dds--ktx-texture-decoding-model) |
 
 ### Minor Formats
 
-| Format    | Description                 | Extensions                              | Notes                                                                                                                                                                 |
-|-----------|-----------------------------|-----------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ICO       | Icon container format       | `.ico`                                  | Every entry in the container is decoded and selectable from the sidebar's **VARIANTS** section. Reads PNG and BMP (DIB) entries with their masks.                  |
+| Format    | Description                 | Extensions                              | Notes                                                                                                                                                                   |
+|-----------|-----------------------------|-----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ICO       | Icon container format       | `.ico`                                  | Every entry in the container is decoded and selectable from the sidebar's **VARIANTS** section. Reads PNG and BMP (DIB) entries with their masks.                       |
 | ICNS      | Apple icon container format | `.icns`                                 | Every size in the container is decoded and selectable from the sidebar's **VARIANTS** section. Reads PNG, JPEG 2000, ARGB and the legacy RLE24 plates with their masks. |
-| JPEG 2000 | Wavelet-based image format  | `.jp2` `.jpg2`<br/>`.j2k` `.j2c` `.jpc` | Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP) are intentionally NOT supported.               |
+| JPEG 2000 | Wavelet-based image format  | `.jp2` `.jpg2`<br/>`.j2k` `.j2c` `.jpc` | Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP) are intentionally NOT supported.                 |
 
 ---
 ## Keyboard Shortcuts & Controls

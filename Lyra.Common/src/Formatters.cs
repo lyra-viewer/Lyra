@@ -22,11 +22,12 @@ public static class Formatters
     public static string ZoomToStr(float zoomPercentage) => MathF.Abs(zoomPercentage) <= 10f
         ? $"{zoomPercentage:0.0}%"
         : $"{zoomPercentage:0}%";
-
-    public static string MsToStr(double? ms) => ms switch
+    
+    public static string DurationToStr(double? ms) => ms switch
     {
-        null => "n/a",
-        < 10 => ms.Value.ToString("0.00"),
-        _    => ms.Value.ToString("0")
+        null     => "n/a",
+        < 9.995  => $"{ms.Value:0.00} ms",
+        < 999.5  => $"{ms.Value:0} ms",
+        _        => $"{ms.Value / 1000:0.00} s"
     };
 }

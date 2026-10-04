@@ -22,6 +22,9 @@ public sealed class VariantRasterContent : ICompositeContent
     private int _lastFailedIndex = -1;
     private int _failureVersion;
 
+    private readonly Dictionary<int, LoadWarning> _warnings = new();
+    private int _warningVersion;
+
     /// <summary>
     /// Every rendition decoded up front. For containers small enough that laziness would only add
     /// failure modes.
@@ -68,16 +71,8 @@ public sealed class VariantRasterContent : ICompositeContent
 
     public IReadOnlyList<ImageVariant> Variants { get; }
 
-    /// <summary>
-    /// What the renditions are, for the panel heading. Defaults to the icon case; a decoder whose
-    /// container holds something else - the pages of a document - says so.
-    /// </summary>
-    public string GroupLabel { get; init; } = "VARIANTS";
-
-    /// <summary>
-    /// Whether the set is long enough to want a jump control rather than only a scrollable list.
-    /// </summary>
-    public bool IsLong => Variants.Count > 12;
+    /// <summary>What the renditions are. Defaults to the icon case;</summary>
+    public VariantKind Kind { get; init; } = VariantKind.Variants;
 
     /// <summary>What the interface shows as selected, which a pending decode has already moved.</summary>
     public int ActiveIndex { get; private set; }
@@ -139,6 +134,35 @@ public sealed class VariantRasterContent : ICompositeContent
 
     /// <summary>Changes whenever a rendition's failure is recorded or cleared.</summary>
     public int FailureVersion => Volatile.Read(ref _failureVersion);
+
+    /// <summary>How a rendition is shown incomplete, or null when it is whole or not yet decoded.</summary>
+    public LoadWarning? WarningOf(int index)
+    {
+        lock (_gate)
+            return _warnings.GetValueOrDefault(index);
+    }
+
+    /// <summary>Changes whenever a rendition's warning is recorded.</summary>
+    public int WarningVersion => Volatile.Read(ref _warningVersion);
+
+    /// <summary>
+    /// Records that a rendition is shown, but not whole. Unlike a failure it stays when the
+    /// rendition is shown, since that is exactly when it applies. Safe from any thread.
+    /// </summary>
+    public void RecordWarning(int index, LoadWarning warning)
+    {
+        if (index < 0 || index >= Variants.Count)
+            return;
+
+        lock (_gate)
+        {
+            if (_warnings.TryGetValue(index, out var existing) && existing == warning)
+                return;
+
+            _warnings[index] = warning;
+            Interlocked.Increment(ref _warningVersion);
+        }
+    }
 
     /// <summary>Raised on a background thread when a requested rendition becomes drawable.</summary>
     public event Action<VariantRasterContent>? VariantReady;
@@ -355,5 +379,7 @@ public sealed class VariantRasterContent : ICompositeContent
             _retired.Clear();
             _recent.Clear();
         }
+
+        (_provider as IDisposable)?.Dispose();
     }
 }

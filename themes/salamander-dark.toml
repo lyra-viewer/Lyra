@@ -27,6 +27,8 @@ danger              = "#9B2D2D"
 hover_danger        = "#AA3737"
 pressed_danger      = "#872626"
 
+warning             = "#D9733B"
+
 subtle              = "#FFFFFF0A"
 hover_subtle        = "#FFFFFF1E"
 pressed_subtle      = "#FFFFFF28"

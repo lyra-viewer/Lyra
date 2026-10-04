@@ -66,8 +66,15 @@ public sealed class Composite : IDisposable
 
     public volatile ExifOrientation AppliedOrientation = ExifOrientation.Normal;
 
+    /// <summary>
+    /// Set by a decoder when the image is shown, but not whole. A set of renditions keeps one per
+    /// rendition instead, on <see cref="VariantRasterContent.WarningOf"/>.
+    /// </summary>
+    public volatile LoadWarning? Warning;
+
     private readonly Dictionary<string, string> _formatSpecific = new();
     private readonly Lock _formatSpecificLock = new();
+    private int _formatSpecificVersion;
 
     public IReadOnlyList<StructureGroup>? Structure;
     public LayerRecord[]? PsdLayers;
@@ -114,7 +121,21 @@ public sealed class Composite : IDisposable
     {
         lock (_formatSpecificLock)
         {
+            if (_formatSpecific.TryGetValue(key, out var existing) && existing == value)
+                return;
+
             _formatSpecific[key] = value;
+            _formatSpecificVersion++;
+        }
+    }
+
+    /// <summary>Changes whenever an entry is added or its value changes, so the UI knows to redraw.</summary>
+    public int FormatSpecificVersion
+    {
+        get
+        {
+            lock (_formatSpecificLock)
+                return _formatSpecificVersion;
         }
     }
 

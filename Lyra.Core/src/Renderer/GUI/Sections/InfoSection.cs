@@ -46,6 +46,7 @@ public sealed class InfoSection : IUISection
 
     // Error row
     private readonly HStack _errorRow;
+    private readonly Label _errorPrefixLabel;
     private readonly Label _errorMessageLabel;
     private readonly Label _errorDetailLabel;
 
@@ -98,7 +99,7 @@ public sealed class InfoSection : IUISection
             _largeImageTilesLabel = ForegroundLabel());
 
         _errorRow = BuildRow().Children(
-            DimPrefix("[Error]       "),
+            _errorPrefixLabel = DimPrefix(ErrorPrefix),
             _errorMessageLabel = new Label("").Color(Palette.Danger).Transient(),
             Separator(),
             _errorDetailLabel = ForegroundLabel());
@@ -197,13 +198,13 @@ public sealed class InfoSection : IUISection
         }
 
         // Error row
-        if (composite is { State: CompositeState.Failed, Failure: { } failure })
+        if (ProblemOf(composite) is { } problem)
         {
-            ShowError(failure.Message, failure.Description);
-        }
-        else if (composite.Content is VariantRasterContent { LastFailure: { } page } pages)
-        {
-            ShowError($"{pages.Variants[page.Index].Label}: {page.Failure.Message}", page.Failure.Description);
+            _errorPrefixLabel.Text = problem.IsError ? ErrorPrefix : WarningPrefix;
+            _errorMessageLabel.Text = problem.Message;
+            _errorMessageLabel.Color = problem.IsError ? Palette.Danger : Palette.Warning;
+            _errorDetailLabel.Text = problem.Detail;
+            _errorRow.Present = true;
         }
         else
         {
@@ -211,11 +212,28 @@ public sealed class InfoSection : IUISection
         }
     }
 
-    private void ShowError(string message, string detail)
+    private const string ErrorPrefix   = "[Error]       ";
+    private const string WarningPrefix = "[Warning]     ";
+
+    internal readonly record struct Problem(bool IsError, string Message, string Detail);
+    
+    internal static Problem? ProblemOf(Composite composite)
     {
-        _errorMessageLabel.Text = message;
-        _errorDetailLabel.Text = detail;
-        _errorRow.Present = true;
+        if (composite is { State: CompositeState.Failed, Failure: { } failure })
+            return new Problem(true, failure.Message, failure.Description);
+
+        var set = composite.Content as VariantRasterContent;
+
+        if (set?.LastFailure is { } page)
+            return new Problem(true, $"{set.Variants[page.Index].Label}: {page.Failure.Message}", page.Failure.Description);
+
+        if (composite.Warning is { } warning)
+            return new Problem(false, warning.Message, warning.Detail);
+
+        if (set is not null && set.WarningOf(set.ShownIndex) is { } shown)
+            return new Problem(false, $"{set.Variants[set.ShownIndex].Label}: {shown.Message}", shown.Detail);
+
+        return null;
     }
 
     // ----- helpers -----------------------------------------------------------

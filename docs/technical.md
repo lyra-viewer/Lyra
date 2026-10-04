@@ -47,6 +47,8 @@ The architecture is designed around fast, non-blocking image loading:
   RGBA interface refuses - 10, 12 and 14-bit samples, 32 and 64-bit, IEEE float, one-bit color - are read at their own
   depth instead, so a float TIFF reaches the HDR pipeline scene-referred rather than flattened to eight bits on the way in.
   Each page of a multi-page TIFF is selectable from the sidebar's **PAGES** section.
+- An animated GIF is not played. Its frames are listed in the sidebar's **FRAMES** section with each frame's own
+  rectangle, delay and encoded size.
 - Slow and network storage is handled without stalling: large reads are cancellable, preloads step aside for the image
   being shown, and a TIFF too large to buffer in memory is first copied to a local scratch file in managed, cancellable
   chunks. A load that takes a while shows a progress bar - bytes transferred, then a decode estimate learned from

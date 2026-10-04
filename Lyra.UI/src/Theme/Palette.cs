@@ -33,6 +33,8 @@ public static class Palette
         HoverDanger         = new SKColor(170, 55, 55),
         PressedDanger       = new SKColor(135, 38, 38),
 
+        Warning             = new SKColor(217, 115, 59),
+
         Subtle              = new SKColor(255, 255, 255, 10),
         HoverSubtle         = new SKColor(255, 255, 255, 30),
         PressedSubtle       = new SKColor(255, 255, 255, 40),
@@ -81,6 +83,9 @@ public static class Palette
     public static SKColor Danger => _current.Danger;
     public static SKColor HoverDanger => _current.HoverDanger;
     public static SKColor PressedDanger => _current.PressedDanger;
+
+    // Warning text: something shown, but not whole. Kept apart from the amber selection colour.
+    public static SKColor Warning => _current.Warning;
 
     // Subtle
     public static SKColor Subtle => _current.Subtle;

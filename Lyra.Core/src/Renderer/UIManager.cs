@@ -91,6 +91,8 @@ public class UIManager : IDisposable
             HoverDanger         = Pick(c, "hover_danger", d.HoverDanger),
             PressedDanger       = Pick(c, "pressed_danger", d.PressedDanger),
 
+            Warning             = Pick(c, "warning", d.Warning),
+
             Subtle              = Pick(c, "subtle", d.Subtle),
             HoverSubtle         = Pick(c, "hover_subtle", d.HoverSubtle),
             PressedSubtle       = Pick(c, "pressed_subtle", d.PressedSubtle),

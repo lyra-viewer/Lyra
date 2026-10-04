@@ -538,14 +538,14 @@ public partial class SdlCore : IDisposable
                 _refitForVariant = -1;
 
                 if (arrived)
-                    FitToShownVariant();
+                    KeepViewAcrossVariants();
             }
 
             _renderer.UIManager.RefreshCurrent();
         });
     }
 
-    /// <summary>The page still decoding after it was selected, so its arrival refits the view; -1 when none.</summary>
+    /// <summary>The variant still decoding after it was selected, so its arrival re-checks the view; -1 when none.</summary>
     private int _refitForVariant = -1;
 
     private void OnToneMapModeChanged(ToneMapMode mode)
@@ -566,7 +566,28 @@ public partial class SdlCore : IDisposable
             return;
 
         _refitForVariant = variants.IsWaiting ? index : -1;
-        FitToShownVariant();
+        KeepViewAcrossVariants();
+    }
+    
+    private void KeepViewAcrossVariants()
+    {
+        if (_composite is null)
+            return;
+
+        if (_panHelper is null || _displayMode == DisplayMode.Undefined)
+        {
+            FitToShownVariant();
+            return;
+        }
+
+        if (_displayMode == DisplayMode.FitToScreen)
+            UpdateFitToScreen();
+
+        _panHelper.UpdateZoom(_zoomPercentage);
+        _panHelper.Clamp();
+        _renderer.SetOffset(_panHelper.CurrentOffset);
+
+        _renderer.UIManager.RefreshCurrent();
     }
 
     private void FitToShownVariant()
