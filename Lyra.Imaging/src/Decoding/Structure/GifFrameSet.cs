@@ -1,6 +1,6 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
-using Lyra.Imaging.Decoding.Decoders.Gif;
+using Lyra.ManagedCodecs.Raster.Gif;
 using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Structure;
@@ -63,14 +63,19 @@ internal static class GifFrameSet
             composite.AddFormatSpecific("Truncated", "stops before the trailer");
     }
 
-    /// <summary>The one reason when a single frame is damaged; otherwise which frames, by number.</summary>
-    public static string DescribeDamage(IReadOnlyDictionary<int, string> damaged)
+    /// <summary>Why frame <paramref name="index"/> cannot be decoded whole, or null when it can.</summary>
+    public static string? ExplainPixelData(GifPixelDataCheck check, int index)
     {
-        if (damaged.Count == 1)
-            return damaged.Values.Single();
-
-        var shown = string.Join(", ", damaged.Keys.Order().Take(5).Select(index => index + 1));
-        return $"{damaged.Count} frames: {shown}{(damaged.Count > 5 ? ", ..." : "")}";
+        var name = $"Frame {index + 1}";
+        return check.Problem switch
+        {
+            GifPixelDataProblem.None => null,
+            GifPixelDataProblem.NoData => $"{name} has no pixel data",
+            GifPixelDataProblem.TooFewPixels => $"{name} holds {check.Pixels} of its {check.Expected} pixels",
+            GifPixelDataProblem.Corrupt => $"{name}'s pixel data is corrupt after {check.Pixels} of {check.Expected} pixels",
+            GifPixelDataProblem.InvalidCodeSize => $"{name} declares an invalid LZW code size ({check.CodeSize})",
+            _ => null
+        };
     }
 
     /// <summary>"yes" for a still image; for an animation, how many of its frames.</summary>

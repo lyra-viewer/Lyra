@@ -29,6 +29,11 @@
         <ProjectReference Include="..\Lyra.Imaging\Lyra.Imaging.csproj" />
     </ItemGroup>
 
+    <!-- Owned by the ManagedCodecs tests, where the GIF readers are tested; the decoder tests here share it. -->
+    <ItemGroup>
+        <Compile Include="..\Lyra.ManagedCodecs.Tests\src\Gif\GifBuilder.cs" Link="src\Support\GifBuilder.cs" />
+    </ItemGroup>
+
     <ItemGroup>
       <Folder Include="src\" />
     </ItemGroup>

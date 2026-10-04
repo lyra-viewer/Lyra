@@ -1,11 +1,11 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace Lyra.Imaging.Decoding.Decoders.Gif;
+namespace Lyra.ManagedCodecs.Raster.Gif;
 
 /// <param name="DataOffset">Where the LZW minimum code size byte sits, which starts the pixel data.</param>
 /// <param name="DataLength">The pixel data's length, its sub-blocks and terminator included.</param>
-internal sealed record GifFrameBlock(
+public sealed record GifFrameBlock(
     int Width,
     int Height,
     bool Interlaced,
@@ -16,7 +16,7 @@ internal sealed record GifFrameBlock(
     int DataLength
 );
 
-internal sealed record GifBlocks(
+public sealed record GifBlocks(
     string Version,
     int GlobalPaletteSize,
     int? LoopCount,
@@ -26,11 +26,12 @@ internal sealed record GifBlocks(
 );
 
 /// <summary>
-/// Walks a GIF's block stream for what Skia does not report: each frame's encoded size, palettes,
-/// interlacing, transparency and the loop count. Never decodes LZW data, and stops at the first
-/// block it cannot make sense of, returning what it read up to there.
+/// Walks a GIF's block stream for its structure: each frame's size, encoded size, palette,
+/// interlacing and transparency, and the loop count. Never decodes LZW data; the pixels are left
+/// to whatever decodes them. Stops at the first block it cannot make sense of, returning what it
+/// read up to there.
 /// </summary>
-internal static class GifBlockReader
+public static class GifBlockReader
 {
     private const byte ExtensionIntroducer = 0x21;
     private const byte ImageSeparator = 0x2C;
@@ -114,7 +115,7 @@ internal static class GifBlockReader
             if (pos + 9 > data.Length)
                 break;
 
-            // Left and top precede the size; Skia reports where the frame sits.
+            // Left and top precede the size; the pixel decoder reports where the frame sits.
             var width = BinaryPrimitives.ReadUInt16LittleEndian(data[(pos + 4)..]);
             var height = BinaryPrimitives.ReadUInt16LittleEndian(data[(pos + 6)..]);
             var flags = data[pos + 8];

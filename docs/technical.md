@@ -55,12 +55,14 @@ The architecture is designed around fast, non-blocking image loading:
   previous loads of the same format.
 
 Decoding is split into two layers. **Lyra.ManagedCodecs** is a pure-managed, dependency-free codec library that
-owns the formats Lyra decodes itself - TGA, Radiance HDR, the ICO and ICNS icon containers, and the GPU texture
+owns the formats Lyra decodes itself - TGA, QOI, Radiance HDR, the ICO and ICNS icon containers, and the GPU texture
 containers (DDS, KTX, KTX2) together with their block formats (BC1–BC7, BC6H, ETC2 / EAC, ASTC). These readers parse
 the container structure in C#, slice each subresource as a zero-copy view into the source file, treat all input as
 hostile (every byte range and surface size is bounds-checked against overflow), and decode only the surface actually
-needed - so a thumbnail or a perceptual hash never pays to decode a full-resolution mip. Because nothing here links a
-native library, it behaves identically on every platform .NET targets.
+needed - so a thumbnail or a perceptual hash never pays to decode a full-resolution mip. It also reads the structure
+of GIF, whose pixels Skia decodes: the block layout, each frame's encoded size and palette, and a check of a frame's
+pixel data that says why a frame Skia rejects is damaged. Because nothing here links a native library, it
+behaves identically on every platform .NET targets.
 
 For the remaining formats Lyra integrates lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL, and TIFF
 decoding, delegating format-specific work to focused libraries. The one native exception inside the managed codec layer

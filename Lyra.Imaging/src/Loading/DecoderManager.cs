@@ -11,6 +11,7 @@ internal static class DecoderManager
         new SkiaDecoder(),
         new GifDecoder(),
         new TgaDecoder(),
+        new QoiDecoder(),
         new DdsDecoder(),
         new KtxDecoder(),
         new TiffDecoder(),

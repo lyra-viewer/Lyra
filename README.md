@@ -134,6 +134,7 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 | HEIF / HEIC | High-efficiency image container format (HEVC-based) | `.heif` `.heic` |                                                                                                                                                                                                       |
 | JPEG XL     | JPEG XL Image Coding System                         | `.jxl`          | Lyra displays static JPEG XL images. Animated JXL is decoded to its first frame only (same policy as JPEG 2000). HDR (floating-point) JXL gets the full [HDR / EDR](docs/technical.md#hdr--edr) path. |
 | WebP        | Compressed raster image format with optional alpha  | `.webp`         |                                                                                                                                                                                                       |
+| QOI         | Quite OK Image: fast lossless RGB / RGBA            | `.qoi`          |                                                                                                                                                                                                       |
 
 ### Document / Vector Formats
 

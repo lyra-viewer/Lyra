@@ -1,39 +1,60 @@
-namespace Lyra.Imaging.Decoding.Decoders.Gif;
+namespace Lyra.ManagedCodecs.Raster.Gif;
+
+public enum GifPixelDataProblem
+{
+    None,
+
+    /// <summary>The data ends before the first pixel.</summary>
+    NoData,
+
+    /// <summary>The data ends before the frame is full.</summary>
+    TooFewPixels,
+
+    /// <summary>A code no valid stream can hold at that point.</summary>
+    Corrupt,
+
+    /// <summary>The LZW minimum code size is outside the 0 to 8 a GIF allows.</summary>
+    InvalidCodeSize
+}
+
+/// <param name="Pixels">Pixels the data yields, counted no further than <paramref name="Expected"/>.</param>
+/// <param name="Expected">The pixels the frame's size declares.</param>
+/// <param name="CodeSize">The LZW minimum code size, or -1 when there was no data to hold one.</param>
+public readonly record struct GifPixelDataCheck(GifPixelDataProblem Problem, long Pixels, long Expected, int CodeSize);
 
 /// <summary>
-/// Says why a frame's pixel data would not decode, by running its LZW stream far enough to count
-/// the pixels it yields. Tracks only how long each code's string is, never the pixels themselves.
+/// Checks whether a frame's pixel data holds what the frame declares, by running its LZW stream
+/// far enough to count the pixels it yields. Tracks only how long each code's string is, never
+/// the pixels themselves, so a frame can be judged without being decoded.
 /// </summary>
-internal static class GifPixelData
+public static class GifPixelData
 {
     private const int MaxCodeWidth = 12;
     private const int TableSize = 1 << MaxCodeWidth;
 
     /// <summary>
-    /// The reason frame <paramref name="index"/> cannot be decoded, or null when its data holds
-    /// every pixel it declares. <paramref name="data"/> starts at the LZW minimum code size byte.
+    /// Checks <paramref name="data"/>, which starts at the frame's LZW minimum code size byte.
+    /// Surplus pixels are no problem: decoders ignore them.
     /// </summary>
-    public static string? Explain(ReadOnlySpan<byte> data, GifFrameBlock frame, int index)
+    public static GifPixelDataCheck Check(ReadOnlySpan<byte> data, GifFrameBlock frame)
     {
-        var name = $"Frame {index + 1}";
         var expected = (long)frame.Width * frame.Height;
 
         if (data.IsEmpty)
-            return $"{name} has no pixel data";
+            return new GifPixelDataCheck(GifPixelDataProblem.NoData, 0, expected, -1);
 
-        int minCodeSize = data[0];
-        if (minCodeSize > 8)
-            return $"{name} declares an invalid LZW code size ({minCodeSize})";
+        int codeSize = data[0];
+        if (codeSize > 8)
+            return new GifPixelDataCheck(GifPixelDataProblem.InvalidCodeSize, 0, expected, codeSize);
 
-        var (pixels, corrupt) = Count(data[1..], minCodeSize, expected);
+        var (pixels, corrupt) = Count(data[1..], codeSize, expected);
 
-        if (corrupt)
-            return $"{name}'s pixel data is corrupt after {pixels} of {expected} pixels";
+        var problem = corrupt ? GifPixelDataProblem.Corrupt
+            : pixels >= expected ? GifPixelDataProblem.None
+            : pixels == 0 ? GifPixelDataProblem.NoData
+            : GifPixelDataProblem.TooFewPixels;
 
-        if (pixels >= expected)
-            return null;
-
-        return pixels == 0 ? $"{name} has no pixel data" : $"{name} holds {pixels} of its {expected} pixels";
+        return new GifPixelDataCheck(problem, pixels, expected, codeSize);
     }
 
     /// <summary>Pixels the stream yields, up to <paramref name="enough"/>, and whether it hit an impossible code.</summary>

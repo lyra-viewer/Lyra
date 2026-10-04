@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Lyra.Imaging.Tests.Support;
+namespace Lyra.ManagedCodecs.Tests.Gif;
 
 /// <summary>
 /// Writes GIFs for tests. The LZW stream never grows past nine-bit codes - a clear code goes out

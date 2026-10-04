@@ -4,6 +4,7 @@ using Lyra.Imaging.Decoding.Decoders.Gif;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Metadata;
+using Lyra.ManagedCodecs.Raster.Gif;
 using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Decoders;
@@ -103,7 +104,7 @@ internal sealed class GifDecoder : SkiaDecoder
     
     private sealed class DamageLog()
     {
-        private readonly SortedDictionary<int, string> _damaged = new();
+        private readonly Dictionary<int, string> _damaged = new();
         private readonly Lock _gate = new();
         private VariantRasterContent? _frames;
 
@@ -156,7 +157,7 @@ internal sealed class GifDecoder : SkiaDecoder
                 stream.Position = frame.DataOffset;
                 stream.ReadExactly(data);
 
-                return GifPixelData.Explain(data, frame, index);
+                return GifFrameSet.ExplainPixelData(GifPixelData.Check(data, frame), index);
             }
             catch (Exception ex)
             {

@@ -5,6 +5,8 @@ using Lyra.Imaging.Decoding.Decoders.Gif;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Loading;
 using Lyra.Imaging.Tests.Support;
+using Lyra.ManagedCodecs.Raster.Gif;
+using Lyra.ManagedCodecs.Tests.Gif;
 using SkiaSharp;
 using Xunit;
 
@@ -23,71 +25,6 @@ public class GifDecoderTests
     {
         Assert.Equal(ImageFormatType.Gif, ImageFormat.GetImageFormat(".gif"));
         Assert.IsType<GifDecoder>(DecoderManager.GetDecoder(ImageFormatType.Gif));
-    }
-
-    [Fact]
-    public void BlockReader_ReadsWhatSkiaDoesNotReport()
-    {
-        var builder = new GifBuilder(Width, Height) { LoopCount = 3 };
-        builder.Comments.Add("made by a test");
-
-        var gif = builder
-            .AddSolid(Red)
-            .Add(new GifBuilder.Frame(2, 3, 4, 5, (_, _) => 1) { Interlaced = true, LocalPalette = [(1, 2, 3), (4, 5, 6)] })
-            .Add(new GifBuilder.Frame(0, 0, 2, 2, (_, _) => 0) { TransparentIndex = 0 })
-            .Build();
-
-        var blocks = GifBlockReader.Read(gif);
-
-        Assert.NotNull(blocks);
-        Assert.Equal("GIF89a", blocks.Version);
-        Assert.Equal(4, blocks.GlobalPaletteSize);
-        Assert.Equal(3, blocks.LoopCount);
-        Assert.Equal(1, blocks.CommentCount);
-        Assert.False(blocks.Truncated);
-
-        Assert.Equal(3, blocks.Frames.Count);
-        Assert.True(blocks.Frames[1].Interlaced);
-        Assert.Equal(2, blocks.Frames[1].LocalPaletteSize);
-        Assert.False(blocks.Frames[0].Transparent);
-        Assert.True(blocks.Frames[2].Transparent);
-
-        Assert.All(blocks.Frames, frame => Assert.True(frame.EncodedBytes > 10));
-        Assert.True(blocks.Frames.Sum(f => f.EncodedBytes) < gif.Length);
-    }
-
-    [Fact]
-    public void BlockReader_LeavesATextBlocksTransparencyToTheText()
-    {
-        var gif = new GifBuilder(Width, Height)
-            .AddRaw(0x21, 0xF9, 4, 0x01, 0, 0, 0, 0)
-            .AddRaw([0x21, 0x01, 12, .. new byte[12], 2, (byte)'h', (byte)'i', 0])
-            .Add(new GifBuilder.Frame(0, 0, Width, Height, (_, _) => Red) { HasControl = false })
-            .Build();
-
-        Assert.False(Assert.Single(GifBlockReader.Read(gif)!.Frames).Transparent);
-    }
-
-    [Fact]
-    public void BlockReader_RejectsWhatIsNotAGif()
-    {
-        Assert.Null(GifBlockReader.Read("not a gif at all"u8));
-        Assert.Null(GifBlockReader.Read("GIF89a"u8));
-        Assert.Null(GifBlockReader.Read([]));
-    }
-
-    [Fact]
-    public void BlockReader_StopsAtTheCut_KeepingTheWholeFrames()
-    {
-        var gif = new GifBuilder(Width, Height).AddSolid(Red).AddSolid(Green).AddSolid(Blue).Build();
-        var whole = GifBlockReader.Read(gif)!;
-
-        var cut = gif.AsSpan(0, gif.Length - (int)whole.Frames[2].EncodedBytes / 2);
-        var blocks = GifBlockReader.Read(cut);
-
-        Assert.NotNull(blocks);
-        Assert.True(blocks.Truncated);
-        Assert.Equal(2, blocks.Frames.Count);
     }
 
     [Fact]
@@ -380,7 +317,6 @@ public class GifDecoderTests
             Assert.IsType<RasterContent>(composite.Content);
 
             var facts = composite.FormatSpecificSnapshot().ToDictionary(p => p.Key, p => p.Value);
-            Assert.Equal(expected, facts["Damaged"]);
             Assert.Equal("GIF89a", facts["Format"]);
             Assert.Equal(LoadWarning.PartiallyDecoded(expected), composite.Warning);
         });
@@ -430,7 +366,6 @@ public class GifDecoderTests
         {
             Assert.IsType<RasterContent>(composite.Content);
             Assert.Equal(LoadWarning.PartiallyDecoded("Frame 1 is cut short: the file ends inside it"), composite.Warning);
-            Assert.Contains(composite.FormatSpecificSnapshot(), p => p is { Key: "Damaged", Value: "Frame 1 is cut short: the file ends inside it" });
         });
     }
 
@@ -464,14 +399,6 @@ public class GifDecoderTests
     }
 
     [Fact]
-    public void SeveralDamagedFrames_AreListedByNumber()
-    {
-        Assert.Equal("Frame 3 holds 1 of its 4 pixels", GifFrameSet.DescribeDamage(new Dictionary<int, string> { [2] = "Frame 3 holds 1 of its 4 pixels" }));
-        Assert.Equal("2 frames: 3, 8", GifFrameSet.DescribeDamage(new Dictionary<int, string> { [7] = "b", [2] = "a" }));
-        Assert.Equal("6 frames: 1, 2, 3, 4, 5, ...", GifFrameSet.DescribeDamage(Enumerable.Range(0, 6).ToDictionary(i => i, _ => "x")));
-    }
-
-    [Fact]
     public void ABrokenLaterFrame_IsShownAndReportedWhenSelected()
     {
         var gif = new GifBuilder(Width, Height).AddSolid(Red).AddRaw(RawFrame(0x02, 0x01, 0x28, 0x00)).Build();
@@ -484,8 +411,6 @@ public class GifDecoderTests
             set.VariantFailed += _ => settled.Set();
             set.VariantReady += _ => settled.Set();
 
-            Assert.DoesNotContain(composite.FormatSpecificSnapshot(), p => p.Key == "Damaged");
-
             Assert.True(set.Select(1));
             Assert.True(settled.Wait(TimeSpan.FromSeconds(10)), "the frame never settled");
 
@@ -493,26 +418,13 @@ public class GifDecoderTests
             Assert.Equal(1, set.ShownIndex);
             Assert.Equal(LoadWarning.PartiallyDecoded("Frame 2 holds 1 of its 4 pixels"), set.WarningOf(1));
             Assert.Null(set.WarningOf(0));
-            Assert.Contains(composite.FormatSpecificSnapshot(), p => p is { Key: "Damaged", Value: "Frame 2 holds 1 of its 4 pixels" });
         });
-    }
-
-    [Fact]
-    public void PixelData_IsCountedAcrossClearCodes_AndSurplusIsNoFault()
-    {
-        var gif = new GifBuilder(Width, Height).AddSolid(Green).Build();
-        var frame = Assert.Single(GifBlockReader.Read(gif)!.Frames);
-        var data = gif.AsSpan(frame.DataOffset, frame.DataLength);
-
-        Assert.Null(GifPixelData.Explain(data, frame, 0));
-        Assert.Null(GifPixelData.Explain(data, frame with { Width = 2, Height = 2 }, 0));
-        Assert.Equal("Frame 1 holds 192 of its 1024 pixels", GifPixelData.Explain(data, frame with { Width = 32, Height = 32 }, 0));
     }
 
     private static Func<int, string?> Explain(byte[] gif)
     {
         var blocks = GifBlockReader.Read(gif)!;
-        return index => GifPixelData.Explain(gif.AsSpan(blocks.Frames[index].DataOffset, blocks.Frames[index].DataLength), blocks.Frames[index], index);
+        return index => GifFrameSet.ExplainPixelData(GifPixelData.Check(gif.AsSpan(blocks.Frames[index].DataOffset, blocks.Frames[index].DataLength), blocks.Frames[index]), index);
     }
 
     private static byte[] WithFrameCut(byte[] gif, int frame, int keepBytes)

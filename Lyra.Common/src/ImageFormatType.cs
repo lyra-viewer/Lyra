@@ -75,6 +75,10 @@ public enum ImageFormatType
     [Description("Adobe Photoshop Document")]
     Psb,
 
+    [FileExtension([".qoi"])]
+    [Description("Quite OK Image")]
+    Qoi,
+
     [FileExtension([".svg"])]
     [Description("Scalable Vector Graphics")]
     Svg,
