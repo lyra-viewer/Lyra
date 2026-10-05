@@ -66,10 +66,6 @@ internal static class TiffNative
 
         /// <summary>The TIFF ORIENTATION value, 1 (top-left, as stored) to 8.</summary>
         public readonly int Orientation => ((Traits >> 1) & 7) + 1;
-
-        /// <summary>Packs <see cref="Traits"/> as the native side does.</summary>
-        internal static byte PackTraits(bool hasIcc, int orientation = 1) =>
-            (byte)((hasIcc ? 1 : 0) | ((Math.Clamp(orientation, 1, 8) - 1) << 1));
     }
 
     /// <summary>What <see cref="LoadNative"/> should produce. Mirrors <c>TiffOutputKind</c>.</summary>

@@ -33,7 +33,6 @@ public class QoiDecoderTests
             Assert.Equal([0xFFFF0000u, 0x8000FF00u], pixels);
 
             var facts = composite.FormatSpecificSnapshot().ToDictionary(p => p.Key, p => p.Value);
-            Assert.Equal("QOI", facts["Format"]);
             Assert.Equal("RGBA", facts["Channels"]);
             Assert.Equal("sRGB, linear alpha", facts["Color Space"]);
 

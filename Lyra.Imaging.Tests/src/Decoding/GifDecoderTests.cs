@@ -1,7 +1,7 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders;
-using Lyra.Imaging.Decoding.Decoders.Gif;
+using Lyra.Imaging.Decoding.Decoders.Animation;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Loading;
 using Lyra.Imaging.Tests.Support;
@@ -329,7 +329,7 @@ public class GifDecoderTests
 
         using var stream = new MemoryStream(gif);
         using var codec = SKCodec.Create(stream)!;
-        using var renderer = new GifFrameRenderer(Renderer(codec).Info, Explain(gif));
+        using var renderer = new AnimationFrameRenderer(Renderer(codec).Info, Explain(gif));
         using var bitmap = renderer.Render(codec, 1, CancellationToken.None);
 
         // 30 bytes of nine-bit codes, less the opening clear, is 25 pixels: one row and nine more.
@@ -377,7 +377,7 @@ public class GifDecoderTests
 
         using var stream = new MemoryStream(gif);
         using var codec = SKCodec.Create(stream)!;
-        using var renderer = new GifFrameRenderer(Renderer(codec).Info, Explain(gif), (index, why) => reports.Add((index, why)));
+        using var renderer = new AnimationFrameRenderer(Renderer(codec).Info, Explain(gif), (index, why) => reports.Add((index, why)));
 
         foreach (var frame in new[] { 1, 2, 0, 2, 1 })
             renderer.Render(codec, frame, CancellationToken.None).Dispose();
@@ -392,7 +392,7 @@ public class GifDecoderTests
 
         using var stream = new MemoryStream(gif);
         using var codec = SKCodec.Create(stream)!;
-        using var renderer = new GifFrameRenderer(Renderer(codec).Info, explain: _ => null);
+        using var renderer = new AnimationFrameRenderer(Renderer(codec).Info, explain: _ => null);
 
         var thrown = Assert.Throws<LoadFailureException>(() => renderer.Render(codec, 0, CancellationToken.None));
         Assert.Equal("Frame 1 could not be decoded (ErrorInInput)", thrown.Message);
@@ -457,7 +457,7 @@ public class GifDecoderTests
         assert(composite);
     }
 
-    private static GifFrameRenderer Renderer(SKCodec codec) =>
+    private static AnimationFrameRenderer Renderer(SKCodec codec) =>
         new(new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Rgba8888, SKAlphaType.Premul, SKColorSpace.CreateSrgb()));
 
     private static uint[] Render(byte[] gif, int frame, params (int X, int Y)[] points)

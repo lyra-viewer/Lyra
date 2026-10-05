@@ -1,9 +1,10 @@
 using System.Buffers.Binary;
+using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
 using Lyra.ManagedCodecs.Texture.Ktx;
 using SkiaSharp;
 
-namespace Lyra.Imaging.Decoding.Support;
+namespace Lyra.Imaging.Decoding.Decoders.Ktx;
 
 /// <summary>
 /// Decodes Basis Universal images (ETC1S / UASTC) carried in KTX2 containers via the native

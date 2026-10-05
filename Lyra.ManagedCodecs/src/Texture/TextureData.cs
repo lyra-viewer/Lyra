@@ -60,9 +60,6 @@ public sealed class TextureData
 
     public required IReadOnlyList<Subresource> Subresources { get; init; }
 
-    /// <summary>Bytes needed to decode <paramref name="sr"/> into RGBA8 (<c>Width * Height * 4</c>).</summary>
-    public static long DecodedByteSize(in Subresource sr) => checked((long)sr.Width * sr.Height * 4);
-
     /// <summary>True if <see cref="Format"/> is scene-referred HDR and must be decoded via <see cref="DecodeHdr"/>.</summary>
     public bool IsHdr => TextureFormats.Info(Format).IsHdr;
 

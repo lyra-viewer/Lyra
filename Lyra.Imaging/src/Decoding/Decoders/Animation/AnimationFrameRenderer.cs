@@ -2,55 +2,24 @@ using Lyra.Common;
 using Lyra.Imaging.Content;
 using SkiaSharp;
 
-namespace Lyra.Imaging.Decoding.Decoders.Gif;
+namespace Lyra.Imaging.Decoding.Decoders.Animation;
 
 /// <summary>
 /// Renders any frame of an animation as it looks when shown: composited over the frames it
 /// depends on, not just its own rectangle. Keeps the last frame it rendered, so the frame after
 /// it costs one decode rather than a replay from the nearest independent frame.
 /// </summary>
-internal sealed class GifFrameRenderer(SKImageInfo info, Func<int, string?>? explain = null, Action<int, string>? damaged = null)
-    : IDisposable
+internal sealed class AnimationFrameRenderer(SKImageInfo info, Func<int, string?>? explain = null, Action<int, string>? damaged = null)
+    : ExclusiveResource
 {
-    private readonly Lock _render = new();
-    private readonly Lock _state = new();
-
     private SKBitmap? _canvas;
     private int _canvasFrame = -1;
-    private bool _busy;
-    private bool _disposed;
 
     private readonly Dictionary<int, string> _damage = new();
 
     public SKImageInfo Info => info;
 
-    public SKBitmap Render(SKCodec codec, int index, CancellationToken ct)
-    {
-        lock (_render)
-        {
-            lock (_state)
-            {
-                if (_disposed)
-                    throw new OperationCanceledException("The frame set was closed.");
-
-                _busy = true;
-            }
-
-            try
-            {
-                return RenderLocked(codec, index, ct);
-            }
-            finally
-            {
-                lock (_state)
-                {
-                    _busy = false;
-                    if (_disposed)
-                        Release();
-                }
-            }
-        }
-    }
+    public SKBitmap Render(SKCodec codec, int index, CancellationToken ct) => Exclusive(() => RenderLocked(codec, index, ct));
 
     private SKBitmap RenderLocked(SKCodec codec, int index, CancellationToken ct)
     {
@@ -124,7 +93,7 @@ internal sealed class GifFrameRenderer(SKImageInfo info, Func<int, string?>? exp
 
         _damage[frame] = why;
 
-        Logger.Warning($"[GifDecoder] {why}; shown as far as it goes, the rest left transparent.");
+        Logger.Warning($"[{nameof(AnimationFrameRenderer)}] {why}; shown as far as it goes, the rest left transparent.");
         damaged?.Invoke(frame, why);
     }
 
@@ -143,20 +112,11 @@ internal sealed class GifFrameRenderer(SKImageInfo info, Func<int, string?>? exp
         return bitmap;
     }
 
-    private void Release()
+    protected override void Release()
     {
         _canvas?.Dispose();
         _canvas = null;
         _canvasFrame = -1;
     }
 
-    public void Dispose()
-    {
-        lock (_state)
-        {
-            _disposed = true;
-            if (!_busy)
-                Release();
-        }
-    }
 }

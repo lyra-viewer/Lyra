@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Decoding.Decoders.J2K;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Metadata;
 using SkiaSharp;
@@ -77,7 +78,7 @@ internal class J2KDecoder : DecoderBase
                         throw;
                     }
 
-                    composite.AddFormatSpecific("GrayScale", isGrayscale.ToString());
+                    composite.AddFormatSpecific("GrayScale", isGrayscale);
 
                     composite.Content = RasterContentBuilder.Build(bitmap, composite);
                 }

@@ -92,7 +92,7 @@ cannot be parallelised, so performance over a NAS or remote share will always be
 - EXIF metadata
 - PSD layer hierarchy
 - File structure inspector (PSD / PSB, TIFF, DDS / KTX / KTX2)
-- Variant picker for files carrying several renditions - the sizes inside an `.icns` / `.ico`, the pages of a TIFF, the frames of a GIF
+- Variant picker for files carrying several renditions - the sizes inside an `.icns` / `.ico`, the pages of a TIFF, the frames of an animated GIF, PNG, WebP, JPEG XL, AVIF or HEIF
 
 ---
 
@@ -115,26 +115,28 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 
 ## Supported Image Formats
 
+> _Note:_ Animated images are not played back. Each frame is selectable from the sidebar's **FRAMES** section.
+
 ### Common Raster Formats (Essential)
 
-| Format      | Description                                      | Extensions                    | Notes                                                          |
-|-------------|--------------------------------------------------|-------------------------------|----------------------------------------------------------------|
-| PNG         | Lossless raster image format with optional alpha | `.png`                        |                                                                |
-| JPEG / JFIF | Lossy raster image format (JPEG family)          | `.jpg` `.jpeg` `.jif` `.jfif` |                                                                |
-| TIFF        | High-precision raster image container            | `.tif` `.tiff`                | See [Technical Details](docs/technical.md#technical-details).  |
-| Targa       | Raster image format with optional alpha          | `.tga`                        |                                                                |
-| BMP         | Uncompressed bitmap image format                 | `.bmp`                        |                                                                |
-| GIF         | Palette image format, still or animated          | `.gif`                        | Not played. Each frame is selectable from the **FRAMES** list. |
+| Format      | Description                                      | Extensions                    | Notes                                                         |
+|-------------|--------------------------------------------------|-------------------------------|---------------------------------------------------------------|
+| PNG         | Lossless raster image format with optional alpha | `.png`                        | Animated PNG (APNG) is supported.                             |
+| JPEG / JFIF | Lossy raster image format (JPEG family)          | `.jpg` `.jpeg` `.jif` `.jfif` |                                                               |
+| TIFF        | High-precision raster image container            | `.tif` `.tiff`                | See [Technical Details](docs/technical.md#technical-details). |
+| Targa       | Raster image format with optional alpha          | `.tga`                        |                                                               |
+| BMP         | Uncompressed bitmap image format                 | `.bmp`                        |                                                               |
+| GIF         | Palette image format, still or animated          | `.gif`                        | Animated GIF is supported.                                    |
 
 ### Modern / Web-Friendly Formats
 
-| Format      | Description                                         | Extensions      | Notes                                                                                                                                                                                                 |
-|-------------|-----------------------------------------------------|-----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| AVIF        | High-efficiency image format based on AV1           | `.avif`         |                                                                                                                                                                                                       |
-| HEIF / HEIC | High-efficiency image container format (HEVC-based) | `.heif` `.heic` |                                                                                                                                                                                                       |
-| JPEG XL     | JPEG XL Image Coding System                         | `.jxl`          | Lyra displays static JPEG XL images. Animated JXL is decoded to its first frame only (same policy as JPEG 2000). HDR (floating-point) JXL gets the full [HDR / EDR](docs/technical.md#hdr--edr) path. |
-| WebP        | Compressed raster image format with optional alpha  | `.webp`         |                                                                                                                                                                                                       |
-| QOI         | Quite OK Image: fast lossless RGB / RGBA            | `.qoi`          |                                                                                                                                                                                                       |
+| Format      | Description                                         | Extensions      | Notes                                                                                                               |
+|-------------|-----------------------------------------------------|-----------------|---------------------------------------------------------------------------------------------------------------------|
+| AVIF        | High-efficiency image format based on AV1           | `.avif`         | Animated AVIF (image sequences) is supported.                                                                       |
+| HEIF / HEIC | High-efficiency image container format (HEVC-based) | `.heif` `.heic` | Animated HEIF / HEIC (image sequences) is supported.                                                                |
+| JPEG XL     | JPEG XL Image Coding System                         | `.jxl`          | Animated JPEG XL is supported. HDR (floating-point) JXL gets the full [HDR / EDR](docs/technical.md#hdr--edr) path. |
+| WebP        | Compressed raster image format with optional alpha  | `.webp`         | Animated WebP is supported.                                                                                         |
+| QOI         | Quite OK Image: fast lossless RGB / RGBA            | `.qoi`          |                                                                                                                     |
 
 ### Document / Vector Formats
 
@@ -223,7 +225,7 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 | SDL3-CS           | Core graphics, input, and windowing                                                        | zlib         | [github](https://github.com/edwardgushchin/SDL3-CS)               |
 | SkiaSharp         | Hardware-accelerated 2D rendering                                                          | BSD-3-Clause | [github](https://github.com/mono/SkiaSharp)                       |
 | Svg.Skia          | SVG parsing and rendering                                                                  | MIT          | [github](https://github.com/wieslawsoltes/Svg.Skia)               |
-| LibHeifSharp      | HEIF / HEIC image decoding                                                                 | LGPL-3.0     | [github](https://github.com/0xC0000054/libheif-sharp)             |
+| libheif           | HEIF / HEIC / AVIF decoding, stills and image sequences (direct interop)                   | LGPL-3.0     | [github](https://github.com/strukturag/libheif)                   |
 | OpenEXR           | High-dynamic-range OpenEXR (.exr) decoding                                                 | BSD-3-Clause | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
 | OpenJPEG          | JPEG 2000 still-image decoding                                                             | BSD-2-Clause | [github](https://github.com/uclouvain/openjpeg)                   |
 | libjxl            | JPEG XL decoding (native wrapper)                                                          | BSD-3-Clause | [github](https://github.com/libjxl/libjxl)                        |
@@ -368,16 +370,16 @@ settings, unless you copy the `lyra-viewer/` folders across.
 
 ### Data
 
-| File                  | Description                                                            |
-|-----------------------|------------------------------------------------------------------------|
-| `log.txt`             | Application log output                                                 |
-| `log.previous.txt`    | Log of the previous run                                                |
-| `load-time-data.toml` | Recorded decode times per format, used to estimate loading progress    |
+| File                  | Description                                                         |
+|-----------------------|---------------------------------------------------------------------|
+| `log.txt`             | Application log output                                              |
+| `log.previous.txt`    | Log of the previous run                                             |
+| `load-time-data.toml` | Recorded decode times per format, used to estimate loading progress |
 
 ### Cache
 
-| Path       | Description                                                                                                                                  |
-|------------|----------------------------------------------------------------------------------------------------------------------------------------------|
+| Path       | Description                                                                                                                                                                                                |
+|------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `scratch/` | Temporary local copies of very large files read from slow or network storage. Can briefly hold multi-GB files; each is deleted after decoding, and leftovers from a crashed run are removed on next start. |
 
 If any configuration file is missing or malformed, Lyra falls back to built-in defaults and recreates the file on next save.

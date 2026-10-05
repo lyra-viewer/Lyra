@@ -51,7 +51,7 @@ public class HdrToneMapGrayscaleTests
             var px = bitmap.GetPixel(1, 1);
             Assert.True(px.Red > 200, $"red should survive tone mapping, got {px}");
             Assert.True(px.Green == 0 && px.Blue == 0, $"green/blue must stay 0 (no gray broadcast), got {px}");
-            Assert.Equal("False", GrayScaleFlag(composite));
+            Assert.Equal("No", GrayScaleFlag(composite));
         }
         finally
         {
@@ -67,7 +67,7 @@ public class HdrToneMapGrayscaleTests
         {
             using var composite = Decode(path);
             Assert.IsAssignableFrom<RasterContent>(composite.Content);
-            Assert.Equal("True", GrayScaleFlag(composite));
+            Assert.Equal("Yes", GrayScaleFlag(composite));
         }
         finally
         {

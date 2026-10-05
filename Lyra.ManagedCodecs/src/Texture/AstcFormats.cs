@@ -53,8 +53,6 @@ internal static class AstcFormats
         TextureFormat.Astc6x6x6Unorm, TextureFormat.Astc6x6x6UnormSrgb,
     ];
 
-    public static int Count3D => Footprints3D.Length;
-
     /// <summary>The 3D LDR format for a footprint index (0-9) and sRGB-ness.</summary>
     public static TextureFormat Ldr3DFormat(int footprintIndex, bool srgb) 
         => Ldr3D[(footprintIndex * 2) + (srgb ? 1 : 0)];

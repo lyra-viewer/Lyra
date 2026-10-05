@@ -71,9 +71,9 @@ internal static class TiffNativeLayout
                 unsafe
                 {
                     var floats = new Span<float>((void*)read.Pixels, checked(read.Width * read.Height * 4));
-                    var content = HdrImageBuilder.Build(floats, read.Width, read.Height, composite, ct, out var isGrayscale);
+                    var content = HdrImageBuilder.Build(floats, read.Width, read.Height, composite, ct, out var facts);
 
-                    composite.AddFormatSpecific("GrayScale", isGrayscale.ToString());
+                    facts.Describe(composite);
                     return content;
                 }
             }

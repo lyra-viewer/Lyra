@@ -30,15 +30,20 @@ internal static class HdrImageBuilder
     private static long TiledSceneBudget => ImageLoader.CacheBudgetBytes / SceneTileBudgetShare;
 
     /// <summary>
-    /// Builds HDR content from interleaved RGBA float pixels. <paramref name="isGrayscale"/>
-    /// reports whether every pixel has R == G == B, which decoders publish as metadata.
+    /// Builds HDR content from interleaved RGBA float pixels. <paramref name="facts"/> says whether
+    /// every pixel has R == G == B and how far above SDR white they reach, for the caller to publish.
     /// </summary>
-    public static ICompositeContent Build(Span<float> rgba, int width, int height, Composite composite, CancellationToken ct, out bool isGrayscale)
+    public static ICompositeContent Build(Span<float> rgba, int width, int height, Composite composite, CancellationToken ct, out PixelFacts facts)
     {
         var whitePoint = HdrToneMap.MeasureWhitePoint(rgba);
+        var content = Build(rgba, width, height, whitePoint, composite, ct, out var isGrayscale);
 
-        composite.AddFormatSpecific("Dynamic Range", DescribeDynamicRange(whitePoint));
+        facts = new PixelFacts(isGrayscale, DescribeDynamicRange(whitePoint));
+        return content;
+    }
 
+    private static ICompositeContent Build(Span<float> rgba, int width, int height, float whitePoint, Composite composite, CancellationToken ct, out bool isGrayscale)
+    {
         var pixels = (long)width * height;
         if (pixels <= LivePixelBudget)
         {
@@ -54,7 +59,7 @@ internal static class HdrImageBuilder
             composite.HdrBakedReason = "Half-float allocation failed.";
             return BuildToneMapped(rgba, width, height, composite, whitePoint, ct, out isGrayscale);
         }
-        
+
         var halfFloatBytes = pixels * 8;
         if (halfFloatBytes <= TiledSceneBudget)
         {
@@ -70,7 +75,7 @@ internal static class HdrImageBuilder
                 return RasterContentBuilder.Build(tiled, composite, whitePoint);
             }
         }
-        
+
         Logger.Info($"[HdrImageBuilder] {width}x{height} is {pixels / 1024 / 1024} MP " +
                     $"({halfFloatBytes / 1024 / 1024} MB as half-float), over the " +
                     $"{TiledSceneBudget / 1024 / 1024} MB scene-referred tile budget; tone-mapping at " +
@@ -81,7 +86,7 @@ internal static class HdrImageBuilder
 
         return BuildToneMapped(rgba, width, height, composite, whitePoint, ct, out isGrayscale);
     }
-    
+
     private static string DescribeDynamicRange(float whitePoint)
     {
         if (whitePoint <= 1.001f)
@@ -152,7 +157,7 @@ internal static class HdrImageBuilder
             return null;
         }
     }
-    
+
     private static ICompositeContent BuildToneMapped(Span<float> rgba, int width, int height, Composite composite, float whitePoint, CancellationToken ct, out bool isGrayscale)
     {
         var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul, SKColorSpace.CreateSrgb());

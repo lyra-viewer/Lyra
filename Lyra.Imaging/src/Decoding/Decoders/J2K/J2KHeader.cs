@@ -1,7 +1,8 @@
 using System.Buffers.Binary;
+using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Metadata;
 
-namespace Lyra.Imaging.Decoding.Support;
+namespace Lyra.Imaging.Decoding.Decoders.J2K;
 
 /// <summary>
 /// Reads the declared size of a JPEG 2000 image from its header, so an impossible one is refused

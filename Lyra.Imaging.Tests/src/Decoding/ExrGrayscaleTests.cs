@@ -91,8 +91,9 @@ public class ExrGrayscaleTests
             Assert.True(bitmap.GetPixel(0, 0).Red < bitmap.GetPixel(3, 0).Red);
             Assert.True(bitmap.GetPixel(0, 1).Red > bitmap.GetPixel(3, 1).Red);
 
-            // 3. And it is reported as grayscale in the metadata panel.
-            Assert.Contains(new KeyValuePair<string, string>("GrayScale", "True"), formatSpecific);
+            // 3. And it is reported as grayscale in the metadata panel, with its range.
+            Assert.Contains(new KeyValuePair<string, string>("GrayScale", "Yes"), formatSpecific);
+            Assert.Contains(formatSpecific, pair => pair.Key == "Dynamic Range");
         });
     }
 
@@ -102,7 +103,7 @@ public class ExrGrayscaleTests
         Decode(SingleChannelExrBase64, (_, formatSpecific) =>
         {
             Assert.Contains(new KeyValuePair<string, string>("Bit Depth", "32-bit float"), formatSpecific);
-            Assert.Contains(new KeyValuePair<string, string>("Alpha", "False"), formatSpecific);
+            Assert.Contains(new KeyValuePair<string, string>("Has Alpha", "No"), formatSpecific);
             Assert.Contains(new KeyValuePair<string, string>("Color Space", "Linear Gray"), formatSpecific);
         });
     }
@@ -115,9 +116,9 @@ public class ExrGrayscaleTests
             // Sample format comes from the color channels, and a file with no chromaticities
             // attribute is Rec.709 by definition rather than "custom".
             Assert.Contains(new KeyValuePair<string, string>("Bit Depth", "16-bit float"), formatSpecific);
-            Assert.Contains(new KeyValuePair<string, string>("Alpha", "True"), formatSpecific);
+            Assert.Contains(new KeyValuePair<string, string>("Has Alpha", "Yes"), formatSpecific);
             Assert.Contains(new KeyValuePair<string, string>("Color Space", "Linear Rec.709"), formatSpecific);
-            Assert.Contains(new KeyValuePair<string, string>("GrayScale", "False"), formatSpecific);
+            Assert.Contains(new KeyValuePair<string, string>("GrayScale", "No"), formatSpecific);
         });
     }
 

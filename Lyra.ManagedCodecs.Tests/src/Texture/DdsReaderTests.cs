@@ -82,7 +82,7 @@ public class DdsReaderTests
         var tex = DdsReader.Read(DdsTestFile.Legacy(4, 4, 1, "DXT1", DdsTestFile.RedBc1Block()));
         var sr = tex.Subresources[0];
 
-        var dst = new byte[TextureData.DecodedByteSize(sr)];
+        var dst = Rgba8.BufferFor(sr);
         tex.Decode(sr, dst);
 
         Assert.Equal(4 * 4 * 4, dst.Length);

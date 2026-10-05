@@ -30,6 +30,16 @@ internal static class DecoderIO
             RandomBuffer,
             FileOptions.RandomAccess
         );
+    
+    public static FileStream OpenHeldRead(string path)
+        => new(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete,
+            RandomBuffer,
+            FileOptions.RandomAccess
+        );
 
     public static byte[] ReadAllBytes(string path, CancellationToken ct, out double elapsedMs, Action<long>? onProgress = null)
     {
@@ -67,6 +77,30 @@ internal static class DecoderIO
         return total == buffer.Length ? buffer : buffer[..total];
     }
 
+    public static byte[] ReadToEnd(Stream stream, CancellationToken ct)
+    {
+        var length = stream.Length;
+        if (length > Array.MaxLength)
+            throw new IOException($"The file is too large to read into memory ({length} bytes).");
+
+        var buffer = new byte[length];
+        var total = 0;
+        stream.Position = 0;
+
+        while (total < buffer.Length)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var read = stream.Read(buffer.AsSpan(total, Math.Min(ReadChunk, buffer.Length - total)));
+            if (read == 0)
+                break;
+
+            total += read;
+        }
+
+        return total == buffer.Length ? buffer : buffer[..total];
+    }
+
     private static long SafeLength(FileStream stream, string path)
     {
         try
@@ -75,7 +109,7 @@ internal static class DecoderIO
         }
         catch (Exception ex)
         {
-            Logger.Debug(typeof(DecoderIO), $"[DecoderIO] Length unavailable, reading until EOF: {path} ({ex.Message})");
+            Logger.Debug(typeof(DecoderIO), $"Length unavailable, reading until EOF: {path} ({ex.Message})");
             return 0;
         }
     }

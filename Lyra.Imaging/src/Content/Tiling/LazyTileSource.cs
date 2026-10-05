@@ -115,7 +115,7 @@ public sealed class LazyTileSource : ITileSource
         get
         {
             lock (_gate)
-                return _tiles.Values.Sum(RasterLargeContent.Bytes);
+                return _tiles.Values.Sum(ImageBytes.Of);
         }
     }
 
@@ -463,7 +463,7 @@ public sealed class LazyTileSource : ITileSource
     /// </summary>
     private void Trim()
     {
-        var resident = _tiles.Values.Sum(RasterLargeContent.Bytes);
+        var resident = _tiles.Values.Sum(ImageBytes.Of);
 
         for (var i = 0; i < _recent.Count && resident > _residentByteBudget; i++)
         {
@@ -472,7 +472,7 @@ public sealed class LazyTileSource : ITileSource
             if (_wanted.Contains(key) || _borrowed.Contains(key) || !_tiles.TryGetValue(key, out var image))
                 continue;
 
-            resident -= RasterLargeContent.Bytes(image);
+            resident -= ImageBytes.Of(image);
 
             image.Dispose();
             _tiles.Remove(key);

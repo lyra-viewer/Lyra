@@ -1,295 +1,309 @@
-using LibHeifSharp;
+using System.Text;
 using Lyra.Common;
 using Lyra.Imaging.Content;
-using Lyra.Imaging.Metadata;
-using SkiaSharp;
+using Lyra.Imaging.Decoding.Decoders.Animation;
+using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
+using Lyra.Imaging.Interop;
+using Lyra.Imaging.Metadata;
+using Lyra.ManagedCodecs.Raster.Heif;
+using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
-internal class HeifDecoder : DecoderBase, IThumbnailDecoder
+internal sealed class HeifDecoder : DecoderBase, IThumbnailDecoder
 {
     public override bool CanDecode(ImageFormatType format) => format == ImageFormatType.Heif;
-
+    
     protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
+        using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), composite.ReportTransferred, composite.CompleteTransfer);
+        using var file = HeifFile.Open(stream, ct);
+        using var still = file.HasPrimaryImage ? file.PrimaryImage() : null;
+
+        Describe(composite, file, still, stream);
+
+        if (TryPublishSequence(composite, file, still, stream, path, ct))
+            return;
+
+        if (still is null)
+            throw new LoadFailureException(LoadFailureKind.DecodeFailed, "The file has no image to show");
+
+        composite.ReportPixelCount(still.Width, still.Height);
+
+        var bitmap = still.DecodeRgba(ResolveColorSpace(still), ct);
+
+        // A sequence that could not be shown may have read the metadata already.
+        composite.ExifInfo ??= ParseMetadata(still, stream, path);
+        composite.AppliedOrientation = composite.ExifInfo.ContainerRotation;
+
+        composite.Content = RasterContentBuilder.Build(bitmap, composite);
+    }
+
+    /// <summary>
+    /// Publishes the file's image sequence frame by frame. False when it has none, or none that
+    /// can be shown faithfully; the still image is then decoded instead.
+    /// </summary>
+    private static bool TryPublishSequence(Composite composite, HeifFile file, HeifImageHandle? still, Stream stream, string path, CancellationToken ct)
+    {
+        var movie = IsoTrackReader.ReadMovie(stream);
+
+        // A lone sample is a sequence only when there is no still image to show instead.
+        if (movie?.ColorTrack is not { SampleCount: > 0 } color || (color.SampleCount == 1 && still is not null))
+            return false;
+
+        if (!color.PlaysSamplesInOrder)
+            return Unshown(still, path, "The file's image sequence has an edit list that reorders its frames, which is not supported");
+
+        using var sequence = OpenSequence(file, movie, color, out var why);
+        if (sequence is null)
+            return Unshown(still, path, why);
+
+        var size = sequence.Size;
+
         try
         {
-            using var stream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer);
-            using var heifContext = new HeifContext(stream, leaveOpen: true);
-            using var imageHandle = heifContext.GetPrimaryImageHandle();
-
-            PopulateFormatSpecific(composite, heifContext, imageHandle, path);
-
-            composite.ReportPixelCount(imageHandle.Width, imageHandle.Height);
-
-            // Decode as 8-bit RGBA interleaved.
-            using var decodedImage = imageHandle.Decode(HeifColorspace.Rgb, HeifChroma.InterleavedRgba32);
-
-            composite.ExifInfo = ParseMetadata(imageHandle, stream, path);
-            composite.AppliedOrientation = composite.ExifInfo.ContainerRotation;
-
-            var bitmap = DecodedImageToBitmap(decodedImage, ct, ResolveColorSpace(imageHandle));
-
-            composite.Content = RasterContentBuilder.Build(bitmap, composite);
+            DecoderValidation.RequireSaneDimensions(size.Width, size.Height);
+            DecoderValidation.RequireAvailableMemory(size.Width, size.Height);
         }
-        catch (HeifException e)
+        catch (InvalidOperationException e) when (still is not null)
         {
-            Logger.Warning($"[HeifDecoder] Unsupported HEIF feature for file: {path}\n{e.Message}");
+            return Unshown(still, path, $"The file's image sequence cannot be shown: {e.Message}");
         }
+
+        composite.ReportPixelCount(size.Width, size.Height);
+        composite.ExifInfo = ParseMetadata(still, stream, path);
+
+        var durations = color.SampleDurations.Select(ticks => TicksToMs(ticks, color.Timescale)).ToArray();
+        var alpha = sequence.AlphaTrack;
+
+        ct.ThrowIfCancellationRequested();
+
+        // The frames share the still image's color space; a sequence-only file has none to share.
+        var colorSpace = still is null ? null : ResolveColorSpace(still);
+        var source = new HeifSequenceFrameSource(() => DecoderIO.OpenHeldRead(path), color.Id, alpha?.Id, color.SampleCount, size, colorSpace, composite);
+
+        try
+        {
+            AnimatedContent.Publish(
+                composite, path, source, damage: null,
+                () => FrameFacts.WholeFrames(durations, size.Width, size.Height, EncodedBytes(color, alpha)),
+                "HEIF",
+                ct);
+        }
+        catch (LoadFailureException e) when (still is not null)
+        {
+            // The sequence's first frame is broken, but the file's still image may not be.
+            Logger.Warning(typeof(HeifDecoder), $"{Path.GetFileName(path)}'s sequence could not be decoded ({e.Message}); showing its still image.");
+            composite.AddFormatSpecific("Sequence", $"unreadable: {e.Message}");
+            return false;
+        }
+
+        composite.AddFormatSpecific("Frames", color.SampleCount.ToString());
+        composite.AddFormatSpecific("Duration", FrameFacts.TotalDuration(durations));
+
+        if (sequence.Track.Repetitions is { } repetitions)
+            composite.AddFormatSpecific("Loop", DescribeRepetitions(repetitions));
+
+        return true;
     }
+
+    private static bool Unshown(HeifImageHandle? still, string path, string reason)
+    {
+        if (still is null)
+            throw new LoadFailureException(LoadFailureKind.DecodeFailed, reason);
+
+        Logger.Warning(typeof(HeifDecoder), $"{Path.GetFileName(path)}: {reason}; showing its still image.");
+        return false;
+    }
+
+    private sealed record Sequence(HeifTrack Track, SKSizeI Size, IsoTrack? AlphaTrack) : IDisposable
+    {
+        public void Dispose() => Track.Dispose();
+    }
+    
+    private static Sequence? OpenSequence(HeifFile file, IsoMovie movie, IsoTrack color, out string reason)
+    {
+        reason = "";
+
+        if (!HeifNative.SequencesAvailable)
+        {
+            reason = $"The file holds an image sequence, which needs libheif 1.20 or later (this is {HeifNative.Version})";
+            return null;
+        }
+
+        var track = file.HasSequence ? file.Track(color.Id) : null;
+        if (track?.Size is not { } size)
+        {
+            track?.Dispose();
+            reason = "libheif cannot read the file's image sequence";
+            return null;
+        }
+
+        return new Sequence(track, size, track.HasAlphaChannel ? null : movie.AlphaTrackFor(color));
+    }
+
+    private static string DescribeRepetitions(uint repetitions) =>
+        repetitions == HeifNative.RepetitionsInfinite ? "forever" : FrameFacts.DescribePlays((int)Math.Min(repetitions, int.MaxValue));
+
+    /// <summary>A frame's color sample and, when it has a track of its own, its alpha sample.</summary>
+    private static Func<int, long?>? EncodedBytes(IsoTrack color, IsoTrack? alpha)
+    {
+        if (color.SampleSizes.Count != color.SampleCount)
+            return null;
+
+        var alphaSizes = alpha?.SampleSizes.Count == color.SampleCount ? alpha.SampleSizes : null;
+        return i => color.SampleSizes[i] + (long)(alphaSizes?[i] ?? 0);
+    }
+
+    private static int TicksToMs(uint ticks, uint timescale) => timescale == 0 ? 0 : (int)Math.Min(int.MaxValue, Math.Round(ticks * 1000.0 / timescale));
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
-        using var heifContext = new HeifContext(path);
-        using var primaryHandle = heifContext.GetPrimaryImageHandle();
+        using var stream = DecoderIO.OpenRandomAccessRead(path);
+        using var file = HeifFile.Open(stream, ct);
 
-        var embedded = TryGetEmbeddedThumbnail(primaryHandle, maxDimension);
-        try
-        {
-            var handle = embedded ?? primaryHandle;
-            using var decodedImage = handle.Decode(HeifColorspace.Rgb, HeifChroma.InterleavedRgba32);
+        var bitmap = file.HasPrimaryImage ? DecodeStillThumbnail(file, maxDimension, ct) : DecodeFirstFrame(file, stream, ct);
+        if (bitmap is null)
+            return null;
 
-            ct.ThrowIfCancellationRequested();
-            return ThumbnailScaler.ResizeToThumbnail(DecodedImageToBitmap(decodedImage, ct), maxDimension);
-        }
-        finally
-        {
-            embedded?.Dispose();
-        }
+        ct.ThrowIfCancellationRequested();
+        return ThumbnailScaler.ResizeToThumbnail(bitmap, maxDimension);
     }
-    
-    private static ExifInfo ParseMetadata(HeifImageHandle handle, Stream container, string path)
+
+    private static SKBitmap DecodeStillThumbnail(HeifFile file, int maxDimension, CancellationToken ct)
     {
-        container.Position = 0;
-        var fromFile = MetadataProcessor.ParseMetadata(container, path);
+        using var primary = file.PrimaryImage();
+        using var embedded = TryGetEmbeddedThumbnail(primary, maxDimension);
+
+        return (embedded ?? primary).DecodeRgba(colorSpace: null, ct);
+    }
+
+    private static SKBitmap? DecodeFirstFrame(HeifFile file, Stream stream, CancellationToken ct)
+    {
+        if (IsoTrackReader.ReadMovie(stream) is not { ColorTrack: { } color } movie)
+            return null;
+
+        using var sequence = OpenSequence(file, movie, color, out _);
+        if (sequence is null)
+            return null;
+
+        DecoderValidation.RequireSaneDimensions(sequence.Size.Width, sequence.Size.Height);
+
+        using var alpha = sequence.AlphaTrack is { } alphaTrack ? file.Track(alphaTrack.Id) : null;
+        using var frame = HeifFrame.DecodeNext(sequence.Track, alpha);
+
+        return frame?.ToBitmap(sequence.Size, colorSpace: null, ct);
+    }
+
+    private static ExifInfo ParseMetadata(HeifImageHandle? image, Stream stream, string path)
+    {
+        stream.Position = 0;
+        var fromFile = MetadataProcessor.ParseMetadata(stream, path);
+
         if (fromFile.IsValid() && fromFile.HasData())
             return fromFile;
 
-        var exifData = handle.GetExifMetadata();
-        if (exifData is null)
+        if (image?.Exif() is not { } exif)
             return fromFile;
 
-        using var stream = new MemoryStream(exifData);
-        return MetadataProcessor.ParseMetadata(stream, path);
+        using var block = new MemoryStream(exif, writable: false);
+        return MetadataProcessor.ParseMetadata(block, path);
     }
 
-    private static HeifImageHandle? TryGetEmbeddedThumbnail(HeifImageHandle handle, int maxDimension)
+    /// <summary>The first embedded thumbnail at least <paramref name="maxDimension"/> on its longest side.</summary>
+    private static HeifImageHandle? TryGetEmbeddedThumbnail(HeifImageHandle image, int maxDimension)
     {
         try
         {
-            var ids = handle.GetThumbnailImageIds();
-            if (ids is not { Count: > 0 })
-                return null;
-
-            foreach (var id in ids)
+            foreach (var id in image.ThumbnailIds())
             {
-                var thumb = handle.GetThumbnailImage(id);
-                if (Math.Max(thumb.Width, thumb.Height) >= maxDimension)
-                    return thumb;
+                var thumbnail = image.Thumbnail(id);
+                if (Math.Max(thumbnail.Width, thumbnail.Height) >= maxDimension)
+                    return thumbnail;
 
-                thumb.Dispose();
+                thumbnail.Dispose();
             }
         }
-        catch (Exception ex)
+        catch (HeifException ex)
         {
-            Logger.Debug($"[HeifDecoder] Embedded thumbnail lookup failed: {ex.Message}");
+            Logger.Debug(typeof(HeifDecoder), $"Embedded thumbnail lookup failed: {ex.Message}");
         }
 
         return null;
     }
 
-    private static SKBitmap DecodedImageToBitmap(HeifImage decodedImage, CancellationToken ct, SKColorSpace? colorSpace = null)
+    /// <summary>
+    /// The embedded color profile as an SKColorSpace: ICC when there is one, else the NCLX (CICP)
+    /// tags common in camera HEIC and AVIF. Null when there is none, or one not mapped here (PQ
+    /// and HLG among them), leaving sRGB assumed.
+    /// </summary>
+    private static SKColorSpace? ResolveColorSpace(HeifImageHandle image)
     {
-        var width = decodedImage.Width;
-        var height = decodedImage.Height;
+        if (image.IccProfile() is { Length: > 0 } icc && SKColorSpace.CreateIcc(icc) is { } fromIcc)
+            return fromIcc;
 
-        var plane = decodedImage.GetPlane(HeifChannel.Interleaved);
-        var src = plane.Scan0;
-        if (src == IntPtr.Zero)
-            throw new InvalidOperationException("HEIF decode returned null interleaved plane.");
-
-        var srcStride = plane.Stride;
-
-        DecoderValidation.RequireSaneDimensions(width, height);
-        DecoderValidation.RequireValidStride(srcStride, width);
-        
-        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul, colorSpace);
-        var bitmap = new SKBitmap(info);
-
-        try
-        {
-            unsafe
-            {
-                var dstSpan = bitmap.GetPixelSpan();
-                fixed (void* dstBase = &dstSpan.GetPinnableReference())
-                {
-                    byte* srcBase = (byte*)src;
-                    byte* dst = (byte*)dstBase;
-
-                    const int bytesPerPixel = 4;
-                    var rowBytes = width * bytesPerPixel;
-
-                    var dstStride = bitmap.RowBytes;
-
-                    var copyBytes = Math.Min(rowBytes, Math.Min(srcStride, dstStride));
-
-                    for (var y = 0; y < height; y++)
-                    {
-                        ct.ThrowIfCancellationRequested();
-
-                        var srcRow = srcBase + (nint)y * (nint)srcStride;
-                        var dstRow = dst + (nint)y * (nint)dstStride;
-
-                        Buffer.MemoryCopy(srcRow, dstRow, dstStride, copyBytes);
-                    }
-                }
-            }
-        }
-        catch
-        {
-            bitmap.Dispose();
-            throw;
-        }
-
-        return bitmap;
+        return image.Nclx() is { } nclx ? FromNclx(nclx) : null;
     }
 
-    // Resolves the embedded color profile to an SKColorSpace. Prefers ICC (exact), then
-    // falls back to the NCLX/CICP tags common in camera HEIC/AVIF. Returns null when there
-    // is no profile, or it is one we don't map (e.g. PQ/HLG HDR), leaving sRGB assumed.
-    private static SKColorSpace? ResolveColorSpace(HeifImageHandle handle)
+    /// <summary>Codes from ITU-T H.273. Only the display-relevant SDR gamuts and curves are mapped.</summary>
+    private static SKColorSpace? FromNclx(HeifNative.NclxProfile nclx)
     {
-        try
-        {
-            var icc = handle.IccColorProfile;
-            var bytes = icc?.GetIccProfileBytes();
-            if (bytes is { Length: > 0 } && SKColorSpace.CreateIcc(bytes) is { } fromIcc)
-                return fromIcc;
-        }
-        catch (Exception ex)
-        {
-            Logger.Debug($"[HeifDecoder] ICC profile read failed: {ex.Message}");
-        }
-
-        try
-        {
-            if (handle.NclxColorProfile is { } nclx)
-                return FromNclx(nclx);
-        }
-        catch (Exception ex)
-        {
-            Logger.Debug($"[HeifDecoder] NCLX profile read failed: {ex.Message}");
-        }
-
-        return null;
-    }
-
-    private static SKColorSpace? FromNclx(HeifNclxColorProfile nclx)
-    {
-        // Map the CICP primaries to a gamut. Only the display-relevant SDR gamuts are
-        // mapped; anything else falls back to sRGB (null).
         SKColorSpaceXyz? gamut = nclx.ColorPrimaries switch
         {
-            ColorPrimaries.BT709 => SKColorSpaceXyz.Srgb,
-            ColorPrimaries.Smpte432 => SKColorSpaceXyz.DisplayP3, // Display-P3 primaries
-            ColorPrimaries.BT2020 => SKColorSpaceXyz.Rec2020,
-            _ => null,
+            1  => SKColorSpaceXyz.Srgb,        // BT.709
+            12 => SKColorSpaceXyz.DisplayP3,   // SMPTE EG 432-1
+            9  => SKColorSpaceXyz.Rec2020,     // BT.2020
+            _  => null
         };
 
-        // Map the transfer function. The gamma-type SDR transfers (sRGB, BT.709/601/2020)
-        // are close enough to treat as sRGB for display; linear is preserved; PQ/HLG and
-        // other HDR transfers are out of scope (null -> sRGB fallback).
-        SKColorSpaceTransferFn? transfer = nclx.TransferCharacteristics switch
+        // The gamma-type SDR curves are close enough to sRGB for display; linear is kept.
+        SKColorSpaceTransferFn? curve = nclx.TransferCharacteristics switch
         {
-            TransferCharacteristics.Srgb
-                or TransferCharacteristics.IEC61966
-                or TransferCharacteristics.BT709
-                or TransferCharacteristics.BT601
-                or TransferCharacteristics.BT2020TenBit
-                or TransferCharacteristics.BT2020TwelveBit => SKColorSpaceTransferFn.Srgb,
-            TransferCharacteristics.Linear => SKColorSpaceTransferFn.Linear,
-            _ => null,
+            1 or 6 or 11 or 13 or 14 or 15 => SKColorSpaceTransferFn.Srgb,  // BT.709, BT.601, IEC 61966-2-4, sRGB, BT.2020 10/12-bit
+            8 => SKColorSpaceTransferFn.Linear,
+            _ => null
         };
 
-        if (gamut is { } g && transfer is { } t)
-            return SKColorSpace.CreateRgb(t, g);
-
-        return null;
+        return gamut is { } g && curve is { } t ? SKColorSpace.CreateRgb(t, g) : null;
     }
 
-    private static void PopulateFormatSpecific(Composite composite, HeifContext context, HeifImageHandle handle, string path)
+    private static void Describe(Composite composite, HeifFile file, HeifImageHandle? image, Stream stream)
     {
-        composite.AddFormatSpecific("Codec", DetectHeifBrand(path));
+        composite.AddFormatSpecific("Codec", DetectHeifBrand(stream));
 
-        // TryAdd(composite, "Bit Depth", () => $"{handle.LumaBitsPerPixel}-bit");
-        TryAdd(composite, "Has Alpha", () => handle.HasAlphaChannel.ToString());
-        TryAdd(composite, "Depth Map", () => handle.HasDepthImage ? "Yes" : "No");
+        if (image is not null)
+        {
+            composite.AddFormatSpecific("Has Alpha", image.HasAlphaChannel);
+            composite.AddFormatSpecific("Depth Map", image.HasDepthImage);
 
-        try
-        {
-            var thumbs = handle.GetThumbnailImageIds();
-            if (thumbs is { Count: > 0 })
-                composite.AddFormatSpecific("Thumbnails", thumbs.Count.ToString());
-        }
-        catch (Exception ex)
-        {
-            Logger.Debug($"[HeifDecoder] Thumbnail enumeration failed: {ex.Message}");
+            if (image.ThumbnailIds() is { Length: > 0 } thumbnails)
+                composite.AddFormatSpecific("Thumbnails", thumbnails.Length.ToString());
         }
 
-        try
-        {
-            var topIds = context.GetTopLevelImageIds();
-            if (topIds is { Count: > 1 })
-                composite.AddFormatSpecific("Top-level Images", topIds.Count.ToString());
-        }
-        catch (Exception ex)
-        {
-            Logger.Debug($"[HeifDecoder] Top-level enumeration failed: {ex.Message}");
-        }
+        if (file.TopLevelImageCount is > 1 and var count)
+            composite.AddFormatSpecific("Top-level Images", count.ToString());
     }
 
-    private static void TryAdd(Composite composite, string key, Func<string> producer)
+    private static string DetectHeifBrand(Stream stream)
     {
-        try
-        {
-            composite.AddFormatSpecific(key, producer());
-        }
-        catch (Exception ex)
-        {
-            Logger.Debug($"[HeifDecoder] FormatSpecific '{key}' failed: {ex.Message}");
-        }
-    }
+        // ftyp: box size, "ftyp", then the major brand.
+        Span<byte> bytes = stackalloc byte[12];
+        stream.Position = 0;
 
-    private static string DetectHeifBrand(string path)
-    {
-        try
-        {
-            using var fs = File.OpenRead(path);
-            Span<byte> buf = stackalloc byte[32];
-            var read = fs.Read(buf);
-            if (read < 12)
-                return "Unknown";
-
-            // ISOBMFF ftyp box layout:
-            //   [0..4)  box size
-            //   [4..8)  "ftyp"
-            //   [8..12) major brand
-            var brand = System.Text.Encoding.ASCII.GetString(buf.Slice(8, 4));
-            return brand switch
-            {
-                "heic" or "heix" or "heim" or "heis" => "HEVC",
-                "avif" or "avis" => "AV1",
-                "jpeg" or "jpgs" => "JPEG",
-                "mif1" or "msf1" => "HEIF (generic)",
-                _ => brand
-            };
-        }
-        catch
-        {
+        if (stream.ReadAtLeast(bytes, bytes.Length, throwOnEndOfStream: false) < bytes.Length)
             return "Unknown";
-        }
+
+        var brand = Encoding.ASCII.GetString(bytes.Slice(8, 4));
+        return brand switch
+        {
+            "heic" or "heix" or "heim" or "heis" or "hevc" or "hevx" => "HEVC",
+            "avif" or "avis" => "AV1",
+            "jpeg" or "jpgs" => "JPEG",
+            "mif1" or "msf1" => "HEIF (generic)",
+            _ => brand
+        };
     }
 }

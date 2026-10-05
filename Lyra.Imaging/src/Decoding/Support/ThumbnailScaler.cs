@@ -13,9 +13,7 @@ internal static class ThumbnailScaler
     {
         var longestSide = Math.Max(full.Width, full.Height);
         if (longestSide <= maxDimension)
-        {
             return full;
-        }
 
         var scale = (float)maxDimension / longestSide;
         var targetWidth = Math.Max(1, (int)MathF.Round(full.Width * scale));

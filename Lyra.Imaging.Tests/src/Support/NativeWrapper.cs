@@ -39,6 +39,26 @@ internal static class NativeWrapper
         }
     }
 
+    /// <summary>
+    /// Loads a library the system provides rather than one built here - Homebrew's or the
+    /// distribution's - and points every given assembly's imports of it there.
+    /// </summary>
+    public static bool TryLoadSystem(string baseName, string[] candidates, params Assembly[] importedBy)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (!NativeLibrary.TryLoad(candidate, out var handle))
+                continue;
+
+            foreach (var assembly in importedBy)
+                Register(assembly, baseName, handle);
+
+            return true;
+        }
+
+        return false;
+    }
+
     private static void Register(Assembly assembly, string baseName, IntPtr handle)
     {
         lock (Loaded)

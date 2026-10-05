@@ -24,7 +24,7 @@ public class RasterContent : ICompositeContent
     public float? DecodedWidth => Image.Width;
     public float? DecodedHeight => Image.Height;
 
-    public long ByteSize => (long)Image.Width * Image.Height * Math.Max(1, Image.ColorType.GetBytesPerPixel());
+    public long ByteSize => ImageBytes.Of(Image);
 
     public void Dispose()
     {

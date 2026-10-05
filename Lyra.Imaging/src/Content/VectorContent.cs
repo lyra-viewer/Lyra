@@ -6,7 +6,7 @@ public sealed class VectorContent(SKPicture picture) : ICompositeContent
 {
     public bool IsResolutionIndependent => true;
 
-    public SKPicture Picture { get; private set; } = picture ?? throw new ArgumentNullException(nameof(picture));
+    public SKPicture Picture { get; } = picture ?? throw new ArgumentNullException(nameof(picture));
 
     public float? DecodedWidth => Picture.CullRect.Width;
     public float? DecodedHeight => Picture.CullRect.Height;

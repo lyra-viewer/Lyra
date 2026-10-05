@@ -23,8 +23,6 @@
 #include <stdbool.h>
 #endif
 
-// Always an export: nothing links against this library at build time - the
-// managed side loads it and resolves symbols by name - so there is no import case.
 #ifdef _WIN32
 #define JXL_NATIVE_API __declspec(dllexport)
 #else
@@ -37,11 +35,42 @@ extern "C" {
 
 JXL_NATIVE_API const char *get_last_jxl_error(void);
 
+// Pixels come straight-alpha RGBA (float for HDR, else 8-bit), already oriented:
+// width and height are after the file's orientation.
 JXL_NATIVE_API bool decode_jxl_from_memory(const uint8_t *data, size_t size, int *out_width, int *out_height,
                                            int *out_is_hdr, int *out_bits_per_sample, int *out_has_alpha,
                                            int *out_has_animation, uint8_t **out_pixels);
 
 JXL_NATIVE_API void free_jxl_pixels(void *ptr);
+
+typedef struct jxl_animation jxl_animation;
+
+typedef struct {
+    int32_t width;
+    int32_t height;
+    int32_t is_hdr;
+    int32_t bits_per_sample;
+    int32_t has_alpha;
+    int32_t frame_count;
+    int32_t loop_count;       // plays in all; 0 forever
+    int32_t incomplete;       // JXL_ANIMATION_COMPLETE, _TRUNCATED or _BROKEN: why frames may be missing
+    int32_t file_color_space; // 1: frames come in the file's own color space, which
+                              // jxl_animation_icc describes; 0: in decode_jxl_from_memory's
+} jxl_animation_info;
+
+#define JXL_ANIMATION_COMPLETE 0
+#define JXL_ANIMATION_TRUNCATED 1 // the data ends before the last frame's header
+#define JXL_ANIMATION_BROKEN 2    // the stream is corrupt after the frames listed
+
+JXL_NATIVE_API jxl_animation *jxl_animation_open(const uint8_t *data, size_t size, jxl_animation_info *out_info);
+
+JXL_NATIVE_API bool jxl_animation_frame_durations(const jxl_animation *animation, int32_t *out_ms, int32_t count);
+
+JXL_NATIVE_API bool jxl_animation_decode_frame(jxl_animation *animation, int32_t index, uint8_t **out_pixels, int32_t *out_partial);
+
+JXL_NATIVE_API bool jxl_animation_icc(const jxl_animation *animation, const uint8_t **out_icc, size_t *out_size);
+
+JXL_NATIVE_API void jxl_animation_close(jxl_animation *animation);
 
 #ifdef __cplusplus
 } // extern "C"

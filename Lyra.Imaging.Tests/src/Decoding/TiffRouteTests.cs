@@ -15,8 +15,10 @@ public class TiffRouteTests
             Width = width, Height = height,
             GrayCapable = 1, RegionCapable = 1, RegionSamples = 1, RgbaCapable = 1, NativeCapable = 1,
             BitsPerSample = 8, SamplesPerPixel = 1, Photometric = 1,
-            Traits = TiffNative.DirectoryInfo.PackTraits(icc, orientation)
+            Traits = PackTraits(icc, orientation)
         };
+    
+    private static byte PackTraits(bool hasIcc, int orientation) => (byte)((hasIcc ? 1 : 0) | ((orientation - 1) << 1));
 
     [Theory]
     [InlineData(false, 1)]

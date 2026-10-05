@@ -17,11 +17,7 @@ public sealed class RasterLargeContent : ICompositeContent
 
     public bool IsResolutionIndependent => false;
     
-    public long ByteSize => Bytes(PreviewImage) + (TileSource?.ByteSize ?? 0);
-
-    internal static long Bytes(SKImage? image) => image is null || image.Handle == IntPtr.Zero
-        ? 0
-        : (long)image.Width * image.Height * Math.Max(1, image.ColorType.GetBytesPerPixel());
+    public long ByteSize => ImageBytes.Of(PreviewImage) + (TileSource?.ByteSize ?? 0);
 
     public float FullWidth { get; }
     public float FullHeight { get; }
@@ -41,8 +37,6 @@ public sealed class RasterLargeContent : ICompositeContent
     /// controls at every zoom.
     /// </summary>
     public float? TileWhitePoint { get; private set; }
-
-    public bool HasSceneTiles => TileSource is not null && TileWhitePoint is not null;
 
     public ITileSource? TileSource { get; private set; }
     

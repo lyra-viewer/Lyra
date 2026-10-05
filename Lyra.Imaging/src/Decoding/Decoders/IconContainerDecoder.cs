@@ -156,20 +156,10 @@ internal abstract class IconContainerDecoder<TEntry> : DecoderBase
         composite.Content = new RasterContent(bitmap, SKImage.FromBitmap(bitmap));
     }
     
-    protected static unsafe SKBitmap FromDecodedImage(DecodedImage image)
+    protected static SKBitmap FromDecodedImage(DecodedImage image)
     {
-        var info = new SKImageInfo(image.Width, image.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-        var bitmap = new SKBitmap(info);
-
-        var dst = (byte*)bitmap.GetPixels();
-        var dstStride = bitmap.Info.RowBytes;
-        var srcStride = image.Width * 4;
-
-        fixed (byte* src = image.Pixels)
-        {
-            for (var y = 0; y < image.Height; y++)
-                Buffer.MemoryCopy(src + ((nint)y * srcStride), dst + ((nint)y * dstStride), dstStride, srcStride);
-        }
+        var bitmap = new SKBitmap(new SKImageInfo(image.Width, image.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul));
+        PixelCopy.CopyTightRgba(image.Pixels, bitmap);
 
         return bitmap;
     }

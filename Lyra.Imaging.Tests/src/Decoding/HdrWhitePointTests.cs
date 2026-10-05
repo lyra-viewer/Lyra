@@ -1,6 +1,5 @@
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
-using Lyra.Imaging.Tests.Support;
 using Xunit;
 
 namespace Lyra.Imaging.Tests.Decoding;
@@ -29,7 +28,7 @@ public class HdrWhitePointTests(ITestOutputHelper output)
             rgba[(i * 4) + 3] = 1f;
         }
 
-        var fast = HdrProfileAccess.MeasureWhitePoint(rgba);
+        var fast = HdrToneMap.MeasureWhitePoint(rgba);
         var exhaustive = ExhaustivePercentile(rgba);
 
         output.WriteLine($"tail {tailFraction:P1}   subsampled {fast:F1}   exhaustive {exhaustive:F1}");
@@ -44,7 +43,8 @@ public class HdrWhitePointTests(ITestOutputHelper output)
     {
         var composite = new Composite(new FileInfo("bright.exr"));
 
-        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 12f), 8, 8, composite, CancellationToken.None, out _);
+        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 12f), 8, 8, composite, CancellationToken.None, out var facts);
+        facts.Describe(composite);
 
         var measured = Assert.IsType<HdrRasterContent>(content).WhitePoint;
         var row = Row(composite, "Dynamic Range");
@@ -54,13 +54,23 @@ public class HdrWhitePointTests(ITestOutputHelper output)
     }
     
     [Fact]
+    public void BuildingContent_PublishesNoFactsItself()
+    {
+        var composite = new Composite(new FileInfo("frame.exr"));
+
+        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 12f), 8, 8, composite, CancellationToken.None, out _);
+
+        Assert.Empty(composite.FormatSpecificSnapshot());
+    }
+
+    [Fact]
     public void AnImageWithNothingAboveWhite_SaysSoInWords()
     {
         var composite = new Composite(new FileInfo("dim.exr"));
 
-        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 0.9f), 8, 8, composite, CancellationToken.None, out _);
+        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 0.9f), 8, 8, composite, CancellationToken.None, out var facts);
 
-        Assert.Equal("Within SDR white", Row(composite, "Dynamic Range"));
+        Assert.Equal("Within SDR white", facts.DynamicRange);
     }
     
     [Fact]
@@ -68,9 +78,9 @@ public class HdrWhitePointTests(ITestOutputHelper output)
     {
         var composite = new Composite(new FileInfo("sun.exr"));
 
-        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 40_000f), 8, 8, composite, CancellationToken.None, out _);
+        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 40_000f), 8, 8, composite, CancellationToken.None, out var facts);
 
-        var row = Row(composite, "Dynamic Range");
+        var row = facts.DynamicRange!;
 
         Assert.DoesNotContain(".", row.Split('x')[0]);
         Assert.DoesNotContain(",", row.Split('x')[0]);

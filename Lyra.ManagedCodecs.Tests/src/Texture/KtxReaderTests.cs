@@ -75,7 +75,7 @@ public class KtxReaderTests
         var tex = KtxReader.Read(KtxTestFile.Ktx1(GlCompressedRgbaDxt1, 4, 4, [KtxTestFile.RedBc1Block()]));
         var sr = tex.Subresources[0];
 
-        var dst = new byte[TextureData.DecodedByteSize(sr)];
+        var dst = Rgba8.BufferFor(sr);
         tex.Decode(sr, dst);
 
         Assert.Equal(new byte[] { 255, 0, 0, 255 }, dst[..4]); // top-left red
@@ -114,7 +114,7 @@ public class KtxReaderTests
         Assert.Equal(TextureFormat.Etc2Rgb8Unorm, tex.Format);
         Assert.Equal("GL_COMPRESSED_RGB8_ETC2", tex.FormatName);
 
-        var dst = new byte[TextureData.DecodedByteSize(tex.Subresources[0])];
+        var dst = Rgba8.BufferFor(tex.Subresources[0]);
         tex.Decode(tex.Subresources[0], dst);
         Assert.Equal(new byte[] { 138, 138, 138, 255 }, dst[..4]);
     }
@@ -128,7 +128,7 @@ public class KtxReaderTests
         Assert.Equal(TextureFormat.R8Unorm, tex.Format);
         Assert.Equal("GL_R8", tex.FormatName);
 
-        var dst = new byte[TextureData.DecodedByteSize(tex.Subresources[0])];
+        var dst = Rgba8.BufferFor(tex.Subresources[0]);
         tex.Decode(tex.Subresources[0], dst);
         Assert.Equal(new byte[] { 100, 100, 100, 255 }, dst[..4]);
     }
@@ -140,14 +140,14 @@ public class KtxReaderTests
         var uintTex = KtxReader.Read(KtxTestFile.Ktx1(0x8232, 2, 1, [[100, 200, 0, 0]]));
         Assert.Equal(TextureFormat.R8Uint, uintTex.Format);
         Assert.Equal("GL_R8UI", uintTex.FormatName);
-        var uintDst = new byte[TextureData.DecodedByteSize(uintTex.Subresources[0])];
+        var uintDst = Rgba8.BufferFor(uintTex.Subresources[0]);
         uintTex.Decode(uintTex.Subresources[0], uintDst);
         Assert.Equal(new byte[] { 100, 100, 100, 255 }, uintDst[..4]);
 
         var sintTex = KtxReader.Read(KtxTestFile.Ktx1(0x8231, 2, 1, [[127, 0x80, 0, 0]]));
         Assert.Equal(TextureFormat.R8Sint, sintTex.Format);
         Assert.Equal("GL_R8I", sintTex.FormatName);
-        var sintDst = new byte[TextureData.DecodedByteSize(sintTex.Subresources[0])];
+        var sintDst = Rgba8.BufferFor(sintTex.Subresources[0]);
         sintTex.Decode(sintTex.Subresources[0], sintDst);
         Assert.Equal(new byte[] { 255, 255, 255, 255 }, sintDst[..4]); // 127 -> 255
     }
@@ -174,7 +174,7 @@ public class KtxReaderTests
         var tex = KtxReader.Read(KtxTestFile.Ktx1BigEndian(GlRgb5A1, GlTypeUShort5551, 2, 1, 1, [redPadded]));
 
         Assert.Equal(TextureFormat.Rgb5A1Unorm, tex.Format);
-        var dst = new byte[TextureData.DecodedByteSize(tex.Subresources[0])];
+        var dst = Rgba8.BufferFor(tex.Subresources[0]);
         tex.Decode(tex.Subresources[0], dst);
         Assert.Equal(new byte[] { 255, 0, 0, 255 }, dst[..4]);
     }
@@ -187,7 +187,7 @@ public class KtxReaderTests
         var tex = KtxReader.Read(KtxTestFile.Ktx1BigEndian(GlRg8, GlTypeUByte, 1, 2, 1, [surface]));
 
         Assert.Equal(TextureFormat.Rg8Unorm, tex.Format);
-        var dst = new byte[TextureData.DecodedByteSize(tex.Subresources[0])];
+        var dst = Rgba8.BufferFor(tex.Subresources[0]);
         tex.Decode(tex.Subresources[0], dst);
         Assert.Equal(new byte[] { 50, 150, 0, 255 }, dst[..4]);
     }
@@ -204,7 +204,7 @@ public class KtxReaderTests
         Assert.Equal(2, tex.MipLevels);
         foreach (var sr in tex.Subresources)
         {
-            var dst = new byte[TextureData.DecodedByteSize(sr)];
+            var dst = Rgba8.BufferFor(sr);
             tex.Decode(sr, dst);
             Assert.Equal(new byte[] { 255, 0, 0, 255 }, dst[..4]);
         }
@@ -239,7 +239,7 @@ public class KtxReaderTests
         var sr = tex.Subresources[0];
         Assert.Equal(6, sr.Data.Length); // unpadded to 3*2
 
-        var dst = new byte[TextureData.DecodedByteSize(sr)];
+        var dst = Rgba8.BufferFor(sr);
         tex.Decode(sr, dst);
         Assert.Equal(new byte[] { 10, 10, 10, 255 }, dst[..4]);          // (0,0)
         Assert.Equal(new byte[] { 20, 20, 20, 255 }, dst[(3 * 4)..(4 * 4)]); // (0,1) - second row

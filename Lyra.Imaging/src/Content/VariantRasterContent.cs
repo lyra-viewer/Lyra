@@ -71,7 +71,7 @@ public sealed class VariantRasterContent : ICompositeContent
 
     public IReadOnlyList<ImageVariant> Variants { get; }
 
-    /// <summary>What the renditions are. Defaults to the icon case;</summary>
+    /// <summary>What the renditions are. Defaults to the icon case: sizes of one image.</summary>
     public VariantKind Kind { get; init; } = VariantKind.Variants;
 
     /// <summary>What the interface shows as selected, which a pending decode has already moved.</summary>

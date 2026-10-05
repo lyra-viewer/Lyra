@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using LibHeifSharp;
 using Lyra.Common;
 using Lyra.Imaging;
 using SDL3;
@@ -239,7 +238,6 @@ internal static class NativeLibraryLoader
     private static void ResolveLibraries()
     {
         NativeLibrary.SetDllImportResolver(typeof(SDL).Assembly, ResolveSdl);
-        NativeLibrary.SetDllImportResolver(typeof(LibHeifInfo).Assembly, ResolveHeif);
         NativeLibrary.SetDllImportResolver(typeof(NativeLibraryLoader).Assembly, ResolveInterop);
         NativeLibrary.SetDllImportResolver(typeof(ImageStore).Assembly, ResolveInterop);
 
@@ -285,15 +283,6 @@ internal static class NativeLibraryLoader
     }
 #endif
 
-    private static IntPtr ResolveHeif(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
-    {
-        return libraryName switch
-        {
-            "libheif" or "libheif.dll" or "libheif.so" or "libheif.dylib" => TryLoad("LIBHEIF"),
-            _ => IntPtr.Zero
-        };
-    }
-
     private static IntPtr ResolveInterop(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
         return libraryName switch
@@ -303,6 +292,7 @@ internal static class NativeLibraryLoader
             "libtiff_native" or "libtiff_native.dll" or "libtiff_native.so" or "libtiff_native.dylib" or "libtiff" => TryLoad("TIFF"),
             "libbasis_native" or "libbasis_native.dll" or "libbasis_native.so" or "libbasis_native.dylib" or "libbasis" => TryLoad("BASIS"),
             "libjxl_native" or "libjxl_native.dll" or "libjxl_native.so" or "libjxl_native.dylib" or "libjxl" => TryLoad("JXL"),
+            "libheif" or "libheif.dll" or "libheif.so" or "libheif.dylib" => TryLoad("LIBHEIF"),
             _ => IntPtr.Zero
         };
     }

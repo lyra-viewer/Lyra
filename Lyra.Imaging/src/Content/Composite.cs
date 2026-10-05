@@ -17,7 +17,6 @@ public sealed class Composite : IDisposable
         FileSizeBytes = ReadSize(fileInfo);
     }
 
-    // Common
     public FileInfo FileInfo { get; }
 
     public long? FileSizeBytes { get; }
@@ -128,6 +127,9 @@ public sealed class Composite : IDisposable
             _formatSpecificVersion++;
         }
     }
+
+    /// <summary>Records a yes-or-no format-specific entry.</summary>
+    public void AddFormatSpecific(string key, bool value) => AddFormatSpecific(key, value ? "Yes" : "No");
 
     /// <summary>Changes whenever an entry is added or its value changes, so the UI knows to redraw.</summary>
     public int FormatSpecificVersion

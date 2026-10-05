@@ -48,7 +48,7 @@ internal class ExrDecoder : FloatRgbaDecoderBase
         if (info.BitsPerChannel > 0)
             composite.AddFormatSpecific("Bit Depth", $"{info.BitsPerChannel}-bit {(info.IsFloat != 0 ? "float" : "integer")}");
 
-        composite.AddFormatSpecific("Alpha", (info.HasAlpha != 0).ToString());
+        composite.AddFormatSpecific("Has Alpha", info.HasAlpha != 0);
         composite.AddFormatSpecific("Color Space", info.IsGray != 0
             ? "Linear Gray"
             : info.CustomPrimaries != 0

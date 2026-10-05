@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Lyra.Common;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Metadata;
@@ -11,23 +12,24 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
     public override bool CanDecode(ImageFormatType format) => format
         is ImageFormatType.Bmp
         or ImageFormatType.Jfif
-        or ImageFormatType.Jpeg
-        or ImageFormatType.Png
-        or ImageFormatType.Webp;
+        or ImageFormatType.Jpeg;
 
     protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
         using var stream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer);
 
+        if (TryDecodeAnimation(composite, stream, path, ct))
+            return;
+
+        stream.Position = 0;
         composite.ExifInfo = MetadataProcessor.ParseMetadata(stream, path);
         stream.Position = 0;
 
-        using var codec = SKCodec.Create(stream);
-        if (codec == null)
-        {
-            Logger.Warning($"[SkiaDecoder] Unable to create codec for: {path}");
-            return;
-        }
+        // Skia takes the stream over, and closes it when it finds no image in it.
+        var length = stream.Length;
+
+        using var codec = SKCodec.Create(stream, out var opened)
+                          ?? throw new LoadFailureException(LoadFailureKind.DecodeFailed, WhyNoCodec(opened, length));
 
         composite.ReportPixelCount(codec.Info.Width, codec.Info.Height);
 
@@ -45,25 +47,25 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
 
             var result = codec.GetPixels(bitmap.Info, bitmap.GetPixels());
 
-            // Tries to repair if the image is truncated JPEG
-            if (result == SKCodecResult.InvalidInput)
+            if (result is SKCodecResult.InvalidInput or SKCodecResult.IncompleteInput
+                && codec.EncodedFormat == SKEncodedImageFormat.Jpeg
+                && TryRestoreEndMarker(stream, bitmap, ct))
             {
-                var repaired = TryDecodeJpegWithEoiRepair(composite, bitmap, ct);
-                if (repaired.HasValue)
-                {
-                    result = repaired.Value;
-                    Logger.Warning($"[SkiaDecoder] Recovered truncated JPEG via EOI repair: {path}");
-                }
+                result = SKCodecResult.Success;
+                Logger.Warning(typeof(SkiaDecoder), $"Recovered a JPEG missing its end marker: {path}");
             }
 
-            if (result == SKCodecResult.IncompleteInput)
-                Logger.Warning($"[SkiaDecoder] Incomplete input (truncated image): {path}");
-
-            if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput)
+            if (result != SKCodecResult.Success)
             {
-                bitmap.Dispose();
-                Logger.Warning($"[SkiaDecoder] Decode failed with status: {result}");
-                return;
+                var damage = result switch
+                {
+                    SKCodecResult.IncompleteInput => "The file ends before the image does",
+                    SKCodecResult.ErrorInInput    => "The image data is corrupt partway through",
+                    _ => throw new LoadFailureException(LoadFailureKind.DecodeFailed, WhyNotDecoded(result))
+                };
+
+                Logger.Warning(typeof(SkiaDecoder), $"{damage}: {path}");
+                composite.Warning = LoadWarning.PartiallyDecoded(damage);
             }
 
             ct.ThrowIfCancellationRequested();
@@ -84,32 +86,105 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
         // The builder takes ownership of the bitmap and keeps it alive for the image it makes.
         composite.Content = RasterContentBuilder.Build(bitmap, composite);
     }
+    
+    protected virtual bool TryDecodeAnimation(Composite composite, Stream stream, string path, CancellationToken ct) => false;
 
-    private static SKCodecResult? TryDecodeJpegWithEoiRepair(Composite composite, SKBitmap bitmap, CancellationToken ct)
+    private static string WhyNoCodec(SKCodecResult result, long length) => result switch
     {
-        var bytes = DecoderIO.ReadAllBytes(composite.FileInfo.FullName, ct, out var readMs, composite.ReportTransferred);
-        composite.CompleteTransfer(bytes.Length, readMs);
+        _ when length == 0            => "The file is empty",
+        SKCodecResult.Unimplemented   => "The file is not an image, or uses a variant of its format that cannot be decoded",
+        SKCodecResult.IncompleteInput => "The file ends before the image header does",
+        SKCodecResult.InvalidInput or SKCodecResult.ErrorInInput => "The image header is corrupt",
+        _                             => $"The image could not be read ({result})"
+    };
+
+    private static string WhyNotDecoded(SKCodecResult result) => result switch
+    {
+        SKCodecResult.InvalidInput => "The image data is not valid",
+        _                          => $"The image data could not be decoded ({result})"
+    };
+
+    private static readonly byte[] EndMarker = [0xFF, 0xD9];
+    private static readonly byte[] FirstFiller = Filler(seed: 1);
+    private static readonly byte[] SecondFiller = Filler(seed: 2);
+    
+    private static bool TryRestoreEndMarker(Stream stream, SKBitmap bitmap, CancellationToken ct)
+    {
+        if (stream.Length < 4 || EndsWithEoi(stream))
+            return false;
+
+        var data = DecoderIO.ReadToEnd(stream, ct);
 
         // JPEG SOI marker (FF D8).
-        if (bytes.Length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8)
+        if (data[0] != 0xFF || data[1] != 0xD8)
+            return false;
+
+        using var scratch = TryAllocate(bitmap.Info);
+        if (scratch is null)
+            return false;
+
+        if (DecodeHash(data, FirstFiller, scratch, ct) is not { } first || DecodeHash(data, SecondFiller, scratch, ct) is not { } second || !first.SequenceEqual(second))
+            return false;
+
+        if (Decode(data, [], scratch, ct) != SKCodecResult.Success)
+            return false;
+
+        unsafe
+        {
+            Buffer.MemoryCopy((void*)scratch.GetPixels(), (void*)bitmap.GetPixels(), bitmap.ByteCount, scratch.ByteCount);
+        }
+
+        return true;
+    }
+
+    private static byte[]? DecodeHash(byte[] data, byte[] filler, SKBitmap scratch, CancellationToken ct) =>
+        Decode(data, filler, scratch, ct) == SKCodecResult.Success ? SHA256.HashData(scratch.GetPixelSpan()) : null;
+
+    /// <summary>The data with <paramref name="filler"/> and an end marker after it, decoded into <paramref name="into"/>.</summary>
+    private static SKCodecResult Decode(byte[] data, byte[] filler, SKBitmap into, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        using var memory = new MemoryStream([.. data, .. filler, .. EndMarker], writable: false);
+        using var codec = SKCodec.Create(memory);
+        if (codec is null)
+            return SKCodecResult.InvalidInput;
+
+        into.Erase(SKColors.Transparent);
+        return codec.GetPixels(into.Info, into.GetPixels());
+    }
+
+    /// <summary>Bytes that decode as arbitrary image data, and never as a marker (no FF).</summary>
+    private static byte[] Filler(int seed)
+    {
+        var random = new Random(seed);
+        return [.. Enumerable.Range(0, 64).Select(_ => (byte)random.Next(0xFF))];
+    }
+
+    private static SKBitmap? TryAllocate(SKImageInfo info)
+    {
+        try
+        {
+            var bitmap = new SKBitmap(info);
+            if (bitmap.GetPixels() != IntPtr.Zero)
+                return bitmap;
+
+            bitmap.Dispose();
             return null;
-
-        // Already has an EOI marker - nothing to repair.
-        if (bytes[^2] == 0xFF && bytes[^1] == 0xD9)
+        }
+        catch (Exception)
+        {
             return null;
+        }
+    }
 
-        var repaired = new byte[bytes.Length + 2];
-        bytes.CopyTo(repaired, 0);
-        repaired[^2] = 0xFF;
-        repaired[^1] = 0xD9;
+    private static bool EndsWithEoi(Stream stream)
+    {
+        Span<byte> tail = stackalloc byte[2];
+        stream.Position = stream.Length - 2;
+        stream.ReadExactly(tail);
 
-        using var stream = new MemoryStream(repaired, writable: false);
-        using var codec = SKCodec.Create(stream);
-        if (codec == null)
-            return null;
-
-        bitmap.Erase(SKColors.Transparent);
-        return codec.GetPixels(bitmap.Info, bitmap.GetPixels());
+        return tail[0] == 0xFF && tail[1] == 0xD9;
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)

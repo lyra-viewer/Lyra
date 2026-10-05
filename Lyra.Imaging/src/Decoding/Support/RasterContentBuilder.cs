@@ -19,8 +19,7 @@ internal static class RasterContentBuilder
 
         bitmap.SetImmutable();
 
-        var bytes = (long)bitmap.Width * bitmap.Height * Math.Max(1, bitmap.ColorType.GetBytesPerPixel());
-        if (bytes <= DecodePolicy.SingleTextureCeilingBytes)
+        if (ImageBytes.Of(bitmap) <= DecodePolicy.SingleTextureCeilingBytes)
             return Single(bitmap, sceneWhitePoint);
 
         try
@@ -72,9 +71,7 @@ internal static class RasterContentBuilder
             throw;
         }
 
-        var bytes = (long)width * height * Math.Max(1, bitmap.ColorType.GetBytesPerPixel());
-
-        Logger.Info($"[RasterContentBuilder] {width}x{height} is {bytes / 1024 / 1024} MB as " +
+        Logger.Info($"[RasterContentBuilder] {width}x{height} is {ImageBytes.Of(bitmap) / 1024 / 1024} MB as " +
                     $"{bitmap.ColorType}, over the {DecodePolicy.SingleTextureCeilingBytes / 1024 / 1024} MB " +
                     "single-texture budget; publishing a preview plus tiles so the GPU only holds " +
                     "what is on screen.");

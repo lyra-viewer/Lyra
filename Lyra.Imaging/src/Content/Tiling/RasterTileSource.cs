@@ -56,7 +56,7 @@ public sealed class RasterTileSource : ITileSource
             var total = 0L;
 
             for (var i = 0; i < tiles.Length; i++)
-                total += RasterLargeContent.Bytes(Volatile.Read(ref tiles[i]));
+                total += ImageBytes.Of(Volatile.Read(ref tiles[i]));
 
             return total;
         }
@@ -66,7 +66,7 @@ public sealed class RasterTileSource : ITileSource
     {
         var total = 0L;
         foreach (var tile in GetTiles(visibleFullRect, imageSize, pixelsPerFullUnit))
-            total += RasterLargeContent.Bytes(tile.Image);
+            total += ImageBytes.Of(tile.Image);
 
         return total;
     }

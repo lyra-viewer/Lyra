@@ -11,8 +11,7 @@ internal sealed class HdrDecoder : FloatRgbaDecoderBase
 
     protected override FloatImageBuffer LoadPixels(Composite composite, CancellationToken ct)
     {
-        var data = DecoderIO.ReadAllBytes(composite.FileInfo.FullName, ct, out var readMs, composite.ReportTransferred);
-        composite.CompleteTransfer(data.Length, readMs);
+        var data = composite.ReadAllBytes(ct);
 
         var image = RadianceHdrReader.Decode(data);
         return FloatImageBuffer.FromManaged(image.Pixels, image.Width, image.Height);

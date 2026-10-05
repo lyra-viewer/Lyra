@@ -41,7 +41,7 @@ public class Ktx2ReaderTests
         var uintTex = Ktx2Reader.Read(KtxTestFile.Ktx2(VkR8Uint, 2, 1, [[100, 200]]));
         Assert.Equal(TextureFormat.R8Uint, uintTex.Format);
         Assert.Equal("VK_FORMAT_R8_UINT", uintTex.FormatName);
-        var uintDst = new byte[TextureData.DecodedByteSize(uintTex.Subresources[0])];
+        var uintDst = Rgba8.BufferFor(uintTex.Subresources[0]);
         uintTex.Decode(uintTex.Subresources[0], uintDst);
         Assert.Equal(new byte[] { 100, 100, 100, 255 }, uintDst[..4]);
 
@@ -74,7 +74,7 @@ public class Ktx2ReaderTests
     public void DecodesBaseSurfaceThroughTextureData()
     {
         var tex = Ktx2Reader.Read(KtxTestFile.Ktx2(VkBc1RgbaUnorm, 4, 4, [KtxTestFile.RedBc1Block()]));
-        var dst = new byte[TextureData.DecodedByteSize(tex.Subresources[0])];
+        var dst = Rgba8.BufferFor(tex.Subresources[0]);
         tex.Decode(tex.Subresources[0], dst);
 
         Assert.Equal(new byte[] { 255, 0, 0, 255 }, dst[..4]);
@@ -110,7 +110,7 @@ public class Ktx2ReaderTests
 
         Assert.Equal(TextureFormat.Etc2Rgb8Unorm, tex.Format);
 
-        var dst = new byte[TextureData.DecodedByteSize(tex.Subresources[0])];
+        var dst = Rgba8.BufferFor(tex.Subresources[0]);
         tex.Decode(tex.Subresources[0], dst);
         Assert.Equal(new byte[] { 138, 138, 138, 255 }, dst[..4]);
     }
@@ -125,7 +125,7 @@ public class Ktx2ReaderTests
         var file = KtxTestFile.Ktx2Supercompressed(VkRgba8Unorm, 4, 4, SchemeZstd, compressed, surface.Length);
         var tex = Ktx2Reader.Read(file);
 
-        var dst = new byte[TextureData.DecodedByteSize(tex.Subresources[0])];
+        var dst = Rgba8.BufferFor(tex.Subresources[0]);
         tex.Decode(tex.Subresources[0], dst);
         Assert.Equal(surface, dst); // RGBA8 decodes to itself
     }
@@ -139,7 +139,7 @@ public class Ktx2ReaderTests
         var file = KtxTestFile.Ktx2Supercompressed(VkRgba8Unorm, 4, 4, SchemeZlib, compressed, surface.Length);
         var tex = Ktx2Reader.Read(file);
 
-        var dst = new byte[TextureData.DecodedByteSize(tex.Subresources[0])];
+        var dst = Rgba8.BufferFor(tex.Subresources[0]);
         tex.Decode(tex.Subresources[0], dst);
         Assert.Equal(surface, dst);
     }

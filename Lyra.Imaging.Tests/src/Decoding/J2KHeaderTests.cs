@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Text;
 using Lyra.Imaging.Content;
-using Lyra.Imaging.Decoding.Support;
+using Lyra.Imaging.Decoding.Decoders.J2K;
 using Xunit;
 
 namespace Lyra.Imaging.Tests.Decoding;

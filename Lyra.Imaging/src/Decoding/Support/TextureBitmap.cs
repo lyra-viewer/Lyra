@@ -36,9 +36,9 @@ internal static class TextureBitmap
         var info = TextureFormats.Info(texture.Format);
 
         composite.AddFormatSpecific("Format", texture.FormatName);
-        composite.AddFormatSpecific("Has Alpha", info.HasAlpha ? "Yes" : "No");
-        composite.AddFormatSpecific("Is Cubemap", texture.Kind == TextureKind.Cube ? "Yes" : "No");
-        composite.AddFormatSpecific("Is Volume", texture.Kind == TextureKind.Volume ? "Yes" : "No");
+        composite.AddFormatSpecific("Has Alpha", info.HasAlpha);
+        composite.AddFormatSpecific("Is Cubemap", texture.Kind == TextureKind.Cube);
+        composite.AddFormatSpecific("Is Volume", texture.Kind == TextureKind.Volume);
 
         if (texture.Kind == TextureKind.Volume)
             composite.AddFormatSpecific("Depth", $"{texture.Depth}");
@@ -66,7 +66,10 @@ internal static class TextureBitmap
             if (flipVertical)
                 FlipFloatRows(floats, surface.Width, surface.Height);
 
-            return HdrImageBuilder.Build(floats, surface.Width, surface.Height, composite, ct, out _);
+            var content = HdrImageBuilder.Build(floats, surface.Width, surface.Height, composite, ct, out var facts);
+            composite.AddFormatSpecific("Dynamic Range", facts.DynamicRange!);
+
+            return content;
         }
 
         var bitmap = DecodeToBitmap(texture, surface, ct);

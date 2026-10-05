@@ -18,7 +18,7 @@ public class JxlColorSpaceTests
     // 8x1 Display-P3 JXL (cjxl -d 0): left half pure P3 red ("logo"), right half sRGB red
     // re-encoded into P3 ("background"). Under the pre-fix sRGB-clamp wrapper both halves
     // decoded to identical solid red; the fix keeps them distinct.
-    private const string DisplayP3JxlBase64 =
+    internal const string DisplayP3JxlBase64 =
         "/woAAA6AJdwvDEiYBkBzSga4OPM6Vvp+izjMXhVa+JLcLQrZKwgqIZyZTe7qYWgFzGyh/CKQV5wLZrH4Aou" +
         "PY2nFV1hc6jqhwbCEqbOwrKF5gFBmgIehrbV0gLeptGiAs5KHQoCUsqGus6alMtBBvZBeX//9998dqNQHjc" +
         "XCVXMQlA0Tl1Bkm1B7rSyATtM4AJumJlTeE9yawUyhT54b77r6Xy8BDHv4+nrKWgaY6DrGBUQGJsYCCAAQA" +

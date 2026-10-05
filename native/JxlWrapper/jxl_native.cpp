@@ -1,53 +1,20 @@
 #include "jxl_native.h"
+#include "jxl_internal.h"
 
-#include <cstdarg>
-#include <cstdint>
-#include <cstdio>
 #include <cstdlib>
-#include <mutex>
-#include <unordered_set>
 
-#include <jxl/cms.h>
-#include <jxl/color_encoding.h>
 #include <jxl/decode.h>
-#include <jxl/encode.h>
 #include <jxl/resizable_parallel_runner.h>
 
-#ifdef __clang__
-#define THREAD_LOCAL __thread
-#else
-#define THREAD_LOCAL thread_local
-#endif
-
-static THREAD_LOCAL char last_jxl_error[512] = "";
-
-static std::unordered_set<void *> jxl_allocated_ptrs;
-static std::mutex jxl_alloc_mutex;
-
-static void set_error(const char *fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    std::vsnprintf(last_jxl_error, sizeof(last_jxl_error), fmt, args);
-    va_end(args);
-}
-
-static void clear_error() { last_jxl_error[0] = '\0'; }
+using namespace jxl_internal;
 
 extern "C" {
 
-JXL_NATIVE_API const char *get_last_jxl_error(void) { return last_jxl_error; }
+JXL_NATIVE_API const char *get_last_jxl_error(void) { return last_error(); }
 
 JXL_NATIVE_API void free_jxl_pixels(void *ptr) {
-    if (!ptr)
-        return;
-
-    std::lock_guard<std::mutex> lock(jxl_alloc_mutex);
-    auto it = jxl_allocated_ptrs.find(ptr);
-    if (it == jxl_allocated_ptrs.end())
-        return;
-
-    jxl_allocated_ptrs.erase(it);
-    std::free(ptr);
+    if (ptr && release_allocation(ptr))
+        std::free(ptr);
 }
 
 JXL_NATIVE_API bool decode_jxl_from_memory(const uint8_t *data, size_t size, int *out_width, int *out_height,
@@ -102,15 +69,8 @@ JXL_NATIVE_API bool decode_jxl_from_memory(const uint8_t *data, size_t size, int
     int width = 0, height = 0;
 
     do {
-        if (JxlDecoderSetCms(dec, *JxlGetDefaultCms()) != JXL_DEC_SUCCESS) {
-            set_error("JxlDecoderSetCms failed.");
+        if (!configure_decoder(dec, runner))
             break;
-        }
-
-        if (runner && JxlDecoderSetParallelRunner(dec, JxlResizableParallelRunner, runner) != JXL_DEC_SUCCESS) {
-            set_error("JxlDecoderSetParallelRunner failed.");
-            break;
-        }
 
         if (JxlDecoderSubscribeEvents(dec, JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING | JXL_DEC_FULL_IMAGE) != JXL_DEC_SUCCESS) {
             set_error("JxlDecoderSubscribeEvents failed.");
@@ -146,6 +106,8 @@ JXL_NATIVE_API bool decode_jxl_from_memory(const uint8_t *data, size_t size, int
                     break;
                 }
 
+                // Already upright: unless asked to keep the orientation, libjxl applies it and
+                // reports the oriented size here, despite the header's "before orientation".
                 width = (int) info.xsize;
                 height = (int) info.ysize;
 
@@ -155,18 +117,11 @@ JXL_NATIVE_API bool decode_jxl_from_memory(const uint8_t *data, size_t size, int
                     break;
                 }
 
-                // HDR == floating-point sample type. A 16-bit *integer* image is
-                // still SDR and must go through the plain 8-bit (sRGB) path.
-                is_hdr = info.exponent_bits_per_sample > 0;
+                is_hdr = is_hdr_image(info);
+                format = pixel_format(is_hdr);
 
-                format.num_channels = 4;
-                format.data_type = is_hdr ? JXL_TYPE_FLOAT : JXL_TYPE_UINT8;
-                format.endianness = JXL_NATIVE_ENDIAN;
-                format.align = 0;
-
-                if (runner) {
+                if (runner)
                     JxlResizableParallelRunnerSetThreads(runner, JxlResizableParallelRunnerSuggestThreads(info.xsize, info.ysize));
-                }
 
                 if (out_width)
                     *out_width = width;
@@ -190,24 +145,9 @@ JXL_NATIVE_API bool decode_jxl_from_memory(const uint8_t *data, size_t size, int
             }
 
             if (status == JXL_DEC_COLOR_ENCODING) {
-                JxlColorEncoding target{};
-                if (is_hdr) {
-                    // HDR (float) stays linear scene-referred for the tone mapper.
-                    JxlColorEncodingSetToLinearSRGB(&target, JXL_FALSE);
-                } else {
-                    // SDR: convert to Display-P3 (sRGB transfer, P3 primaries, D65)
-                    // instead of clamping to sRGB.
-                    target.color_space = JXL_COLOR_SPACE_RGB;
-                    target.white_point = JXL_WHITE_POINT_D65;
-                    target.primaries = JXL_PRIMARIES_P3;
-                    target.transfer_function = JXL_TRANSFER_FUNCTION_SRGB;
-                    target.rendering_intent = JXL_RENDERING_INTENT_RELATIVE;
-                }
-
-                if (JxlDecoderSetOutputColorProfile(dec, &target, nullptr, 0) != JXL_DEC_SUCCESS) {
-                    set_error("JxlDecoderSetOutputColorProfile failed.");
+                if (!set_output_profile(dec, is_hdr))
                     break;
-                }
+
                 continue;
             }
 
@@ -267,16 +207,11 @@ JXL_NATIVE_API bool decode_jxl_from_memory(const uint8_t *data, size_t size, int
     JxlDecoderDestroy(dec);
 
     if (!ok) {
-        if (pixels)
-            std::free(pixels);
-        
+        std::free(pixels);
         return false;
     }
 
-    {
-        std::lock_guard<std::mutex> lock(jxl_alloc_mutex);
-        jxl_allocated_ptrs.insert(pixels);
-    }
+    track_allocation(pixels);
 
     *out_pixels = pixels;
     return true;

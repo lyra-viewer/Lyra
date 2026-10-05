@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Decoding.Decoders.Ktx;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.ManagedCodecs.Texture;
@@ -61,7 +62,7 @@ internal sealed class KtxDecoder : DecoderBase, IThumbnailDecoder
         DecoderValidation.RequireSaneDimensions(bitmap.Width, bitmap.Height);
 
         composite.AddFormatSpecific("Format", BasisTranscoder.CodecName(bytes));
-        composite.AddFormatSpecific("Has Alpha", HasTranslucentPixels(bitmap) ? "Yes" : "No");
+        composite.AddFormatSpecific("Has Alpha", HasTranslucentPixels(bitmap));
 
         composite.Content = RasterContentBuilder.Build(bitmap, composite);
     }

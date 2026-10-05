@@ -1,3 +1,4 @@
+using Lyra.Imaging.Content;
 using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Support;
@@ -33,11 +34,12 @@ internal static class PixelCopy
 
     /// <summary>
     /// Copies rows of pixels into <paramref name="bitmap"/>, one at a time, taking as many bytes
-    /// per row as its color type implies and stepping the source by its own stride.
+    /// per row as its color type implies and stepping the source by its own stride. A source
+    /// wider than the bitmap is cropped on the right.
     /// </summary>
-    public static unsafe void CopyRows(IntPtr source, long sourceStride, SKBitmap bitmap)
+    public static unsafe void CopyRows(IntPtr source, long sourceStride, SKBitmap bitmap, CancellationToken ct = default)
     {
-        var width = bitmap.Width * Math.Max(1, bitmap.ColorType.GetBytesPerPixel());
+        var rowBytes = bitmap.Width * ImageBytes.PerPixel(bitmap.ColorType);
         var height = bitmap.Height;
 
         var src = (byte*)source;
@@ -45,7 +47,12 @@ internal static class PixelCopy
         var dstStride = bitmap.RowBytes;
 
         for (long y = 0; y < height; y++)
-            Buffer.MemoryCopy(src + y * sourceStride, dst + y * dstStride, dstStride, width);
+        {
+            if ((y & 0x3F) == 0)
+                ct.ThrowIfCancellationRequested();
+
+            Buffer.MemoryCopy(src + y * sourceStride, dst + y * dstStride, dstStride, rowBytes);
+        }
     }
 
     /// <summary>
@@ -66,15 +73,13 @@ internal static class PixelCopy
         var width = bitmap.Width;
         var height = bitmap.Height;
 
-        bitmap.Erase(SKColors.Transparent);
-
         var src = (byte*)source;
         var dst = (byte*)bitmap.GetPixels();
         var dstStride = bitmap.RowBytes;
 
         if (IsOpaque(src, sourceStride, width, height))
         {
-            CopyRows(source, sourceStride, bitmap);
+            CopyRows(source, sourceStride, bitmap, ct);
             isGrayscale = IsGray(src, sourceStride, width, height);
             return;
         }

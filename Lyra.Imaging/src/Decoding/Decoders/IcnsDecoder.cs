@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Decoding.Decoders.J2K;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
 using Lyra.ManagedCodecs.Raster.Icns;
@@ -130,16 +131,8 @@ internal sealed class IcnsDecoder : IconContainerDecoder<IcnsEntry>
                 DecoderValidation.RequireSaneDimensions(width, height);
                 DecoderValidation.RequireValidStride(strideBytes, width);
 
-                var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-                var bitmap = new SKBitmap(info);
-
-                var src = (byte*)nativePixels;
-                var dst = (byte*)bitmap.GetPixels();
-                var dstStride = bitmap.Info.RowBytes;
-                var rowBytes = Math.Min(strideBytes, dstStride);
-
-                for (var y = 0; y < height; y++)
-                    Buffer.MemoryCopy(src + ((nint)y * strideBytes), dst + ((nint)y * dstStride), dstStride, rowBytes);
+                var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul));
+                PixelCopy.CopyRows(nativePixels, strideBytes, bitmap);
 
                 return bitmap;
             }

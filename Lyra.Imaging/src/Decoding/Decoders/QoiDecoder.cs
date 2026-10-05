@@ -103,7 +103,6 @@ internal sealed class QoiDecoder : DecoderBase, IThumbnailDecoder
 
     private static void Describe(Composite composite, QoiHeader header)
     {
-        composite.AddFormatSpecific("Format", "QOI");
         composite.AddFormatSpecific("Channels", header.Channels == 4 ? "RGBA" : "RGB");
         composite.AddFormatSpecific("Color Space", header.ColorSpace == QoiColorSpace.Linear ? "linear" : "sRGB, linear alpha");
     }

@@ -1,4 +1,3 @@
-using Lyra.Common;
 using Lyra.Imaging.Content;
 using Lyra.ManagedCodecs.Raster.Gif;
 using SkiaSharp;
@@ -21,7 +20,7 @@ internal static class GifFrameSet
                 Label: $"Frame {i + 1}",
                 Width: width,
                 Height: height,
-                Detail: DescribeFrame(frame),
+                Detail: FrameFacts.DescribeFrame(frame),
                 ByteSize: encoded?[i].EncodedBytes))
         ];
     }
@@ -42,7 +41,7 @@ internal static class GifFrameSet
         if (animated)
         {
             composite.AddFormatSpecific("Frames", frames.Length.ToString());
-            composite.AddFormatSpecific("Duration", TotalDuration(frames));
+            composite.AddFormatSpecific("Duration", FrameFacts.TotalDuration(frames));
         }
 
         if (blocks is null)
@@ -78,24 +77,14 @@ internal static class GifFrameSet
         };
     }
 
-    /// <summary>"yes" for a still image; for an animation, how many of its frames.</summary>
+    /// <summary>A row only when some frame has it, saying how many.</summary>
     private static void AddWhenAny(Composite composite, string key, GifBlocks blocks, Func<GifFrameBlock, bool> has)
     {
         var count = blocks.Frames.Count(has);
         if (count == 0)
             return;
 
-        var total = blocks.Frames.Count;
-        composite.AddFormatSpecific(key, total == 1 ? "yes" : count == total ? "all frames" : $"{count} of {total} frames");
-    }
-
-    /// <summary>The frame's own rectangle, its offset when it has one, and its delay.</summary>
-    private static string DescribeFrame(SKCodecFrameInfo frame)
-    {
-        var rect = frame.FrameRect;
-        var offset = rect.Left != 0 || rect.Top != 0 ? $" at {rect.Left},{rect.Top}" : "";
-
-        return $"{rect.Width}x{rect.Height}{offset}, {Formatters.DurationToStr(Math.Max(0, frame.Duration))}";
+        composite.AddFormatSpecific(key, FrameFacts.Proportion(count, blocks.Frames.Count));
     }
 
     private static string DescribePalette(GifBlocks blocks)
@@ -116,7 +105,4 @@ internal static class GifFrameSet
         1    => "1 repeat",
         _    => $"{loopCount} repeats"
     };
-
-    private static string TotalDuration(SKCodecFrameInfo[] frames) =>
-        Formatters.DurationToStr(frames.Sum(f => (long)Math.Max(0, f.Duration)));
 }

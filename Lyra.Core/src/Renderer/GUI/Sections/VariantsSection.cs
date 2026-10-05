@@ -79,8 +79,6 @@ public sealed class VariantsSection : IUISection, IDisposable
             .Child(_body);
     }
 
-    internal ValueSlider Jump => _jump;
-
     public void Refresh(UIState state) => Refresh(state.Composite?.Content as VariantRasterContent);
 
     internal void Refresh(VariantRasterContent? set)
