@@ -39,8 +39,43 @@ public static class SurfaceDecoder
                 return;
 
             case TextureFormat.R8Unorm:
+            case TextureFormat.R8UnormSrgb:
             case TextureFormat.R8Uint: // integer values are shown directly as grayscale
                 ExpandChannels(src, dst, width * height, sourceChannels: 1);
+                return;
+
+            case TextureFormat.A8Unorm:
+                DecodeA8(src, dst, width * height);
+                return;
+
+            case TextureFormat.La8Unorm:
+                DecodeLa8(src, dst, width * height);
+                return;
+
+            case TextureFormat.Bgr8Unorm:
+            case TextureFormat.Bgr8UnormSrgb:
+                SwizzleBgr(src, dst, width * height, sourceBytes: 3);
+                return;
+
+            case TextureFormat.Bgrx8Unorm:
+            case TextureFormat.Bgrx8UnormSrgb:
+                SwizzleBgr(src, dst, width * height, sourceBytes: 4);
+                return;
+
+            case TextureFormat.Rgbx8Unorm:
+                DecodeRgbx8(src, dst, width * height);
+                return;
+
+            case TextureFormat.Bgr5A1Unorm:
+                DecodePacked16(src, dst, width * height, PackedLayout.Bgr5A1);
+                return;
+
+            case TextureFormat.Bgr5X1Unorm:
+                DecodePacked16(src, dst, width * height, PackedLayout.Bgr5X1);
+                return;
+
+            case TextureFormat.Bgra4Unorm:
+                DecodePacked16(src, dst, width * height, PackedLayout.Bgra4);
                 return;
 
             case TextureFormat.Rg8Unorm:
@@ -92,6 +127,12 @@ public static class SurfaceDecoder
     {
         var dstRequired = ValidateSurface(format, src.Length, dst.Length, width, height, dstUnit: "floats");
 
+        if (TextureFormats.Info(format).IsAstc)
+        {
+            DecodeAstcSurfaceHdr(format, src, dst, width, height);
+            return;
+        }
+
         switch (format)
         {
             case TextureFormat.Bc6HUFloat:
@@ -111,6 +152,12 @@ public static class SurfaceDecoder
                 return;
             case TextureFormat.R32Float:
                 DecodeR32FloatGray(src, dst, width * height);
+                return;
+            case TextureFormat.Rg16Float:
+                DecodeRg16Float(src, dst, width * height);
+                return;
+            case TextureFormat.Rg32Float:
+                DecodeRg32Float(src, dst, width * height);
                 return;
             case TextureFormat.Rgb16Float:
                 DecodeRgb16Float(src, dst, width * height);
@@ -209,6 +256,66 @@ public static class SurfaceDecoder
         }
     }
 
+    /// <summary>
+    /// Whether an ASTC surface holds HDR blocks. ASTC formats in DDS, KTX 1 and most KTX 2 files do not
+    /// say whether they are HDR, so the blocks have to: the first HDR one ends the scan.
+    /// </summary>
+    public static bool ContainsHdrBlocks(TextureFormat format, ReadOnlySpan<byte> src)
+    {
+        var info = TextureFormats.Info(format);
+        if (!info.IsAstc || info.IsSrgb)
+            return false;
+
+        for (var offset = 0; offset + 16 <= src.Length; offset += 16)
+        {
+            if (AstcBlockDecoder.IsHdrBlock(src.Slice(offset, 16), info.IsAstc3D))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>The float counterpart of <see cref="DecodeAstcSurface"/>, for surfaces holding HDR blocks.</summary>
+    private static void DecodeAstcSurfaceHdr(TextureFormat format, ReadOnlySpan<byte> src, Span<float> dst, int width, int height)
+    {
+        var info = TextureFormats.Info(format);
+        var bw = info.BlockWidth;
+        var bh = info.BlockHeight;
+        var bd = info.IsAstc3D ? info.BlockDepth : 1;
+        var blocksX = (width + bw - 1) / bw;
+        var blocksY = (height + bh - 1) / bh;
+
+        Span<float> blockRgba = stackalloc float[6 * 6 * 6 * 4];
+        var srcOffset = 0;
+
+        for (var by = 0; by < blocksY; by++)
+        for (var bx = 0; bx < blocksX; bx++)
+        {
+            if (!AstcBlockDecoder.TryDecodeHdr(src.Slice(srcOffset, 16), bw, bh, bd, blockRgba))
+                FillError(blockRgba, bw * bh);
+
+            srcOffset += 16;
+
+            var pxX = bx * bw;
+            var pxY = by * bh;
+            var copyW = Math.Min(bw, width - pxX);
+            var copyH = Math.Min(bh, height - pxY);
+            for (var ry = 0; ry < copyH; ry++)
+                blockRgba.Slice(ry * bw * 4, copyW * 4).CopyTo(dst.Slice(((pxY + ry) * width + pxX) * 4, copyW * 4));
+        }
+    }
+
+    private static void FillError(Span<float> block, int texels)
+    {
+        for (var i = 0; i < texels; i++)
+        {
+            block[(i * 4) + 0] = 1f;
+            block[(i * 4) + 1] = 0f;
+            block[(i * 4) + 2] = 1f;
+            block[(i * 4) + 3] = 1f;
+        }
+    }
+
     private static void FillError(Span<byte> block, int texels)
     {
         for (var i = 0; i < texels; i++)
@@ -266,7 +373,10 @@ public static class SurfaceDecoder
     {
         Rgba4,
         Rgb5A1,
-        Rgb565
+        Rgb565,
+        Bgr5A1,
+        Bgr5X1,
+        Bgra4
     }
 
     /// <summary>Decodes a 16-bit-per-pixel packed integer format (little-endian) into RGBA8.</summary>
@@ -290,6 +400,19 @@ public static class SurfaceDecoder
                     dst[d + 2] = Expand5((v >> 1) & 0x1F);
                     dst[d + 3] = (byte)((v & 1) * 255);
                     break;
+                case PackedLayout.Bgr5A1:   // B5G5R5A1, B in the low bits
+                case PackedLayout.Bgr5X1:
+                    dst[d + 0] = Expand5((v >> 10) & 0x1F);
+                    dst[d + 1] = Expand5((v >> 5) & 0x1F);
+                    dst[d + 2] = Expand5(v & 0x1F);
+                    dst[d + 3] = layout == PackedLayout.Bgr5X1 ? (byte)255 : (byte)((v >> 15) * 255);
+                    break;
+                case PackedLayout.Bgra4:    // B4G4R4A4, B in the low nibble
+                    dst[d + 0] = (byte)(((v >> 8) & 0xF) * 0x11);
+                    dst[d + 1] = (byte)(((v >> 4) & 0xF) * 0x11);
+                    dst[d + 2] = (byte)((v & 0xF) * 0x11);
+                    dst[d + 3] = (byte)(((v >> 12) & 0xF) * 0x11);
+                    break;
                 default:                    // Rgb565: R5G6B5
                     dst[d + 0] = Expand5((v >> 11) & 0x1F);
                     dst[d + 1] = (byte)(((v >> 5) & 0x3F) << 2 | ((v >> 5) & 0x3F) >> 4);
@@ -298,6 +421,49 @@ public static class SurfaceDecoder
                     break;
             }
         }
+    }
+
+    /// <summary>Alpha only. White beneath it, so the mask shows on any background; D3D samples it as black.</summary>
+    private static void DecodeA8(ReadOnlySpan<byte> src, Span<byte> dst, int pixels)
+    {
+        for (var i = 0; i < pixels; i++)
+        {
+            var d = i * 4;
+            dst[d + 0] = dst[d + 1] = dst[d + 2] = 255;
+            dst[d + 3] = src[i];
+        }
+    }
+
+    private static void DecodeLa8(ReadOnlySpan<byte> src, Span<byte> dst, int pixels)
+    {
+        for (var i = 0; i < pixels; i++)
+        {
+            var d = i * 4;
+            dst[d + 0] = dst[d + 1] = dst[d + 2] = src[i * 2];
+            dst[d + 3] = src[(i * 2) + 1];
+        }
+    }
+
+    /// <summary>B, G, R in memory order, with an unused fourth byte when <paramref name="sourceBytes"/> is 4.</summary>
+    private static void SwizzleBgr(ReadOnlySpan<byte> src, Span<byte> dst, int pixels, int sourceBytes)
+    {
+        for (var i = 0; i < pixels; i++)
+        {
+            var s = i * sourceBytes;
+            var d = i * 4;
+            dst[d + 0] = src[s + 2];
+            dst[d + 1] = src[s + 1];
+            dst[d + 2] = src[s];
+            dst[d + 3] = 255;
+        }
+    }
+
+    private static void DecodeRgbx8(ReadOnlySpan<byte> src, Span<byte> dst, int pixels)
+    {
+        src[..(pixels * 4)].CopyTo(dst);
+
+        for (var i = 0; i < pixels; i++)
+            dst[(i * 4) + 3] = 255;
     }
 
     /// <summary>Decodes A2B10G10R10 (32-bit packed, R in the low bits) into RGBA8.</summary>
@@ -360,6 +526,33 @@ public static class SurfaceDecoder
         var floats = MemoryMarshal.Cast<byte, float>(src);
         for (var i = 0; i < pixels; i++) 
             WriteGray(dst, i, floats[i]);
+    }
+
+    /// <summary>Two channels as red and green with zero blue, as BC5 and RG8 show them.</summary>
+    private static void DecodeRg16Float(ReadOnlySpan<byte> src, Span<float> dst, int pixels)
+    {
+        var halves = MemoryMarshal.Cast<byte, Half>(src);
+        for (var i = 0; i < pixels; i++)
+        {
+            var d = i * 4;
+            dst[d + 0] = (float)halves[i * 2];
+            dst[d + 1] = (float)halves[(i * 2) + 1];
+            dst[d + 2] = 0f;
+            dst[d + 3] = 1f;
+        }
+    }
+
+    private static void DecodeRg32Float(ReadOnlySpan<byte> src, Span<float> dst, int pixels)
+    {
+        var floats = MemoryMarshal.Cast<byte, float>(src);
+        for (var i = 0; i < pixels; i++)
+        {
+            var d = i * 4;
+            dst[d + 0] = floats[i * 2];
+            dst[d + 1] = floats[(i * 2) + 1];
+            dst[d + 2] = 0f;
+            dst[d + 3] = 1f;
+        }
     }
 
     private static void DecodeRgb16Float(ReadOnlySpan<byte> src, Span<float> dst, int pixels)

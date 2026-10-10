@@ -38,4 +38,7 @@ internal static class TgaTestImage
         ];
         return b;
     }
+
+    /// <summary>The TGA 2.0 footer.</summary>
+    public static byte[] Footer => [0, 0, 0, 0, 0, 0, 0, 0, .. "TRUEVISION-XFILE.\0"u8];
 }

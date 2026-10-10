@@ -103,6 +103,95 @@ internal static class KtxFormatMap
         _ => TextureFormat.Unknown,
     };
 
+    // glFormat and glType values that describe uncompressed pixel data.
+    private const uint GlRed = 0x1903, GlRg = 0x8227, GlRgb = 0x1907, GlRgba = 0x1908, GlBgr = 0x80E0, GlBgra = 0x80E1;
+    private const uint GlAlpha = 0x1906, GlLuminance = 0x1909, GlLuminanceAlpha = 0x190A, GlRedInteger = 0x8D94;
+
+    private const uint GlByte = 0x1400, GlUnsignedByte = 0x1401, GlUnsignedShort = 0x1403, GlFloat = 0x1406;
+    private const uint GlHalfFloat = 0x140B, GlHalfFloatOes = 0x8D61;
+    private const uint GlUnsignedShort4444 = 0x8033, GlUnsignedShort5551 = 0x8034, GlUnsignedShort565 = 0x8363;
+    private const uint GlUnsignedInt2101010Rev = 0x8368, GlUnsignedInt10F11F11FRev = 0x8C3B, GlUnsignedInt5999Rev = 0x8C3E;
+
+    /// <summary>
+    /// The format of uncompressed KTX 1 data, from the <c>glFormat</c> and <c>glType</c> that
+    /// describe the bytes; <c>glInternalFormat</c> only asks a GPU how to store them, and some
+    /// writers leave it at GL_RGBA8 for float data. It still says whether 8-bit data is sRGB.
+    /// Unknown for a pair this does not cover, leaving the internal format to decide.
+    /// </summary>
+    public static TextureFormat FromGlData(uint glFormat, uint glType, uint glInternalFormat)
+    {
+        var srgb = glInternalFormat is 0x8C40 or 0x8C41 or 0x8C42 or 0x8C43; // GL_SRGB, GL_SRGB8, GL_SRGB_ALPHA, GL_SRGB8_ALPHA8
+        var half = glType is GlHalfFloat or GlHalfFloatOes;
+
+        return (glFormat, glType) switch
+        {
+            (GlRed or GlLuminance, GlUnsignedByte) => srgb ? TextureFormat.R8UnormSrgb : TextureFormat.R8Unorm,
+            (GlRed, GlByte) => TextureFormat.R8Snorm,
+            (GlRedInteger, GlUnsignedByte) => TextureFormat.R8Uint,
+            (GlRedInteger, GlByte) => TextureFormat.R8Sint,
+            (GlAlpha, GlUnsignedByte) => TextureFormat.A8Unorm,
+            (GlLuminanceAlpha, GlUnsignedByte) => TextureFormat.La8Unorm,
+            (GlRg, GlUnsignedByte) => TextureFormat.Rg8Unorm,
+            (GlRgb, GlUnsignedByte) => srgb ? TextureFormat.Rgb8UnormSrgb : TextureFormat.Rgb8Unorm,
+            (GlBgr, GlUnsignedByte) => srgb ? TextureFormat.Bgr8UnormSrgb : TextureFormat.Bgr8Unorm,
+            (GlRgba, GlUnsignedByte) => srgb ? TextureFormat.Rgba8UnormSrgb : TextureFormat.Rgba8Unorm,
+            (GlRgba, GlByte) => TextureFormat.Rgba8Snorm,
+            (GlBgra, GlUnsignedByte) => srgb ? TextureFormat.Bgra8UnormSrgb : TextureFormat.Bgra8Unorm,
+            (GlRed, GlUnsignedShort) => TextureFormat.R16Unorm,
+            (GlRed, _) when half => TextureFormat.R16Float,
+            (GlRg, _) when half => TextureFormat.Rg16Float,
+            (GlRgb, _) when half => TextureFormat.Rgb16Float,
+            (GlRgba, _) when half => TextureFormat.Rgba16Float,
+            (GlRed, GlFloat) => TextureFormat.R32Float,
+            (GlRg, GlFloat) => TextureFormat.Rg32Float,
+            (GlRgba, GlFloat) => TextureFormat.Rgba32Float,
+            (GlRgba, GlUnsignedShort4444) => TextureFormat.Rgba4Unorm,
+            (GlRgba, GlUnsignedShort5551) => TextureFormat.Rgb5A1Unorm,
+            (GlRgb, GlUnsignedShort565) => TextureFormat.Rgb565Unorm,
+            (GlRgba, GlUnsignedInt2101010Rev) => TextureFormat.Rgb10A2Unorm,
+            (GlRgb, GlUnsignedInt10F11F11FRev) => TextureFormat.B10G11R11UFloat,
+            (GlRgb, GlUnsignedInt5999Rev) => TextureFormat.Rgb9E5UFloat,
+            _ => TextureFormat.Unknown,
+        };
+    }
+
+    /// <summary>How the inspector names uncompressed data whose bytes differ from its internal format.</summary>
+    public static string GlDataName(uint glFormat, uint glType)
+    {
+        var format = glFormat switch
+        {
+            GlRed            => "GL_RED", 
+            GlRg             => "GL_RG", 
+            GlRgb            => "GL_RGB",
+            GlRgba           => "GL_RGBA",
+            GlBgr            => "GL_BGR", 
+            GlBgra           => "GL_BGRA",
+            GlAlpha          => "GL_ALPHA", 
+            GlLuminance      => "GL_LUMINANCE", 
+            GlLuminanceAlpha => "GL_LUMINANCE_ALPHA", 
+            GlRedInteger     => "GL_RED_INTEGER",
+            _ => $"0x{glFormat:X}"
+        };
+
+        var type = glType switch
+        {
+            GlByte          => "GL_BYTE", 
+            GlUnsignedByte  => "GL_UNSIGNED_BYTE", 
+            GlUnsignedShort => "GL_UNSIGNED_SHORT", 
+            GlFloat         => "GL_FLOAT",
+            GlHalfFloat or GlHalfFloatOes => "GL_HALF_FLOAT",
+            GlUnsignedShort4444       => "GL_UNSIGNED_SHORT_4_4_4_4", 
+            GlUnsignedShort5551       => "GL_UNSIGNED_SHORT_5_5_5_1", 
+            GlUnsignedShort565        => "GL_UNSIGNED_SHORT_5_6_5",
+            GlUnsignedInt2101010Rev   => "GL_UNSIGNED_INT_2_10_10_10_REV", 
+            GlUnsignedInt10F11F11FRev => "GL_UNSIGNED_INT_10F_11F_11F_REV", 
+            GlUnsignedInt5999Rev      => "GL_UNSIGNED_INT_5_9_9_9_REV",
+            _ => $"0x{glType:X}"
+        };
+
+        return $"{format} / {type}";
+    }
+
     public static string GlName(uint glInternalFormat) => glInternalFormat switch
     {
         0x8229 => "GL_R8",
@@ -181,13 +270,17 @@ internal static class KtxFormatMap
         2 => TextureFormat.Rgba4Unorm,            // VK_FORMAT_R4G4B4A4_UNORM_PACK16
         4 => TextureFormat.Rgb565Unorm,           // VK_FORMAT_R5G6B5_UNORM_PACK16
         6 => TextureFormat.Rgb5A1Unorm,           // VK_FORMAT_R5G5B5A1_UNORM_PACK16
+        8 => TextureFormat.Bgr5A1Unorm,           // VK_FORMAT_A1R5G5B5_UNORM_PACK16
         9 => TextureFormat.R8Unorm,               // VK_FORMAT_R8_UNORM
         10 => TextureFormat.R8Snorm,              // VK_FORMAT_R8_SNORM
         13 => TextureFormat.R8Uint,               // VK_FORMAT_R8_UINT
         14 => TextureFormat.R8Sint,               // VK_FORMAT_R8_SINT
+        15 => TextureFormat.R8UnormSrgb,          // VK_FORMAT_R8_SRGB
         16 => TextureFormat.Rg8Unorm,             // VK_FORMAT_R8G8_UNORM
         23 => TextureFormat.Rgb8Unorm,            // VK_FORMAT_R8G8B8_UNORM
         29 => TextureFormat.Rgb8UnormSrgb,        // VK_FORMAT_R8G8B8_SRGB
+        30 => TextureFormat.Bgr8Unorm,            // VK_FORMAT_B8G8R8_UNORM
+        36 => TextureFormat.Bgr8UnormSrgb,        // VK_FORMAT_B8G8R8_SRGB
         64 => TextureFormat.Rgb10A2Unorm,         // VK_FORMAT_A2B10G10R10_UNORM_PACK32
         70 => TextureFormat.R16Unorm,             // VK_FORMAT_R16_UNORM
         37 => TextureFormat.Rgba8Unorm,           // VK_FORMAT_R8G8B8A8_UNORM
@@ -196,9 +289,11 @@ internal static class KtxFormatMap
         44 => TextureFormat.Bgra8Unorm,           // VK_FORMAT_B8G8R8A8_UNORM
         50 => TextureFormat.Bgra8UnormSrgb,       // VK_FORMAT_B8G8R8A8_SRGB
         76 => TextureFormat.R16Float,             // VK_FORMAT_R16_SFLOAT
+        83 => TextureFormat.Rg16Float,            // VK_FORMAT_R16G16_SFLOAT
         90 => TextureFormat.Rgb16Float,           // VK_FORMAT_R16G16B16_SFLOAT
         97 => TextureFormat.Rgba16Float,          // VK_FORMAT_R16G16B16A16_SFLOAT
         100 => TextureFormat.R32Float,            // VK_FORMAT_R32_SFLOAT
+        103 => TextureFormat.Rg32Float,           // VK_FORMAT_R32G32_SFLOAT
         109 => TextureFormat.Rgba32Float,         // VK_FORMAT_R32G32B32A32_SFLOAT
         122 => TextureFormat.B10G11R11UFloat,     // VK_FORMAT_B10G11R11_UFLOAT_PACK32
         123 => TextureFormat.Rgb9E5UFloat,        // VK_FORMAT_E5B9G9R9_UFLOAT_PACK32
@@ -231,6 +326,9 @@ internal static class KtxFormatMap
 
         // VK_FORMAT_ASTC_*x*_{UNORM,SRGB}_BLOCK (157..184), unorm then srgb per footprint.
         >= 157 and <= 184 => AstcFormats.LdrFormat((int)(vkFormat - 157) / 2, ((vkFormat - 157) & 1) == 1),
+
+        // VK_FORMAT_ASTC_*x*_SFLOAT_BLOCK: the same blocks, which decode to HDR when they hold it.
+        >= 1000066000 and <= 1000066013 => AstcFormats.LdrFormat((int)(vkFormat - 1000066000), srgb: false),
         _ => TextureFormat.Unknown,
     };
 
@@ -240,13 +338,17 @@ internal static class KtxFormatMap
         2 => "VK_FORMAT_R4G4B4A4_UNORM_PACK16",
         4 => "VK_FORMAT_R5G6B5_UNORM_PACK16",
         6 => "VK_FORMAT_R5G5B5A1_UNORM_PACK16",
+        8 => "VK_FORMAT_A1R5G5B5_UNORM_PACK16",
         9 => "VK_FORMAT_R8_UNORM",
         10 => "VK_FORMAT_R8_SNORM",
         13 => "VK_FORMAT_R8_UINT",
         14 => "VK_FORMAT_R8_SINT",
+        15 => "VK_FORMAT_R8_SRGB",
         16 => "VK_FORMAT_R8G8_UNORM",
         23 => "VK_FORMAT_R8G8B8_UNORM",
         29 => "VK_FORMAT_R8G8B8_SRGB",
+        30 => "VK_FORMAT_B8G8R8_UNORM",
+        36 => "VK_FORMAT_B8G8R8_SRGB",
         64 => "VK_FORMAT_A2B10G10R10_UNORM_PACK32",
         70 => "VK_FORMAT_R16_UNORM",
         37 => "VK_FORMAT_R8G8B8A8_UNORM",
@@ -255,9 +357,11 @@ internal static class KtxFormatMap
         44 => "VK_FORMAT_B8G8R8A8_UNORM",
         50 => "VK_FORMAT_B8G8R8A8_SRGB",
         76 => "VK_FORMAT_R16_SFLOAT",
+        83 => "VK_FORMAT_R16G16_SFLOAT",
         90 => "VK_FORMAT_R16G16B16_SFLOAT",
         97 => "VK_FORMAT_R16G16B16A16_SFLOAT",
         100 => "VK_FORMAT_R32_SFLOAT",
+        103 => "VK_FORMAT_R32G32_SFLOAT",
         109 => "VK_FORMAT_R32G32B32A32_SFLOAT",
         122 => "VK_FORMAT_B10G11R11_UFLOAT_PACK32",
         123 => "VK_FORMAT_E5B9G9R9_UFLOAT_PACK32",
@@ -288,6 +392,7 @@ internal static class KtxFormatMap
         155 => "VK_FORMAT_EAC_R11G11_UNORM_BLOCK",
         156 => "VK_FORMAT_EAC_R11G11_SNORM_BLOCK",
         >= 157 and <= 184 => $"VK_FORMAT_ASTC_{AstcFormats.Footprints[(vkFormat - 157) / 2]}_{((vkFormat - 157) % 2 == 0 ? "UNORM" : "SRGB")}_BLOCK",
+        >= 1000066000 and <= 1000066013 => $"VK_FORMAT_ASTC_{AstcFormats.Footprints[vkFormat - 1000066000]}_SFLOAT_BLOCK",
         _ => $"VkFormat {vkFormat}",
     };
 
@@ -299,7 +404,6 @@ internal static class KtxFormatMap
     public static string DescribeUnsupportedVk(uint vkFormat) => vkFormat switch
     {
         0 => "VK_FORMAT_UNDEFINED (Basis Universal supercompression — not yet supported)",
-        >= 1000066000 and <= 1000066013 => $"VkFormat {vkFormat} (ASTC HDR — not yet supported)",
         _ => VkName(vkFormat),
     };
 }

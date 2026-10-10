@@ -10,29 +10,53 @@ public static class TgaReader
     /// <summary>Cheap header sniff: whether <paramref name="header"/> plausibly begins a TGA file.</summary>
     public static bool CanDecode(ReadOnlySpan<byte> header) => IsLikelyTga(header);
 
+    /// <summary>The 18-byte header at the start of <paramref name="data"/>.</summary>
+    public static TgaHeader ReadHeader(ReadOnlySpan<byte> data) =>
+        data.Length >= TgaHeader.Size ? TgaHeader.Parse(data) : throw new InvalidDataException("File is too small to contain a header.");
+
+    /// <summary>Whether the file ends in the TGA 2.0 footer, which version 1 files do not have.</summary>
+    public static bool IsVersion2(ReadOnlySpan<byte> data) =>
+        data.Length >= TgaHeader.Size + FooterSize && data[^(Signature.Length)..].SequenceEqual(Signature);
+
+    // Extension and developer area offsets, then the signature.
+    private const int FooterSize = 26;
+
+    private static ReadOnlySpan<byte> Signature => "TRUEVISION-XFILE.\0"u8;
+
     /// <summary>Decodes a TGA already resident in memory.</summary>
     public static DecodedImage Decode(ReadOnlySpan<byte> data)
     {
+        var image = Decode(data, out var truncated);
+
+        return truncated ? throw new InvalidDataException("Unexpected end of file while reading pixel data.") : image;
+    }
+
+    /// <summary>
+    /// Decodes a TGA already resident in memory, as far as its pixel data goes: the pixels a short file
+    /// does not reach are left transparent, and <paramref name="truncated"/> says so.
+    /// </summary>
+    public static DecodedImage Decode(ReadOnlySpan<byte> data, out bool truncated)
+    {
         if (data.Length < TgaHeader.Size)
         {
-            throw new InvalidDataException("TGA: file is too small to contain a header.");
+            throw new InvalidDataException("File is too small to contain a header.");
         }
 
         var header = TgaHeader.Parse(data);
 
         if (header.ColorMapType is not 0 and not 1)
         {
-            throw new NotSupportedException($"TGA: unsupported color map type {header.ColorMapType}.");
+            throw new NotSupportedException($"Unsupported color map type {header.ColorMapType}.");
         }
 
         if (header.Width == 0 || header.Height == 0)
         {
-            throw new InvalidDataException("TGA: width and height must be non-zero.");
+            throw new InvalidDataException("Width and height must be non-zero.");
         }
 
         if (!header.ImageType.IsValid() || header.ImageType == TgaImageType.NoImageData)
         {
-            throw new NotSupportedException($"TGA: unsupported image type {header.ImageType}.");
+            throw new NotSupportedException($"Unsupported image type {header.ImageType}.");
         }
 
         int width = header.Width;
@@ -57,7 +81,7 @@ public static class TgaReader
             paletteEntrySize = header.CMapDepth / 8;
             if (paletteEntrySize is < 1 or > 4)
             {
-                throw new NotSupportedException($"TGA: unsupported color map entry depth {header.CMapDepth}.");
+                throw new NotSupportedException($"Unsupported color map entry depth {header.CMapDepth}.");
             }
 
             int paletteBytes = header.CMapLength * paletteEntrySize;
@@ -74,35 +98,53 @@ public static class TgaReader
         {
             if (header.ColorMapType != 1 || palette.IsEmpty)
             {
-                throw new InvalidDataException("TGA: color-mapped image is missing its color map.");
+                throw new InvalidDataException("Color-mapped image is missing its color map.");
             }
 
             if (header.PixelDepth != 8)
             {
-                throw new NotSupportedException($"TGA: only 8-bit color map indices are supported (got {header.PixelDepth}-bit).");
+                throw new NotSupportedException($"Only 8-bit color map indices are supported (got {header.PixelDepth}-bit).");
             }
         }
 
         int bytesPerPixel = paletted ? 1 : BytesPerPixel(header.PixelDepth);
         if (bytesPerPixel == 0)
         {
-            throw new NotSupportedException($"TGA: unsupported pixel depth {header.PixelDepth}.");
+            throw new NotSupportedException($"Unsupported pixel depth {header.PixelDepth}.");
         }
 
         long rawLength = (long)width * height * bytesPerPixel;
 
-        // Source pixel data, either read directly or decompressed from RLE packets.
+        // Source pixel data, either read directly or decompressed from RLE packets; a short file
+        // fills only its start.
         ReadOnlySpan<byte> raw;
+        long rawRead;
         if (header.ImageType.IsRunLengthEncoded())
         {
             var rawOwner = new byte[rawLength];
-            DecompressRle(data, pos, rawOwner, bytesPerPixel);
+            rawRead = DecompressRle(data, pos, rawOwner, bytesPerPixel);
             raw = rawOwner;
+        }
+        else if (data.Length - pos >= rawLength)
+        {
+            raw = data.Slice(pos, checked((int)rawLength));
+            rawRead = rawLength;
         }
         else
         {
-            raw = Slice(data, pos, checked((int)rawLength), "pixel");
+            var rawOwner = new byte[rawLength];
+            rawRead = Math.Max(0, data.Length - pos);
+            data[pos..].CopyTo(rawOwner);
+            raw = rawOwner;
         }
+
+        long pixelsRead = rawRead / bytesPerPixel;
+        if (pixelsRead == 0)
+        {
+            throw new InvalidDataException("The file ends before its pixel data.");
+        }
+
+        truncated = pixelsRead < (long)width * height;
 
         byte[] rgba = new byte[(long)width * height * 4];
 
@@ -119,6 +161,12 @@ public static class TgaReader
 
             for (int x = 0; x < width; x++)
             {
+                // Pixels a short file never reached stay transparent.
+                if ((long)y * width + x >= pixelsRead)
+                {
+                    break;
+                }
+
                 int destX = flipX ? width - 1 - x : x;
                 int src = srcRow + (x * bytesPerPixel);
                 int dst = destRow + (destX * 4);
@@ -218,29 +266,29 @@ public static class TgaReader
     /// with a header byte: the high bit marks a run (repeat one pixel) versus a literal packet
     /// (copy N distinct pixels); the low 7 bits hold the count minus one.
     /// </summary>
-    private static void DecompressRle(ReadOnlySpan<byte> data, int pos, Span<byte> dest, int bytesPerPixel)
+    /// <summary>Expands RLE packets into <paramref name="dest"/>, returning how many bytes the data filled before it ended.</summary>
+    private static int DecompressRle(ReadOnlySpan<byte> data, int pos, Span<byte> dest, int bytesPerPixel)
     {
         int written = 0;
-        while (written < dest.Length)
+        while (written < dest.Length && pos < data.Length)
         {
-            if (pos >= data.Length)
-            {
-                throw new InvalidDataException("TGA: unexpected end of RLE data.");
-            }
-
             byte packet = data[pos++];
             int count = (packet & 0x7F) + 1;
             int chunk = count * bytesPerPixel;
 
             if (written + chunk > dest.Length)
             {
-                throw new InvalidDataException("TGA: RLE data overruns the image dimensions.");
+                throw new InvalidDataException("RLE data overruns the image dimensions.");
             }
 
             if ((packet & 0x80) != 0)
             {
-                // Run packet: one pixel repeated `count` times.
-                ReadOnlySpan<byte> pixel = Slice(data, pos, bytesPerPixel, "RLE run");
+                if (pos + bytesPerPixel > data.Length)
+                {
+                    break;
+                }
+
+                ReadOnlySpan<byte> pixel = data.Slice(pos, bytesPerPixel);
                 pos += bytesPerPixel;
                 for (int i = 0; i < count; i++)
                 {
@@ -250,12 +298,14 @@ public static class TgaReader
             }
             else
             {
-                // Literal packet: `count` distinct pixels copied verbatim.
-                Slice(data, pos, chunk, "RLE literal").CopyTo(dest.Slice(written, chunk));
-                pos += chunk;
-                written += chunk;
+                int available = Math.Min(chunk, data.Length - pos);
+                data.Slice(pos, available).CopyTo(dest.Slice(written, available));
+                pos += available;
+                written += available;
             }
         }
+
+        return written;
     }
 
     /// <summary>Bytes per stored pixel for a given true-color/grayscale pixel depth.</summary>
@@ -273,7 +323,7 @@ public static class TgaReader
         long next = (long)pos + count;
         if (next > data.Length)
         {
-            throw new InvalidDataException("TGA: unexpected end of file.");
+            throw new InvalidDataException("Unexpected end of file.");
         }
 
         return (int)next;
@@ -283,7 +333,7 @@ public static class TgaReader
     {
         if (pos < 0 || count < 0 || (long)pos + count > data.Length)
         {
-            throw new InvalidDataException($"TGA: unexpected end of file while reading {what} data.");
+            throw new InvalidDataException($"Unexpected end of file while reading {what} data.");
         }
 
         return data.Slice(pos, count);

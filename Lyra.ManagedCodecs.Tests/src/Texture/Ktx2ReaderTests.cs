@@ -174,18 +174,32 @@ public class Ktx2ReaderTests
     }
 
     [Fact]
-    public void RejectsHdrAstcAsUnsupported()
+    public void ReadsHdrAstcAsItsFootprint()
     {
-        var ex = Assert.Throws<NotSupportedException>(
-            () => Ktx2Reader.Read(KtxTestFile.Ktx2(VkAstc4x4SFloat, 4, 4, [new byte[16]])));
-        Assert.Contains("ASTC HDR", ex.Message);
+        var texture = Ktx2Reader.Read(KtxTestFile.Ktx2(VkAstc4x4SFloat, 4, 4, [new byte[16]]));
+
+        Assert.Equal(TextureFormat.Astc4x4Unorm, texture.Format);
+        Assert.Equal("VK_FORMAT_ASTC_4x4_SFLOAT_BLOCK", texture.FormatName);
+    }
+
+    [Theory]
+    [InlineData(8u, TextureFormat.Bgr5A1Unorm)]
+    [InlineData(15u, TextureFormat.R8UnormSrgb)]
+    [InlineData(30u, TextureFormat.Bgr8Unorm)]
+    [InlineData(36u, TextureFormat.Bgr8UnormSrgb)]
+    [InlineData(83u, TextureFormat.Rg16Float)]
+    [InlineData(103u, TextureFormat.Rg32Float)]
+    public void ReadsUncompressedVkFormats(uint vkFormat, TextureFormat expected)
+    {
+        var data = new byte[TextureFormats.SurfaceByteSize(expected, 4, 4)];
+
+        Assert.Equal(expected, Ktx2Reader.Read(KtxTestFile.Ktx2(vkFormat, 4, 4, [data])).Format);
     }
 
     [Fact]
     public void RejectsBasisAsUnsupported()
     {
-        var ex = Assert.Throws<NotSupportedException>(
-            () => Ktx2Reader.Read(KtxTestFile.Ktx2(VkUndefined, 4, 4, [new byte[16]])));
+        var ex = Assert.Throws<NotSupportedException>(() => Ktx2Reader.Read(KtxTestFile.Ktx2(VkUndefined, 4, 4, [new byte[16]])));
         Assert.Contains("Basis", ex.Message);
     }
 

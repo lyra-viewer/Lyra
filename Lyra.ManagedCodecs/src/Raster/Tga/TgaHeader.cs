@@ -6,7 +6,7 @@ namespace Lyra.ManagedCodecs.Raster.Tga;
 /// The fixed 18-byte TGA file header. All multibyte fields are little-endian.
 /// <see href="https://www.fileformat.info/format/tga/egff.htm"/>
 /// </summary>
-internal readonly struct TgaHeader
+public readonly struct TgaHeader
 {
     public const int Size = 18;
 
@@ -30,6 +30,13 @@ internal readonly struct TgaHeader
 
     /// <summary>Image origin, from bits 4-5 of the image descriptor.</summary>
     public TgaImageOrigin Origin => (TgaImageOrigin)((ImageDescriptor & 0x30) >> 4);
+    
+    public bool HasAlpha => (ImageType.IsColorMapped() ? CMapDepth : PixelDepth) switch
+    {
+        32 => !ImageType.IsGrayscale() || AttributeBits > 0,
+        15 or 16 => AttributeBits > 0,
+        _ => false
+    };
 
     public static TgaHeader Parse(ReadOnlySpan<byte> data) => new()
     {
@@ -51,7 +58,7 @@ internal readonly struct TgaHeader
 /// <summary>
 /// The corner of the display the first stored pixel maps to (image descriptor bits 4-5).
 /// </summary>
-internal enum TgaImageOrigin
+public enum TgaImageOrigin
 {
     BottomLeft = 0,
     BottomRight = 1,

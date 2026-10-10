@@ -35,6 +35,28 @@ public class KtxReaderTests
         Assert.Equal(4 * 4 * 4, tex.Subresources[0].Data.Length);
     }
 
+    // GL_RGBA8 0x8058, GL_RGBA4 0x8056, GL_RGBA 0x1908, GL_UNSIGNED_BYTE 0x1401, GL_HALF_FLOAT 0x140B, GL_FLOAT 0x1406.
+    [Theory]
+    [InlineData(0x140Bu, 8, TextureFormat.Rgba16Float)]
+    [InlineData(0x1406u, 16, TextureFormat.Rgba32Float)]
+    public void UncompressedDataFollowsItsTypeOverTheInternalFormat(uint glType, int bytesPerPixel, TextureFormat expected)
+    {
+        var texture = KtxReader.Read(KtxTestFile.Ktx1Uncompressed(0x8058, 0x1908, glType, 2, 2, new byte[2 * 2 * bytesPerPixel]));
+
+        Assert.Equal(expected, texture.Format);
+        Assert.Equal("GL_RGBA8, stored as GL_RGBA / " + (glType == 0x1406 ? "GL_FLOAT" : "GL_HALF_FLOAT"), texture.FormatName);
+    }
+
+    [Fact]
+    public void DataTheTypeMisdescribesFallsBackToTheInternalFormat()
+    {
+        // RGBA4 data whose glFormat and glType claim 8-bit RGBA: only the internal format fits its size.
+        var texture = KtxReader.Read(KtxTestFile.Ktx1Uncompressed(0x8056, 0x1908, 0x1401, 2, 2, new byte[2 * 2 * 2]));
+
+        Assert.Equal(TextureFormat.Rgba4Unorm, texture.Format);
+        Assert.Equal("GL_RGBA4", texture.FormatName);
+    }
+
     [Fact]
     public void ReadsBc1Surface()
     {
@@ -90,10 +112,17 @@ public class KtxReaderTests
     }
 
     [Fact]
-    public void DefaultsToBottomLeftOrigin()
+    public void DefaultsToTopLeftOrigin()
     {
-        // No KTXorientation metadata: KTX1 follows the OpenGL bottom-up convention.
+        // No KTXorientation metadata: files without it are written top-down, whatever OpenGL's convention.
         var tex = KtxReader.Read(KtxTestFile.Ktx1(GlRgba8, 4, 4, [KtxTestFile.Rgba8(4, 4, 1, 2, 3, 4)]));
+        Assert.Equal(TextureOrigin.TopLeft, tex.Origin);
+    }
+
+    [Fact]
+    public void HonorsBottomLeftOrientationMetadata()
+    {
+        var tex = KtxReader.Read(KtxTestFile.Ktx1(GlRgba8, 4, 4, [KtxTestFile.Rgba8(4, 4, 1, 2, 3, 4)], orientation: "S=r,T=u"));
         Assert.Equal(TextureOrigin.BottomLeft, tex.Origin);
     }
 

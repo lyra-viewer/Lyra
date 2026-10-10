@@ -13,15 +13,23 @@ public enum TextureFormat
 
     // Uncompressed 8-bit.
     R8Unorm,
+    R8UnormSrgb,
     R8Snorm,
+    A8Unorm,            // alpha only; shown as white with that alpha
+    La8Unorm,           // luminance, then alpha
     Rg8Unorm,
     Rgb8Unorm,
     Rgb8UnormSrgb,
+    Bgr8Unorm,
+    Bgr8UnormSrgb,
     Rgba8Unorm,
     Rgba8UnormSrgb,
     Rgba8Snorm,
+    Rgbx8Unorm,         // the fourth byte is unused padding
     Bgra8Unorm,
     Bgra8UnormSrgb,
+    Bgrx8Unorm,
+    Bgrx8UnormSrgb,
 
     // Uncompressed 16-bit single channel.
     R16Unorm,
@@ -37,11 +45,18 @@ public enum TextureFormat
     Rgb565Unorm,        // R5G6B5
     Rgb10A2Unorm,       // A2B10G10R10
 
+    // Packed integer, B in the low bits: DXGI's B5G5R5A1 / B4G4R4A4, D3D9's A1R5G5B5 / A4R4G4B4.
+    Bgr5A1Unorm,
+    Bgr5X1Unorm,        // the top bit is unused
+    Bgra4Unorm,
+
     // Uncompressed float (also the decode target for HDR block formats).
     Rgba16Float,
     Rgba32Float,
     R16Float,
     R32Float,
+    Rg16Float,
+    Rg32Float,
     Rgb16Float,
     B10G11R11UFloat,    // packed: 11-bit R, 11-bit G, 10-bit B unsigned floats
     Rgb9E5UFloat,       // packed: 3x 9-bit mantissa + shared 5-bit exponent

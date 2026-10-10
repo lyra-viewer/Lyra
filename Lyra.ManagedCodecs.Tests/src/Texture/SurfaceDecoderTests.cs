@@ -11,6 +11,39 @@ public class SurfaceDecoderTests
         return (rgba[i], rgba[i + 1], rgba[i + 2], rgba[i + 3]);
     }
 
+    [Theory]
+    [InlineData(TextureFormat.A8Unorm, new byte[] { 0x80 }, 255, 255, 255, 128)]           // alpha over white
+    [InlineData(TextureFormat.La8Unorm, new byte[] { 0x40, 0xC0 }, 64, 64, 64, 192)]    
+    [InlineData(TextureFormat.R8UnormSrgb, new byte[] { 0x80 }, 128, 128, 128, 255)]    
+    [InlineData(TextureFormat.Bgr8Unorm, new byte[] { 1, 2, 3 }, 3, 2, 1, 255)] 
+    [InlineData(TextureFormat.Bgrx8Unorm, new byte[] { 1, 2, 3, 0 }, 3, 2, 1, 255)]        // padding is not alpha
+    [InlineData(TextureFormat.Rgbx8Unorm, new byte[] { 1, 2, 3, 0 }, 1, 2, 3, 255)] 
+    [InlineData(TextureFormat.Bgr5A1Unorm, new byte[] { 0x00, 0xFC }, 255, 0, 0, 255)]     // A1, R31
+    [InlineData(TextureFormat.Bgr5A1Unorm, new byte[] { 0x1F, 0x00 }, 0, 0, 255, 0)]       // A0, B31
+    [InlineData(TextureFormat.Bgr5X1Unorm, new byte[] { 0x1F, 0x00 }, 0, 0, 255, 255)]
+    [InlineData(TextureFormat.Bgra4Unorm, new byte[] { 0x0F, 0x48 }, 0x88, 0, 0xFF, 0x44)] // A4 R8 G0 B15
+    public void DecodesUncompressedPixels(TextureFormat format, byte[] pixel, int r, int g, int b, int a)
+    {
+        var dst = new byte[4];
+        SurfaceDecoder.DecodeSurface(format, pixel, dst, 1, 1);
+
+        Assert.Equal(((byte)r, (byte)g, (byte)b, (byte)a), Px(dst, 0, 0, 1));
+    }
+
+    [Fact]
+    public void DecodesTwoChannelFloatsAsRedAndGreen()
+    {
+        byte[] half = [.. BitConverter.GetBytes((Half)2.5f), .. BitConverter.GetBytes((Half)(-1f))];
+        byte[] single = [.. BitConverter.GetBytes(3f), .. BitConverter.GetBytes(4f)];
+        var dst = new float[4];
+
+        SurfaceDecoder.DecodeSurfaceHdr(TextureFormat.Rg16Float, half, dst, 1, 1);
+        Assert.Equal([2.5f, -1f, 0f, 1f], dst);
+
+        SurfaceDecoder.DecodeSurfaceHdr(TextureFormat.Rg32Float, single, dst, 1, 1);
+        Assert.Equal([3f, 4f, 0f, 1f], dst);
+    }
+
     [Fact]
     public void DecodesBc1FourColourBlock()
     {

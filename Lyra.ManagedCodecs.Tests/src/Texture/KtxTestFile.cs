@@ -17,6 +17,10 @@ internal static class KtxTestFile
     public static byte[] Ktx1(uint glInternalFormat, int width, int height, byte[][] mips, string? orientation = null)
         => Ktx1Build(glInternalFormat, width, height, depth: 0, arrayElements: 0, faceCount: 1, mips, orientation);
 
+    /// <summary>A single-mip uncompressed 2D KTX1 whose glFormat and glType describe the bytes.</summary>
+    public static byte[] Ktx1Uncompressed(uint glInternalFormat, uint glFormat, uint glType, int width, int height, byte[] mip)
+        => Ktx1Build(glInternalFormat, width, height, depth: 0, arrayElements: 0, faceCount: 1, [mip], orientation: null, glType, glFormat);
+
     /// <summary>A single-mip non-array cubemap: <paramref name="face"/> is the per-face payload, repeated 6x.</summary>
     public static byte[] Ktx1Cubemap(uint glInternalFormat, int width, int height, byte[] face)
         => Ktx1Build(glInternalFormat, width, height, depth: 0, arrayElements: 0, faceCount: 6, [face], orientation: null);
@@ -83,16 +87,16 @@ internal static class KtxTestFile
 
     private static byte[] Ktx1Build(
         uint glInternalFormat, int width, int height, int depth, int arrayElements, int faceCount,
-        byte[][] mips, string? orientation)
+        byte[][] mips, string? orientation, uint glType = 0, uint glFormat = 0)
     {
         var kv = orientation is null ? [] : BuildKeyValue("KTXorientation", orientation);
 
         using var ms = new MemoryStream();
         ms.Write(Ktx1Id);
         Write32(ms, 0x04030201);     // endianness
-        Write32(ms, 0);              // glType (compressed/unspecified)
+        Write32(ms, glType);         // 0: compressed
         Write32(ms, 1);              // glTypeSize
-        Write32(ms, 0);              // glFormat
+        Write32(ms, glFormat);
         Write32(ms, glInternalFormat);
         Write32(ms, 0);              // glBaseInternalFormat
         Write32(ms, (uint)width);

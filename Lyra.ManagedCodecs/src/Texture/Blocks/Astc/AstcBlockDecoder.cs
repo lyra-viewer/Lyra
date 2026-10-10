@@ -1,13 +1,15 @@
 namespace Lyra.ManagedCodecs.Texture.Blocks.Astc;
 
 /// <summary>
-/// Decodes one ASTC LDR block to 8-bit RGBA. Ties the pieces together: block mode + weights
+/// Decodes one ASTC block, to 8-bit RGBA (<see cref="TryDecode(ReadOnlySpan{byte}, int, int, int, Span{byte})"/>)
+/// or to float RGBA (<see cref="TryDecodeHdr"/>). Ties the pieces together: block mode + weights
 /// (<see cref="AstcWeights"/>), color-endpoint values (<see cref="AstcIntegerSequence"/> +
 /// <see cref="AstcQuantization"/>), the per-partition color-endpoint modes, the seeded partition
-/// pattern, and the final per-texel weighted interpolation (spec C.2.19, unorm8 decode path).
+/// pattern, and the final per-texel weighted interpolation (spec C.2.19).
 ///
-/// HDR endpoint modes are not handled (the LDR-only formats never use them); a block requesting one,
-/// or any malformed encoding, returns <c>false</c> so the caller can emit an error color.
+/// The 8-bit decode is LDR only: a block using an HDR endpoint mode or an HDR constant, or any
+/// malformed encoding, returns <c>false</c> so the caller can emit an error color. The float decode
+/// follows astcenc's HDR profile, where LDR and HDR blocks can be mixed in one texture.
 /// </summary>
 internal static class AstcBlockDecoder
 {
@@ -16,6 +18,20 @@ internal static class AstcBlockDecoder
 
     private static readonly int[] ExtraCemBits = [0, 2, 5, 8];
 
+    // An HDR alpha of 1.0 in the logarithmic encoding, for HDR modes that carry no alpha.
+    private const int LnsOne = 0x7800;
+
+    private const int MaxTexels = 216; // largest footprint, 3D 6x6x6
+
+    /// <summary>The parts of a block both decodes share; the spans it refers to are the caller's.</summary>
+    private readonly ref struct ParsedBlock
+    {
+        public required AstcBlockMode Mode { get; init; }
+        public required int Partitions { get; init; }
+        public required int PartitionId { get; init; }
+        public required int DualChannel { get; init; }
+    }
+
     /// <summary>Decodes a 2D block into <paramref name="dst"/> (blockW·blockH RGBA8). Returns false on error.</summary>
     public static bool TryDecode(ReadOnlySpan<byte> block, int blockW, int blockH, Span<byte> dst)
         => TryDecode(block, blockW, blockH, blockD: 1, dst);
@@ -23,21 +39,24 @@ internal static class AstcBlockDecoder
     /// <summary>
     /// Decodes a block into <paramref name="dst"/> (blockW·blockH·blockD RGBA8, texels ordered X then Y
     /// then Z). <paramref name="blockD"/> of 1 is the 2D path; greater than 1 selects the 3D weight-grid
-    /// and partition logic. Returns false on error.
+    /// and partition logic. Returns false on error, and for HDR content.
     /// </summary>
     public static bool TryDecode(ReadOnlySpan<byte> block, int blockW, int blockH, int blockD, Span<byte> dst)
     {
-        var is3d = blockD > 1;
-        var mode = AstcWeights.DecodeMode(block, is3d);
-        if (mode.Error)
-        {
-            return false;
-        }
-
         var texels = blockW * blockH * blockD;
+        Span<int> weightsPrimary = stackalloc int[MaxTexels];
+        Span<int> weightsSecondary = stackalloc int[MaxTexels];
+        Span<int> cems = stackalloc int[4];
+        Span<int> colorValues = stackalloc int[18];
 
-        if (mode.VoidExtent)
+        if (!TryParse(block, blockW, blockH, blockD, weightsPrimary, weightsSecondary, cems, colorValues, out var parsed))
+            return false;
+
+        if (parsed.Mode.VoidExtent)
         {
+            if (IsHdrVoidExtent(block))
+                return false;
+
             var r = (int)(AstcIntegerSequence.ReadBits(block, 64, 16) >> 8);
             var g = (int)(AstcIntegerSequence.ReadBits(block, 80, 16) >> 8);
             var bl = (int)(AstcIntegerSequence.ReadBits(block, 96, 16) >> 8);
@@ -53,20 +72,182 @@ internal static class AstcBlockDecoder
             return true;
         }
 
-        Span<int> weightsPrimary = stackalloc int[216]; // max 3D footprint 6x6x6
-        Span<int> weightsSecondary = stackalloc int[216];
+        Span<int> ep0 = stackalloc int[16]; // [partition*4 + channel]
+        Span<int> ep1 = stackalloc int[16];
+        var valueIndex = 0;
+        for (var p = 0; p < parsed.Partitions; p++)
+        {
+            var count = ValueCount(cems[p]);
+            if (!DecodeEndpointPair(cems[p], colorValues.Slice(valueIndex, count), ep0.Slice(p * 4, 4), ep1.Slice(p * 4, 4)))
+                return false; // HDR endpoint mode
+
+            valueIndex += count;
+        }
+
+        var is3d = blockD > 1;
+        for (var tz = 0; tz < blockD; tz++)
+        for (var ty = 0; ty < blockH; ty++)
+        for (var tx = 0; tx < blockW; tx++)
+        {
+            var texel = ((tz * blockH) + ty) * blockW + tx;
+            var partition = PartitionForTexel(parsed.Partitions, parsed.PartitionId, is3d, tx, ty, tz, texels);
+            var primary = weightsPrimary[texel];
+            var secondary = parsed.Mode.DualPlane ? weightsSecondary[texel] : 0;
+
+            for (var c = 0; c < 4; c++)
+            {
+                var weight = c == parsed.DualChannel ? secondary : primary;
+                dst[(texel * 4) + c] = (byte)Interpolate(ep0[(partition * 4) + c], ep1[(partition * 4) + c], weight);
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Decodes a block into <paramref name="dst"/> (RGBA float, texels ordered as for the 8-bit decode),
+    /// as astcenc's HDR profile does: LDR endpoints widen to 16 bits, HDR ones are logarithmic, and both
+    /// interpolate in 16 bits before becoming half floats. Returns false on a malformed block.
+    /// </summary>
+    public static bool TryDecodeHdr(ReadOnlySpan<byte> block, int blockW, int blockH, int blockD, Span<float> dst)
+    {
+        var texels = blockW * blockH * blockD;
+        Span<int> weightsPrimary = stackalloc int[MaxTexels];
+        Span<int> weightsSecondary = stackalloc int[MaxTexels];
+        Span<int> cems = stackalloc int[4];
+        Span<int> colorValues = stackalloc int[18];
+
+        if (!TryParse(block, blockW, blockH, blockD, weightsPrimary, weightsSecondary, cems, colorValues, out var parsed))
+            return false;
+
+        if (parsed.Mode.VoidExtent)
+        {
+            var hdr = IsHdrVoidExtent(block);
+            Span<float> constant = stackalloc float[4];
+            for (var c = 0; c < 4; c++)
+            {
+                var bits = (int)AstcIntegerSequence.ReadBits(block, 64 + (c * 16), 16);
+                constant[c] = hdr ? (float)BitConverter.UInt16BitsToHalf((ushort)bits) : AstcHdr.Unorm16ToFloat(bits);
+            }
+
+            for (var i = 0; i < texels; i++)
+                constant.CopyTo(dst.Slice(i * 4, 4));
+
+            return true;
+        }
+
+        Span<int> ep0 = stackalloc int[16];
+        Span<int> ep1 = stackalloc int[16];
+        Span<bool> lns = stackalloc bool[16]; // [partition*4 + channel]: logarithmic, else unorm16
+        var valueIndex = 0;
+        for (var p = 0; p < parsed.Partitions; p++)
+        {
+            var count = ValueCount(cems[p]);
+            if (!DecodeEndpointPair16(cems[p], colorValues.Slice(valueIndex, count), ep0.Slice(p * 4, 4), ep1.Slice(p * 4, 4), lns.Slice(p * 4, 4)))
+                return false;
+
+            valueIndex += count;
+        }
+
+        var is3d = blockD > 1;
+        for (var tz = 0; tz < blockD; tz++)
+        for (var ty = 0; ty < blockH; ty++)
+        for (var tx = 0; tx < blockW; tx++)
+        {
+            var texel = ((tz * blockH) + ty) * blockW + tx;
+            var partition = PartitionForTexel(parsed.Partitions, parsed.PartitionId, is3d, tx, ty, tz, texels);
+            var primary = weightsPrimary[texel];
+            var secondary = parsed.Mode.DualPlane ? weightsSecondary[texel] : 0;
+
+            for (var c = 0; c < 4; c++)
+            {
+                var weight = c == parsed.DualChannel ? secondary : primary;
+                var e = (partition * 4) + c;
+                var value = ((ep0[e] * (64 - weight)) + (ep1[e] * weight) + 32) >> 6;
+                dst[(texel * 4) + c] = lns[e] ? AstcHdr.LnsToFloat(value) : AstcHdr.Unorm16ToFloat(value);
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether a block holds HDR content: an HDR constant, or a partition using an HDR endpoint mode.
+    /// Reads only the block mode and endpoint modes, so a whole surface can be checked cheaply.
+    /// </summary>
+    public static bool IsHdrBlock(ReadOnlySpan<byte> block, bool is3d)
+    {
+        Span<int> modes = stackalloc int[4];
+        var partitions = EndpointModes(block, is3d, modes);
+
+        if (partitions == 0)
+            return AstcWeights.DecodeMode(block, is3d).VoidExtent && IsHdrVoidExtent(block);
+
+        foreach (var cem in modes[..partitions])
+        {
+            if (IsHdrEndpointMode(cem))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Each partition's color-endpoint mode, into <paramref name="modes"/>; returns the partition count,
+    /// 0 for a void-extent or malformed block.
+    /// </summary>
+    internal static int EndpointModes(ReadOnlySpan<byte> block, bool is3d, Span<int> modes)
+    {
+        var mode = AstcWeights.DecodeMode(block, is3d);
+        if (mode.Error || mode.VoidExtent)
+            return 0;
+
+        var numPartitions = 1 + (int)AstcIntegerSequence.ReadBits(block, 11, 2);
+        var numExtraCem = NumExtraCemBits(block, numPartitions);
+
+        for (var p = 0; p < numPartitions; p++)
+            modes[p] = EndpointMode(block, p, numPartitions, mode.WeightBits, numExtraCem);
+
+        return numPartitions;
+    }
+
+    private static bool IsHdrEndpointMode(int cem) => cem is 2 or 3 or 7 or 11 or 14 or 15;
+
+    // The void-extent block's dynamic-range bit: its constant is FP16, not UNORM16.
+    private static bool IsHdrVoidExtent(ReadOnlySpan<byte> block) => AstcIntegerSequence.ReadBits(block, 9, 1) != 0;
+
+    private static int ValueCount(int cem) => 2 * ((cem >> 2) + 1);
+
+    private static bool TryParse(
+        ReadOnlySpan<byte> block, int blockW, int blockH, int blockD,
+        Span<int> weightsPrimary, Span<int> weightsSecondary, Span<int> cems, Span<int> colorValues,
+        out ParsedBlock parsed)
+    {
+        parsed = default;
+
+        var is3d = blockD > 1;
+        var mode = AstcWeights.DecodeMode(block, is3d);
+        if (mode.Error)
+            return false;
+
+        if (mode.VoidExtent)
+        {
+            parsed = new ParsedBlock { Mode = mode, Partitions = 0, PartitionId = 0, DualChannel = -1 };
+            return true;
+        }
+
+        var texels = blockW * blockH * blockD;
         AstcWeights.DecodeWeights(block, mode, blockW, blockH, blockD, weightsPrimary[..texels], weightsSecondary[..texels]);
 
         var numPartitions = 1 + (int)AstcIntegerSequence.ReadBits(block, 11, 2);
         var partitionId = numPartitions > 1 ? (int)AstcIntegerSequence.ReadBits(block, 13, 10) : 0;
         var numExtraCem = NumExtraCemBits(block, numPartitions);
 
-        Span<int> cems = stackalloc int[4];
         var numColorValues = 0;
         for (var p = 0; p < numPartitions; p++)
         {
             cems[p] = EndpointMode(block, p, numPartitions, mode.WeightBits, numExtraCem);
-            numColorValues += 2 * ((cems[p] >> 2) + 1);
+            numColorValues += ValueCount(cems[p]);
         }
 
         if (numColorValues > 18)
@@ -81,40 +262,17 @@ internal static class AstcBlockDecoder
             return false;
 
         AstcIntegerSequence.CountsForRange(colorRange, out var ct, out var cq, out var cb);
-        Span<int> colorValues = stackalloc int[18];
         AstcIntegerSequence.Decode(block, colorStartBit, numColorValues, ct, cq, cb, colorValues);
-        for (var i = 0; i < numColorValues; i++) 
+        for (var i = 0; i < numColorValues; i++)
             colorValues[i] = AstcQuantization.UnquantizeEndpoint(colorValues[i], colorRange);
 
-        Span<int> ep0 = stackalloc int[16]; // [partition*4 + channel]
-        Span<int> ep1 = stackalloc int[16];
-        var valueIndex = 0;
-        for (var p = 0; p < numPartitions; p++)
+        parsed = new ParsedBlock
         {
-            var count = 2 * ((cems[p] >> 2) + 1);
-            if (!DecodeEndpointPair(cems[p], colorValues.Slice(valueIndex, count), ep0.Slice(p * 4, 4), ep1.Slice(p * 4, 4)))
-                return false; // HDR / unsupported endpoint mode
-
-            valueIndex += count;
-        }
-
-        var dualChannel = mode.DualPlane ? (int)AstcIntegerSequence.ReadBits(block, dualStart, 2) : -1;
-
-        for (var tz = 0; tz < blockD; tz++)
-        for (var ty = 0; ty < blockH; ty++)
-        for (var tx = 0; tx < blockW; tx++)
-        {
-            var texel = ((tz * blockH) + ty) * blockW + tx;
-            var partition = PartitionForTexel(numPartitions, partitionId, is3d, tx, ty, tz, texels);
-            var primary = weightsPrimary[texel];
-            var secondary = mode.DualPlane ? weightsSecondary[texel] : 0;
-
-            for (var c = 0; c < 4; c++)
-            {
-                var weight = c == dualChannel ? secondary : primary;
-                dst[(texel * 4) + c] = (byte)Interpolate(ep0[(partition * 4) + c], ep1[(partition * 4) + c], weight);
-            }
-        }
+            Mode = mode,
+            Partitions = numPartitions,
+            PartitionId = partitionId,
+            DualChannel = mode.DualPlane ? (int)AstcIntegerSequence.ReadBits(block, dualStart, 2) : -1,
+        };
 
         return true;
     }
@@ -304,11 +462,69 @@ internal static class AstcBlockDecoder
             }
 
             default:
-                return false; // HDR modes 2,3,7,11,14,15 — not supported
+                return false; // HDR modes 2,3,7,11,14,15 - not supported
         }
 
         Clamp(ep0);
         Clamp(ep1);
+        return true;
+    }
+
+    /// <summary>
+    /// The endpoint pair as 16-bit values, and per channel whether they are logarithmic (HDR) or
+    /// unorm16 (LDR, widened by bit replication), as astcenc's HDR profile has them.
+    /// </summary>
+    private static bool DecodeEndpointPair16(int mode, ReadOnlySpan<int> v, Span<int> ep0, Span<int> ep1, Span<bool> lns)
+    {
+        switch (mode)
+        {
+            case 2:
+                AstcHdr.LuminanceLargeRange(v, ep0, ep1);
+                break;
+            case 3:
+                AstcHdr.LuminanceSmallRange(v, ep0, ep1);
+                break;
+            case 7:
+                AstcHdr.RgbScale(v, ep0, ep1);
+                break;
+            case 11:
+            case 14:
+            case 15:
+                AstcHdr.Rgb(v, ep0, ep1);
+                break;
+            default:
+                if (!DecodeEndpointPair(mode, v, ep0, ep1))
+                    return false;
+
+                for (var c = 0; c < 4; c++)
+                {
+                    ep0[c] *= 257;
+                    ep1[c] *= 257;
+                    lns[c] = false;
+                }
+
+                return true;
+        }
+
+        lns[0] = lns[1] = lns[2] = true;
+
+        switch (mode)
+        {
+            case 14: // LDR alpha
+                ep0[3] = v[6] * 257;
+                ep1[3] = v[7] * 257;
+                lns[3] = false;
+                break;
+            case 15:
+                AstcHdr.Alpha(v[6], v[7], out ep0[3], out ep1[3]);
+                lns[3] = true;
+                break;
+            default: // no alpha of their own: opaque, in the logarithmic encoding
+                ep0[3] = ep1[3] = LnsOne;
+                lns[3] = true;
+                break;
+        }
+
         return true;
     }
 

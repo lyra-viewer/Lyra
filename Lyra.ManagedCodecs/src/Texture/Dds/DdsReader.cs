@@ -21,8 +21,10 @@ public static class DdsReader
     private const uint DdsdMipMapCount = 0x20000;
 
     private const uint DdpfAlphaPixels = 0x1;
+    private const uint DdpfAlpha = 0x2;
     private const uint DdpfFourCc = 0x4;
     private const uint DdpfRgb = 0x40;
+    private const uint DdpfLuminance = 0x20000;
     private const uint DdpfBumpDudv = 0x00080000; // signed (snorm) bump/normal data
 
     private const uint Caps2Cubemap = 0x200;
@@ -210,9 +212,26 @@ public static class DdsReader
         99 => TextureFormat.Bc7UnormSrgb,     // BC7_UNORM_SRGB
         10 => TextureFormat.Rgba16Float,      // R16G16B16A16_FLOAT
         2 => TextureFormat.Rgba32Float,       // R32G32B32A32_FLOAT
+        16 => TextureFormat.Rg32Float,        // R32G32_FLOAT
+        34 => TextureFormat.Rg16Float,        // R16G16_FLOAT
+        41 => TextureFormat.R32Float,         // R32_FLOAT
+        54 => TextureFormat.R16Float,         // R16_FLOAT
+        26 => TextureFormat.B10G11R11UFloat,  // R11G11B10_FLOAT
+        67 => TextureFormat.Rgb9E5UFloat,     // R9G9B9E5_SHAREDEXP
+        24 => TextureFormat.Rgb10A2Unorm,     // R10G10B10A2_UNORM
         31 => TextureFormat.Rgba8Snorm,       // R8G8B8A8_SNORM
+        56 => TextureFormat.R16Unorm,         // R16_UNORM
         61 => TextureFormat.R8Unorm,          // R8_UNORM
+        62 => TextureFormat.R8Uint,           // R8_UINT
+        63 => TextureFormat.R8Snorm,          // R8_SNORM
+        64 => TextureFormat.R8Sint,           // R8_SINT
+        65 => TextureFormat.A8Unorm,          // A8_UNORM
         49 => TextureFormat.Rg8Unorm,         // R8G8_UNORM
+        85 => TextureFormat.Rgb565Unorm,      // B5G6R5_UNORM: R in the high bits, as GL's RGB565
+        86 => TextureFormat.Bgr5A1Unorm,      // B5G5R5A1_UNORM
+        88 => TextureFormat.Bgrx8Unorm,       // B8G8R8X8_UNORM
+        93 => TextureFormat.Bgrx8UnormSrgb,   // B8G8R8X8_UNORM_SRGB
+        115 => TextureFormat.Bgra4Unorm,      // B4G4R4A4_UNORM
         >= 133 and <= 188 => MapDxgiAstc(dxgiFormat),
         _ => TextureFormat.Unknown,
     };
@@ -241,7 +260,11 @@ public static class DdsReader
             return fourCc switch
             {
                 // Some D3D9 exporters store a numeric D3DFORMAT in the FourCC field instead of 4 chars.
+                111 => TextureFormat.R16Float,    // D3DFMT_R16F
+                112 => TextureFormat.Rg16Float,   // D3DFMT_G16R16F
                 113 => TextureFormat.Rgba16Float, // D3DFMT_A16B16G16R16F
+                114 => TextureFormat.R32Float,    // D3DFMT_R32F
+                115 => TextureFormat.Rg32Float,   // D3DFMT_G32R32F
                 116 => TextureFormat.Rgba32Float, // D3DFMT_A32B32G32R32F
                 _ when fourCc == FourCc("DXT1") => TextureFormat.Bc1RgbaUnorm,
                 _ when fourCc == FourCc("DXT2") || fourCc == FourCc("DXT3") => TextureFormat.Bc2Unorm,
@@ -250,27 +273,41 @@ public static class DdsReader
                 _ when fourCc == FourCc("BC4S") => TextureFormat.Bc4Snorm,
                 _ when fourCc == FourCc("ATI2") || fourCc == FourCc("BC5U") => TextureFormat.Bc5Unorm,
                 _ when fourCc == FourCc("BC5S") => TextureFormat.Bc5Snorm,
+                _ when fourCc == FourCc("ETC ") || fourCc == FourCc("ETC1") || fourCc == FourCc("ETC2") => TextureFormat.Etc2Rgb8Unorm,
+                _ when fourCc == FourCc("ETCA") => TextureFormat.Etc2Rgba8Unorm,
+                _ when fourCc == FourCc("ETCP") => TextureFormat.Etc2Rgb8A1Unorm,
                 _ => TextureFormat.Unknown,
             };
         }
 
-        if ((pfFlags & DdpfRgb) != 0)
+        if ((pfFlags & (DdpfRgb | DdpfLuminance | DdpfAlpha)) != 0)
         {
             var bitCount = Read32(span, PixelFormatOffset + 12);
             var rMask = Read32(span, PixelFormatOffset + 16);
             var gMask = Read32(span, PixelFormatOffset + 20);
             var bMask = Read32(span, PixelFormatOffset + 24);
-            var aMask = (pfFlags & DdpfAlphaPixels) != 0 ? Read32(span, PixelFormatOffset + 28) : 0u;
+            var aMask = (pfFlags & (DdpfAlphaPixels | DdpfAlpha)) != 0 ? Read32(span, PixelFormatOffset + 28) : 0u;
 
-            if (bitCount == 32 && gMask == 0x0000FF00)
+            // Treated as linear: legacy DDS has no sRGB flag.
+            return (bitCount, rMask, gMask, bMask, aMask) switch
             {
-                // The two ubiquitous 32-bit layouts; treated as linear (legacy DDS has no sRGB flag).
-                if (rMask == 0x00FF0000 && bMask == 0x000000FF && aMask == 0xFF000000)
-                    return TextureFormat.Bgra8Unorm;
-                
-                if (rMask == 0x000000FF && bMask == 0x00FF0000 && aMask == 0xFF000000)
-                    return TextureFormat.Rgba8Unorm;
-            }
+                (32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000) => TextureFormat.Bgra8Unorm,
+                (32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0) => TextureFormat.Bgrx8Unorm,
+                (32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000) => TextureFormat.Rgba8Unorm,
+                (32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0) => TextureFormat.Rgbx8Unorm,
+                (32, 0x000003FF, 0x000FFC00, 0x3FF00000, 0xC0000000) => TextureFormat.Rgb10A2Unorm,
+                (24, 0x00FF0000, 0x0000FF00, 0x000000FF, 0) => TextureFormat.Bgr8Unorm,
+                (24, 0x000000FF, 0x0000FF00, 0x00FF0000, 0) => TextureFormat.Rgb8Unorm,
+                (16, 0xF800, 0x07E0, 0x001F, 0) => TextureFormat.Rgb565Unorm,
+                (16, 0x7C00, 0x03E0, 0x001F, 0x8000) => TextureFormat.Bgr5A1Unorm,
+                (16, 0x7C00, 0x03E0, 0x001F, 0) => TextureFormat.Bgr5X1Unorm,
+                (16, 0x0F00, 0x00F0, 0x000F, 0xF000) => TextureFormat.Bgra4Unorm,
+                (16, 0xFFFF, 0, 0, 0) => TextureFormat.R16Unorm,
+                (16, 0x00FF, 0, 0, 0xFF00) => TextureFormat.La8Unorm,
+                (8, 0xFF, 0, 0, 0) => TextureFormat.R8Unorm,
+                (8, 0, 0, 0, 0xFF) => TextureFormat.A8Unorm,
+                _ => TextureFormat.Unknown,
+            };
         }
 
         // Signed (snorm) bump/normal maps, e.g. D3DFMT_Q8W8V8U8: 32bpp with RGBA-order masks.
@@ -351,6 +388,35 @@ public static class DdsReader
         TextureFormat.Bc7UnormSrgb => "BC7_UNORM_SRGB",
         TextureFormat.Bc6HUFloat => "BC6H_UF16",
         TextureFormat.Bc6HSFloat => "BC6H_SF16",
+        TextureFormat.R8Unorm => "R8_UNORM",
+        TextureFormat.R8Snorm => "R8_SNORM",
+        TextureFormat.R8Uint => "R8_UINT",
+        TextureFormat.R8Sint => "R8_SINT",
+        TextureFormat.R16Unorm => "R16_UNORM",
+        TextureFormat.Rg8Unorm => "R8G8_UNORM",
+        TextureFormat.A8Unorm => "A8_UNORM",
+        TextureFormat.R16Float => "R16_FLOAT",
+        TextureFormat.R32Float => "R32_FLOAT",
+        TextureFormat.Rg16Float => "R16G16_FLOAT",
+        TextureFormat.Rg32Float => "R32G32_FLOAT",
+        TextureFormat.B10G11R11UFloat => "R11G11B10_FLOAT",
+        TextureFormat.Rgb9E5UFloat => "R9G9B9E5_SHAREDEXP",
+        TextureFormat.Rgb10A2Unorm => "R10G10B10A2_UNORM",
+        TextureFormat.Rgb565Unorm => "B5G6R5_UNORM",
+        TextureFormat.Bgr5A1Unorm => "B5G5R5A1_UNORM",
+        TextureFormat.Bgra4Unorm => "B4G4R4A4_UNORM",
+        TextureFormat.Bgrx8Unorm => "B8G8R8X8_UNORM",
+        TextureFormat.Bgrx8UnormSrgb => "B8G8R8X8_UNORM_SRGB",
+
+        // Legacy layouts DXGI never had: named as D3D9 did.
+        TextureFormat.Bgr8Unorm => "R8G8B8 (D3D9)",
+        TextureFormat.Rgb8Unorm => "B8G8R8 (D3D9)",
+        TextureFormat.Rgbx8Unorm => "X8B8G8R8 (D3D9)",
+        TextureFormat.Bgr5X1Unorm => "X1R5G5B5 (D3D9)",
+        TextureFormat.La8Unorm => "A8L8 (D3D9)",
+        TextureFormat.Etc2Rgb8Unorm => "ETC2_RGB8",
+        TextureFormat.Etc2Rgba8Unorm => "ETC2_RGBA8",
+        TextureFormat.Etc2Rgb8A1Unorm => "ETC2_RGB8A1",
         _ => format.ToString(),
     };
 
@@ -361,7 +427,7 @@ public static class DdsReader
             (char)(fourCc & 0xFF), (char)((fourCc >> 8) & 0xFF),
             (char)((fourCc >> 16) & 0xFF), (char)((fourCc >> 24) & 0xFF),
         ];
-        return new string(chars).TrimEnd('\0');
+        return new string(chars).TrimEnd('\0', ' ');
     }
 
     private static uint FourCc(string code)

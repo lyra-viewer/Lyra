@@ -22,8 +22,7 @@ public static class KtxShared
 
     /// <summary>
     /// Reads the <c>KTXorientation</c> metadata to decide whether the stored rows run top-down or
-    /// bottom-up. KTX1 writes <c>"S=r,T=d"</c>-style values and defaults to the OpenGL bottom-left
-    /// convention when absent; KTX2 writes a compact <c>"rd"</c> and defaults to top-left. The "T"
+    /// bottom-up. KTX1 writes <c>"S=r,T=d"</c>-style values, KTX2 a compact <c>"rd"</c>; the "T"
     /// (vertical) axis is the only one that matters for a 2D display flip: <c>d</c> = down = top-left.
     /// </summary>
     public static TextureOrigin ReadOrigin(ReadOnlySpan<byte> keyValueData, bool isKtx2, bool bigEndian = false)
@@ -31,7 +30,7 @@ public static class KtxShared
         var orientation = FindValue(keyValueData, "KTXorientation", bigEndian);
         if (orientation is null)
         {
-            return isKtx2 ? TextureOrigin.TopLeft : TextureOrigin.BottomLeft;
+            return TextureOrigin.TopLeft;
         }
 
         if (isKtx2)

@@ -41,11 +41,11 @@ public enum ImageFormatType
     [Description("JPEG File Interchange Format")]
     Jfif,
 
-    [FileExtension([".jp2", ".jpg2"])]
+    [FileExtension([".jp2", ".jpg2", ".jph"])]
     [Description("JPEG 2000 Container")]
     Jp2,
     
-    [FileExtension([".j2k", ".j2c", ".jpc"])]
+    [FileExtension([".j2k", ".j2c", ".jpc", ".jhc"])]
     [Description("JPEG 2000 Codestream")]
     J2k,
 

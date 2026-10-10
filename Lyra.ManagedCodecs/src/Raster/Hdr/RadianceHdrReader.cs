@@ -4,14 +4,23 @@ namespace Lyra.ManagedCodecs.Raster.Hdr;
 
 /// <summary>
 /// A pure-managed reader for Radiance RGBE images (the <c>.hdr</c> / <c>.pic</c> format
-/// developed by Greg Ward). Handles the standard <c>32-bit_rle_rgbe</c> format in both the
+/// developed by Greg Ward). Handles <c>32-bit_rle_rgbe</c> and <c>32-bit_rle_xyze</c> in both the
 /// new-style run-length encoded layout and the old flat layout, returning linear RGBA float
-/// pixels with top-left origin. The <c>GAMMA</c>/<c>EXPOSURE</c> header fields are parsed but
-/// not applied, matching the behavior of the native reference reader this replaces.
+/// pixels with top-left origin. The <c>GAMMA</c>/<c>EXPOSURE</c> header fields are not applied,
+/// matching the behavior of the native reference reader this replaces.
 /// </summary>
 public sealed class RadianceHdrReader
 {
-    private const string FormatLine = "FORMAT=32-bit_rle_rgbe";
+    private const string FormatPrefix = "FORMAT=";
+
+    // CIE XYZ to Radiance's RGB (its standard primaries, equal-energy white), as Radiance's own
+    // xyz2rgbmat, so an XYZE white comes out the same RGB white an RGBE one does.
+    private static readonly float[] XyzToRgb =
+    [
+        2.565313f, -1.166850f, -0.398463f,
+        -1.022108f, 1.978287f, 0.043822f,
+        0.074724f, -0.251940f, 1.177215f,
+    ];
 
     // Run-length encoding only applies to scanlines in this width range; outside it the file
     // is stored flat (one RGBE quad per pixel, no per-scanline header).
@@ -46,7 +55,7 @@ public sealed class RadianceHdrReader
     {
         var reader = new ByteReader(data);
 
-        ParseHeader(ref reader, out var width, out var height, out var flipX, out var flipY);
+        ParseHeader(ref reader, out var width, out var height, out var flipX, out var flipY, out var xyz);
 
         if (width <= 0 || height <= 0)
         {
@@ -55,6 +64,10 @@ public sealed class RadianceHdrReader
 
         var pixels = new float[checked((long)width * height * 4)];
         DecodePixels(ref reader, width, height, flipX, flipY, pixels);
+
+        if (xyz)
+            ConvertXyzToRgb(pixels);
+
         return new DecodedFloatImage(pixels, width, height);
     }
 
@@ -62,32 +75,38 @@ public sealed class RadianceHdrReader
     //  Header
     // --------------------------------------------------------
 
-    private static void ParseHeader(ref ByteReader reader, out int width, out int height, out bool flipX, out bool flipY)
+    private static void ParseHeader(ref ByteReader reader, out int width, out int height, out bool flipX, out bool flipY, out bool xyz)
     {
-        // Scan header lines until the FORMAT specifier. The magic line ("#?RADIANCE") and any
-        // GAMMA=/EXPOSURE=/comment lines are skipped; a blank line here means FORMAT is missing.
-        while (true)
-        {
-            var line = reader.ReadLine();
-            if (line.Length == 0)
-            {
-                throw new InvalidDataException("HDR: no FORMAT specifier found in header.");
-            }
+        string? format = null;
 
-            if (line == FormatLine)
-            {
-                break;
-            }
+        for (var line = reader.ReadLine(); line.Length > 0; line = reader.ReadLine())
+        {
+            if (line.StartsWith(FormatPrefix, StringComparison.Ordinal))
+                format = line[FormatPrefix.Length..].Trim();
         }
 
-        // A single blank line separates the FORMAT specifier from the resolution line.
-        var blank = reader.ReadLine();
-        if (blank.Length != 0)
+        xyz = format switch
         {
-            throw new InvalidDataException("HDR: missing blank line after FORMAT specifier.");
-        }
+            "32-bit_rle_rgbe" => false,
+            "32-bit_rle_xyze" => true,
+            null => throw new InvalidDataException("HDR: no FORMAT specifier found in header."),
+            _ => throw new NotSupportedException($"HDR: unsupported FORMAT \"{format}\".")
+        };
 
         ParseResolution(reader.ReadLine(), out width, out height, out flipX, out flipY);
+    }
+
+    private static void ConvertXyzToRgb(float[] pixels)
+    {
+        var m = XyzToRgb;
+
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            float x = pixels[i], y = pixels[i + 1], z = pixels[i + 2];
+            pixels[i] = (m[0] * x) + (m[1] * y) + (m[2] * z);
+            pixels[i + 1] = (m[3] * x) + (m[4] * y) + (m[5] * z);
+            pixels[i + 2] = (m[6] * x) + (m[7] * y) + (m[8] * z);
+        }
     }
 
     /// <summary>

@@ -151,6 +151,41 @@ public class RadianceHdrReaderTests
     }
 
     [Fact]
+    public void HeaderLinesAfterTheFormatAreAccepted()
+    {
+        var bytes = HdrTestImage.Header(1, 1, after: ["pfilt -x 1024 -y 676", "EXPOSURE=2.548616e-01"]);
+        bytes.AddRange([12, 34, 56, E1]);
+
+        var img = RadianceHdrReader.Decode(bytes.ToArray());
+
+        Assert.Equal(new[] { 12f, 34f, 56f, 1f }, img.Pixels);
+    }
+
+    [Fact]
+    public void XyzeIsConvertedToRgb()
+    {
+        var bytes = HdrTestImage.Header(1, 1, format: "32-bit_rle_xyze");
+        bytes.AddRange([100, 100, 100, E1]);
+
+        var img = RadianceHdrReader.Decode(bytes.ToArray());
+
+        Assert.Equal(100f, img.Pixels[0], 0.01f);
+        Assert.Equal(100f, img.Pixels[1], 0.01f);
+        Assert.Equal(100f, img.Pixels[2], 0.01f);
+        Assert.Equal(1f, img.Pixels[3]);
+    }
+
+    [Fact]
+    public void AnUnknownFormatIsRejected()
+    {
+        var bytes = HdrTestImage.Header(1, 1, format: "16-bit_float");
+        bytes.AddRange([12, 34, 56, E1]);
+
+        var thrown = Assert.Throws<NotSupportedException>(() => RadianceHdrReader.Decode(bytes.ToArray()));
+        Assert.Contains("16-bit_float", thrown.Message);
+    }
+
+    [Fact]
     public void ThrowsOnTruncatedPixelData()
     {
         var bytes = HdrTestImage.Header(2, 2);

@@ -3,7 +3,7 @@ namespace Lyra.ManagedCodecs.Raster.Tga;
 /// <summary>
 /// The TGA image type (header byte 2).
 /// </summary>
-internal enum TgaImageType : byte
+public enum TgaImageType : byte
 {
     NoImageData = 0,
     ColorMapped = 1,
@@ -14,7 +14,7 @@ internal enum TgaImageType : byte
     RleBlackAndWhite = 11,
 }
 
-internal static class TgaImageTypeExtensions
+public static class TgaImageTypeExtensions
 {
     public static bool IsValid(this TgaImageType type) => type
         is TgaImageType.NoImageData

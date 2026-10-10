@@ -150,7 +150,7 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 | Format       | Description                                     | Extensions | Notes                                        |
 |--------------|-------------------------------------------------|------------|----------------------------------------------|
 | OpenEXR      | High-dynamic range, multi-channel raster format | `.exr`     |                                              |
-| Radiance HDR | High-dynamic range RGBE format                  | `.hdr`     | See [HDR / EDR](docs/technical.md#hdr--edr). |
+| Radiance HDR | High-dynamic range RGBE / XYZE format           | `.hdr`     | See [HDR / EDR](docs/technical.md#hdr--edr). |
 
 ### GPU Formats
 
@@ -161,11 +161,11 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 
 ### Minor Formats
 
-| Format    | Description                 | Extensions                              | Notes                                                                                                                                                                   |
-|-----------|-----------------------------|-----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ICO       | Icon container format       | `.ico`                                  | Every entry in the container is decoded and selectable from the sidebar's **VARIANTS** section. Reads PNG and BMP (DIB) entries with their masks.                       |
-| ICNS      | Apple icon container format | `.icns`                                 | Every size in the container is decoded and selectable from the sidebar's **VARIANTS** section. Reads PNG, JPEG 2000, ARGB and the legacy RLE24 plates with their masks. |
-| JPEG 2000 | Wavelet-based image format  | `.jp2` `.jpg2`<br/>`.j2k` `.j2c` `.jpc` | Lyra supports single-image JPEG 2000 files. Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP) are intentionally NOT supported.                 |
+| Format    | Description                 | Extensions                                            | Notes                                                                                                                                                                                                     |
+|-----------|-----------------------------|-------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ICO       | Icon container format       | `.ico`                                                | Every entry in the container is decoded and selectable from the sidebar's **VARIANTS** section. Reads PNG and BMP (DIB) entries with their masks.                                                         |
+| ICNS      | Apple icon container format | `.icns`                                               | Every size in the container is decoded and selectable from the sidebar's **VARIANTS** section. Reads PNG, JPEG 2000, ARGB and the legacy RLE24 plates with their masks.                                   |
+| JPEG 2000 | Wavelet-based image format  | `.jp2` `.jpg2` `.jph`<br/>`.j2k` `.j2c` `.jpc` `.jhc` | Lyra supports single-image JPEG 2000 files, including High-Throughput JPEG 2000 (`.jph`, `.jhc`). Multi-image, animated, or compound JPEG 2000 formats (JPX, JPM, MJ2, JPIP) are currently not supported. |
 
 ---
 ## Keyboard Shortcuts & Controls

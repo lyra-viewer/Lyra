@@ -42,7 +42,9 @@ public static class KtxReader
             throw new NotSupportedException($"Invalid endianness marker 0x{endiannessRaw:X8}.");
         }
 
+        var glType = Read32(span, 16, bigEndian);
         var glTypeSize = Read32(span, 20, bigEndian);
+        var glFormat = Read32(span, 24, bigEndian);
         var glInternalFormat = Read32(span, 28, bigEndian);
         var width = (int)Read32(span, 36, bigEndian);
         var heightField = (int)Read32(span, 40, bigEndian);
@@ -59,8 +61,14 @@ public static class KtxReader
             throw new InvalidDataException($"Invalid glTypeSize {glTypeSize} in a big-endian file.");
         }
 
-        var format = KtxFormatMap.FromGl(glInternalFormat);
-        if (format == TextureFormat.Unknown)
+        // Compressed data has a glType of 0; anything else is described by glFormat and glType. Writers
+        // get either wrong - float data under GL_RGBA8, RGBA4 data under GL_RGBA / GL_UNSIGNED_BYTE -
+        // so both are candidates, and the stored image sizes pick between them.
+        var internalFormat = KtxFormatMap.FromGl(glInternalFormat);
+        var dataFormat = glType != 0 ? KtxFormatMap.FromGlData(glFormat, glType, glInternalFormat) : TextureFormat.Unknown;
+        TextureFormat[] candidates = [.. new[] { dataFormat, internalFormat }.Where(f => f != TextureFormat.Unknown).Distinct()];
+
+        if (candidates.Length == 0)
         {
             throw new NotSupportedException($"Unsupported {KtxFormatMap.DescribeUnsupportedGl(glInternalFormat)}.");
         }
@@ -117,13 +125,27 @@ public static class KtxReader
         // Only uncompressed multibyte components need swapping; a glTypeSize of 1 (and every compressed
         // format) is endian-neutral, so a width of 1 means "no swap".
         var swapWidth = bigEndian ? (int)glTypeSize : 1;
-        var subresources = EnumerateSubresources(
-            file, format, width, height, depth, mipLevels, arrayCount, faceCount, isVolume, isCubemap, dataOffset, bigEndian, swapWidth);
+        var format = candidates[0];
+        List<Subresource> subresources;
+
+        try
+        {
+            subresources = EnumerateSubresources(
+                file, format, width, height, depth, mipLevels, arrayCount, faceCount, isVolume, isCubemap, dataOffset, bigEndian, swapWidth);
+        }
+        catch (InvalidDataException) when (candidates.Length > 1)
+        {
+            format = candidates[1];
+            subresources = EnumerateSubresources(
+                file, format, width, height, depth, mipLevels, arrayCount, faceCount, isVolume, isCubemap, dataOffset, bigEndian, swapWidth);
+        }
 
         return new TextureData
         {
             Format = format,
-            FormatName = KtxFormatMap.GlName(glInternalFormat),
+            FormatName = format == internalFormat
+                ? KtxFormatMap.GlName(glInternalFormat)
+                : $"{KtxFormatMap.GlName(glInternalFormat)}, stored as {KtxFormatMap.GlDataName(glFormat, glType)}",
             Kind = kind,
             Width = width,
             Height = height,

@@ -60,8 +60,31 @@ public sealed class TextureData
 
     public required IReadOnlyList<Subresource> Subresources { get; init; }
 
-    /// <summary>True if <see cref="Format"/> is scene-referred HDR and must be decoded via <see cref="DecodeHdr"/>.</summary>
-    public bool IsHdr => TextureFormats.Info(Format).IsHdr;
+    private enum HdrBlocks
+    {
+        NotScanned,
+        Absent,
+        Present
+    }
+
+    private HdrBlocks _hdrBlocks;
+
+    /// <summary>
+    /// True if the texture is scene-referred HDR and must be decoded via <see cref="DecodeHdr"/>: an HDR
+    /// format, or an ASTC one whose blocks are HDR (judged from the first surface).
+    /// </summary>
+    public bool IsHdr => TextureFormats.Info(Format).IsHdr || HasHdrBlocks;
+
+    private bool HasHdrBlocks
+    {
+        get
+        {
+            if (_hdrBlocks == HdrBlocks.NotScanned)
+                _hdrBlocks = Subresources.Count > 0 && SurfaceDecoder.ContainsHdrBlocks(Format, Subresources[0].Data.Span) ? HdrBlocks.Present : HdrBlocks.Absent;
+
+            return _hdrBlocks == HdrBlocks.Present;
+        }
+    }
 
     /// <summary>Decodes one subresource into <paramref name="dst"/> as 8-bit RGBA, top-left origin.</summary>
     public void Decode(in Subresource sr, Span<byte> dst)

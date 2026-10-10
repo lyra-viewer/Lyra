@@ -8,13 +8,20 @@ namespace Lyra.ManagedCodecs.Tests.Hdr;
 /// </summary>
 internal static class HdrTestImage
 {
-    /// <summary>Writes the standard header and resolution line (e.g. <c>-Y 2 +X 2</c>).</summary>
-    public static List<byte> Header(int width, int height, char ySign = '-', char xSign = '+')
+    /// <summary>
+    /// Writes the standard header and resolution line (e.g. <c>-Y 2 +X 2</c>), with
+    /// <paramref name="after"/> as further header lines between FORMAT and the blank line.
+    /// </summary>
+    public static List<byte> Header(int width, int height, char ySign = '-', char xSign = '+', string format = "32-bit_rle_rgbe", params string[] after)
     {
         var bytes = new List<byte>();
         Ascii(bytes, "#?RADIANCE\n");
         Ascii(bytes, "GAMMA=1.0\n");
-        Ascii(bytes, "FORMAT=32-bit_rle_rgbe\n");
+        Ascii(bytes, $"FORMAT={format}\n");
+
+        foreach (var line in after)
+            Ascii(bytes, line + "\n");
+
         Ascii(bytes, "\n");
         Ascii(bytes, $"{ySign}Y {height} {xSign}X {width}\n");
         return bytes;

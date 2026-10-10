@@ -29,12 +29,13 @@
         <ProjectReference Include="..\Lyra.Imaging\Lyra.Imaging.csproj" />
     </ItemGroup>
 
-    <!-- Owned by the ManagedCodecs tests, where the GIF, WebP, APNG and ISO track readers are tested; the decoder tests here share them. -->
+    <!-- Owned by the ManagedCodecs tests, where the GIF, WebP, APNG, ISO track and TGA readers are tested; the decoder tests here share them. -->
     <ItemGroup>
         <Compile Include="..\Lyra.ManagedCodecs.Tests\src\Gif\GifBuilder.cs" Link="src\Support\GifBuilder.cs" />
         <Compile Include="..\Lyra.ManagedCodecs.Tests\src\Webp\WebpBuilder.cs" Link="src\Support\WebpBuilder.cs" />
         <Compile Include="..\Lyra.ManagedCodecs.Tests\src\Png\ApngBuilder.cs" Link="src\Support\ApngBuilder.cs" />
         <Compile Include="..\Lyra.ManagedCodecs.Tests\src\Heif\HeifSequenceFixtures.cs" Link="src\Support\HeifSequenceFixtures.cs" />
+        <Compile Include="..\Lyra.ManagedCodecs.Tests\src\Tga\TgaTestImage.cs" Link="src\Support\TgaTestImage.cs" />
     </ItemGroup>
 
     <ItemGroup>
