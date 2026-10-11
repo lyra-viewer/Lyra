@@ -20,7 +20,7 @@ public partial class SdlCore
             LoadImage();
         }
 
-        _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: wasInDuplicatesMode, noDuplicatesFound: false);
+        _ui.SetDuplicatesState(inDuplicatesMode: wasInDuplicatesMode, noDuplicatesFound: false);
         _duplicateScanService.Start();
     }
 
@@ -31,13 +31,13 @@ public partial class SdlCore
 
         DirectoryNavigator.ExitDuplicatesMode();
         LoadImage();
-        _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false);
+        _ui.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false);
     }
 
     /// <summary>Scan aborted (raised on the scan thread) - drop back to the pre-scan state.</summary>
     private void OnDuplicateScanAborted()
     {
-        DispatchToMain(() => _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false));
+        DispatchToMain(() => _ui.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false));
     }
 
     /// <summary>Scan finished (raised on the scan thread) - apply the result on the main thread.</summary>
@@ -48,11 +48,11 @@ public partial class SdlCore
             if (groupCount > 0 && DirectoryNavigator.EnterDuplicatesMode())
             {
                 LoadImage();
-                _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: true, noDuplicatesFound: false);
+                _ui.SetDuplicatesState(inDuplicatesMode: true, noDuplicatesFound: false);
             }
             else
             {
-                _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: true);
+                _ui.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: true);
             }
         });
     }

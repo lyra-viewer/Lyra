@@ -1,9 +1,6 @@
 using System.Runtime.InteropServices;
 using Lyra.Common;
-using Lyra.DropStatusProvider;
-using Lyra.DuplicateStatusProvider;
 using Lyra.Renderer.Drawing;
-using Lyra.SdlCore;
 using SkiaSharp;
 using static SDL3.SDL;
 
@@ -22,8 +19,8 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
 
     private readonly SKColorSpace _surfaceColorSpace;
 
-    public SkiaOpenGlRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, IScanProgressProvider scanProgressProvider)
-        : base(drawableSize, dropProgressProvider, viewState, "OpenGL", scanProgressProvider)
+    public SkiaOpenGlRenderer(IntPtr window, PixelSize drawableSize)
+        : base(drawableSize, "OpenGL")
     {
         _window = window;
         _surfaceColorSpace = DetermineSurfaceColorSpace(window);
@@ -77,7 +74,7 @@ public sealed class SkiaOpenGlRenderer : SkiaRendererBase
     /// WGL on Windows reaches neither an HDR color space nor 10-bit; Linux would need the
     /// compositor's color management, which is Vulkan's route rather than GL's.
     /// </summary>
-    protected override bool BackendSupportsExtendedRange => false;
+    public override bool BackendSupportsExtendedRange => false;
 
     /// 8-bit, and no extended-range path exists in GL on any platform Lyra runs on.
     protected override SurfaceProfile Surface => SurfaceProfile.DisplayReferred(_surfaceColorSpace);

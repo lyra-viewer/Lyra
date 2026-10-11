@@ -1,0 +1,41 @@
+using Lyra.DuplicateStatusProvider;
+using Lyra.FileLoader.Enumeration;
+using Lyra.Renderer.Display;
+using Lyra.SdlCore;
+
+namespace Lyra.GUI;
+
+public readonly record struct ApplicationStates(
+    CollectionType CollectionType,
+    int CollectionIndex,
+    int CollectionCount,
+    int? DirectoryIndex,
+    int? DirectoryCount,
+
+    bool InDuplicatesMode,
+
+    float Zoom,
+    DisplayMode DisplayMode,
+    bool ViewLocked,
+    string SamplingMode,
+    
+    bool InfoVisible,
+    bool HelpVisible,
+    bool SidebarVisible,
+    
+    bool DropActive,
+    bool DropAborted,
+    long DropPathsEnqueued,
+    long DropFilesEnumerated,
+    long DropFilesSupported,
+
+    bool ScanActive,
+    bool ScanAborted,
+    ScanPhase ScanPhase,
+    int ScanDone,
+    int ScanTotal,
+
+    string Backend,
+    DisplayCapabilities Display,
+    bool BackendSupportsExtendedRange
+);

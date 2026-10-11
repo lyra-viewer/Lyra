@@ -1,5 +1,6 @@
 using Lyra.Common.Settings.Enums;
 using Lyra.Imaging.Content;
+using Lyra.Renderer;
 using static SDL3.SDL;
 
 namespace Lyra.SdlCore;

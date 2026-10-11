@@ -1,7 +1,4 @@
 using Lyra.Common;
-using Lyra.DropStatusProvider;
-using Lyra.DuplicateStatusProvider;
-using Lyra.SdlCore;
 using Lyra.SystemUtils.MacInterop;
 using SkiaSharp;
 using static SDL3.SDL;
@@ -50,8 +47,8 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     
     private static readonly SKColorSpace DisplayP3 = SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Srgb, SKColorSpaceXyz.DisplayP3);
 
-    public SkiaMetalRenderer(IntPtr window, PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, IScanProgressProvider scanProgressProvider)
-        : base(drawableSize, dropProgressProvider, viewState, "Metal", scanProgressProvider)
+    public SkiaMetalRenderer(IntPtr window, PixelSize drawableSize)
+        : base(drawableSize, "Metal")
     {
         _metalView = MetalCreateView(window);
         if (_metalView == IntPtr.Zero)
@@ -97,7 +94,7 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     /// Metal is the one macOS backend that can carry extended range: a CAMetalLayer takes an
     /// RGBA16Float pixel format and an extended color space, proven end to end by `LyraEdrProbe`.
     /// </summary>
-    protected override bool BackendSupportsExtendedRange => true;
+    public override bool BackendSupportsExtendedRange => true;
 
     /// <summary>
     /// An RGBA16Float layer in extended Display-P3, carrying the headroom the panel grants.

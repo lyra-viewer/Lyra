@@ -1,20 +1,12 @@
 using Lyra.Common.Events;
 using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
-using Lyra.Common.SystemExtensions;
 using Lyra.Common;
-using Lyra.DropStatusProvider;
-using Lyra.DuplicateStatusProvider;
-using Lyra.FileLoader.Navigation;
-using Lyra.FileLoader.Store;
 using Lyra.Imaging.Content;
 using Lyra.Renderer.Display;
 using Lyra.Renderer.Drawing;
-using Lyra.Renderer.GUI;
-using Lyra.SdlCore;
 using SkiaSharp;
 using static Lyra.Common.Events.EventManager;
-using Lyra.Renderer.GUI.Presenters;
 
 namespace Lyra.Renderer.Backends;
 
@@ -28,49 +20,25 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     
     protected IDisplayCapabilityService Displays { get; private set; } = DisplayCapabilityService.None;
     
-    protected virtual bool BackendSupportsExtendedRange => false;
+    public virtual bool BackendSupportsExtendedRange => false;
 
-    private Composite? _composite;
-    private SKPoint _offset = SKPoint.Empty;
-    private DisplayMode _displayMode = DisplayMode.Undefined;
-    private float _zoomPercentage = 100f;
-
-    private readonly ViewState _viewState;
     private readonly ICompositeContentDrawer _contentDrawer;
-    private readonly IDropProgressProvider _dropProgressProvider;
-    private readonly IScanProgressProvider? _scanProgressProvider;
 
-    private readonly LoadProgressPresenter _loadProgress = new();
-
-    public UIManager UIManager { get; private set; }
-
-    private readonly string _backend;
+    public string Backend { get; }
 
     /// One-shot diagnostic: whether a frame carried values above SDR white.
     private readonly PresentedPeak _presentedPeak = new();
-    
-    protected SkiaRendererBase(PixelSize drawableSize, IDropProgressProvider dropProgressProvider, ViewState viewState, string backend, IScanProgressProvider? scanProgressProvider = null)
-    {
-        ArgumentNullException.ThrowIfNull(dropProgressProvider);
-        ArgumentNullException.ThrowIfNull(viewState);
 
-        _backend = backend;
-        _viewState = viewState;
+    protected SkiaRendererBase(PixelSize drawableSize, string backend)
+    {
+        Backend = backend;
 
         WindowWidth = drawableSize.PixelWidth;
         WindowHeight = drawableSize.PixelHeight;
         DisplayScale = drawableSize.Scale;
         ContentScale = drawableSize.ContentScale;
 
-        _dropProgressProvider = dropProgressProvider;
-        _scanProgressProvider = scanProgressProvider;
-
         _contentDrawer = new SkiaCompositeContentDrawer();
-
-        UIManager = new UIManager(ContentScale)
-        {
-            PointerScale = DisplayScale / ContentScale
-        };
     }
 
     /// <summary>
@@ -94,8 +62,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     /// Deliberately not done in the constructor. The event bus is static and holds a strong
     /// reference, so a renderer that subscribed and then failed to construct - which every backend
     /// can do, and which the backend fallback exists to survive - would never be handed to anyone
-    /// able to unsubscribe it. It would go on receiving resize events, driving a UI it has no
-    /// surface for, for the life of the process.
+    /// able to unsubscribe it. It would go on receiving resize events, with no surface to apply
+    /// them to, for the life of the process.
     /// </remarks>
     public void Attach()
     {
@@ -151,7 +119,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     {
     }
 
-    public virtual void Render()
+    public virtual void Render(in RenderScene scene, IRenderOverlay? overlay)
     {
         BeforeRender();
 
@@ -165,14 +133,15 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             {
                 var canvas = surface.Canvas;
 
-                RenderBackground(canvas);
-                RenderComposite(canvas);
-                UpdateStatusOverlay();
-                RenderUI(canvas);
+                RenderBackground(canvas, scene.Background);
+                RenderComposite(canvas, scene);
+
+                if (overlay is not null)
+                    RenderOverlay(canvas, overlay);
 
                 // Debug only: it reads the whole frame back from the GPU, for one log line.
                 if (SettingsManager.AppSettings.Debug)
-                    _presentedPeak.Observe(surface, _backend, _composite?.Content is not null);
+                    _presentedPeak.Observe(surface, Backend, scene.Composite?.Content is not null);
 
                 AfterRender(surface);
             }
@@ -188,25 +157,17 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         }
     }
 
-    /// <summary>
-    /// Draws the interface into the window surface.
-    /// </summary>
-    private void RenderUI(SKCanvas canvas)
+    private void RenderOverlay(SKCanvas canvas, IRenderOverlay overlay)
     {
         canvas.Save();
         canvas.Scale(ContentScale);
-        UIManager.Render(canvas);
+        overlay.Render(canvas);
         canvas.Restore();
     }
 
-    public void RefreshUI(Composite? composite)
+    private void RenderBackground(SKCanvas canvas, BackgroundMode background)
     {
-        UIManager.Refresh(UIState.Create(composite, GetApplicationStates(), DirectoryNavigator.GetSnapshot(), DirectoryNavigator.GetNavigation(), FileRecordDatabase.Current));
-    }
-
-    private void RenderBackground(SKCanvas canvas)
-    {
-        switch (_viewState.BackgroundMode)
+        switch (background)
         {
             case BackgroundMode.White:
                 canvas.Clear(SKColors.White);
@@ -221,24 +182,24 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         }
     }
 
-    private void RenderComposite(SKCanvas canvas)
+    private void RenderComposite(SKCanvas canvas, RenderScene scene)
     {
-        if (_composite?.Content == null)
+        if (scene.Composite is not { Content: not null } composite)
             return;
         
-        if (_displayMode == DisplayMode.Undefined)
+        if (!scene.HasView)
             return;
 
-        var sampling = _viewState.SamplingMode switch
+        var sampling = scene.Sampling switch
         {
             SamplingMode.Smooth => new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear),
             SamplingMode.Pixel or _ => new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None)
         };
 
-        var logicalSize = new SKSize(_composite.LogicalWidth, _composite.LogicalHeight);
-        var zoomScale = _zoomPercentage / 100f;
+        var logicalSize = new SKSize(composite.LogicalWidth, composite.LogicalHeight);
+        var zoomScale = scene.ZoomPercentage / 100f;
 
-        RenderCentered(canvas, logicalSize, c =>
+        RenderCentered(canvas, logicalSize, scene.ZoomPercentage, scene.Offset, c =>
         {
             var destFull = new SKRect(0, 0, logicalSize.Width, logicalSize.Height);
 
@@ -248,17 +209,17 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
                 windowPxW: WindowWidth,
                 windowPxH: WindowHeight,
                 displayScale: ContentScale,
-                zoomPercentage: _zoomPercentage,
-                offsetPx: _offset
+                zoomPercentage: scene.ZoomPercentage,
+                offsetPx: scene.Offset
             );
 
-            _contentDrawer.Draw(c, _composite, destFull, visibleFull, sampling, zoomScale, ContentScale, Surface);
+            _contentDrawer.Draw(c, composite, destFull, visibleFull, sampling, zoomScale, ContentScale, Surface);
         });
     }
 
-    private void RenderCentered(SKCanvas canvas, SKSize logicalSize, Action<SKCanvas> drawContent)
+    private void RenderCentered(SKCanvas canvas, SKSize logicalSize, float zoomPercentage, SKPoint offset, Action<SKCanvas> drawContent)
     {
-        var zoomScale = _zoomPercentage / 100f;
+        var zoomScale = zoomPercentage / 100f;
 
         var drawWidth = logicalSize.Width * zoomScale;
         var drawHeight = logicalSize.Height * zoomScale;
@@ -266,8 +227,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         var logicalWindowWidth = WindowWidth / ContentScale;
         var logicalWindowHeight = WindowHeight / ContentScale;
 
-        var left = (logicalWindowWidth - drawWidth) / 2 + _offset.X / ContentScale;
-        var top = (logicalWindowHeight - drawHeight) / 2 + _offset.Y / ContentScale;
+        var left = (logicalWindowWidth - drawWidth) / 2 + offset.X / ContentScale;
+        var top = (logicalWindowHeight - drawHeight) / 2 + offset.Y / ContentScale;
 
         canvas.Save();
         canvas.Scale(ContentScale);
@@ -279,61 +240,6 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
 
         canvas.Restore();
     }
-
-    /// <summary>
-    /// Pushes the current status text to the StatusLayer.
-    /// Decision logic stays here (closest to composite and drop state);
-    /// UIManager just forwards to the layer.
-    /// </summary>
-    private void UpdateStatusOverlay()
-    {
-        var textColor = _viewState.BackgroundMode == BackgroundMode.White ? SKColors.Black : SKColors.White;
-        
-        var load = LoadSnapshot.Of(_composite);
-        UIManager.SetLoadProgress(_loadProgress.Update(load), textColor);
-
-        if (_closing)
-        {
-            UIManager.SetStatusOverlay("Closing...", textColor);
-            return;
-        }
-
-        if (_scanProgressProvider?.GetScanStatus() is { Active: true } scan)
-        {
-            UIManager.SetStatusOverlay(FormatScanStatus(scan), textColor);
-            return;
-        }
-
-        var drop = _dropProgressProvider.GetDropStatus();
-        if (drop is { Active: true, FilesEnumerated: > 300 })
-        {
-            UIManager.SetStatusOverlay($"{drop.FilesSupported} images found, {drop.FilesEnumerated} files scanned...", textColor);
-            return;
-        }
-
-        if (_composite == null || _composite.State == CompositeState.Failed)
-        {
-            UIManager.SetStatusOverlay("No image", textColor);
-            return;
-        }
-
-        if (_composite.State == CompositeState.Loading)
-        {
-            UIManager.SetStatusOverlay(LoadStatusText.For(load), textColor);
-            return;
-        }
-
-        UIManager.SetStatusOverlay(null, default);
-    }
-
-    private static string FormatScanStatus(ScanProgress scan) => scan.Phase switch
-    {
-        ScanPhase.Exact when scan.Total > 0      => $"Finding duplicates… hashing {scan.Done}/{scan.Total}",
-        ScanPhase.Exact                          => "Finding duplicates… measuring sizes",
-        ScanPhase.Perceptual when scan.Total > 0 => $"Perceptual scan… {scan.Done}/{scan.Total}",
-        ScanPhase.Perceptual                     => "Perceptual scan…",
-        _                                        => "Finding duplicates…"
-    };
 
     private void DrawCheckerboardPattern(SKCanvas canvas)
     {
@@ -355,50 +261,6 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         }
     }
 
-    public ApplicationStates GetApplicationStates()
-    {
-        var navigation = DirectoryNavigator.GetNavigation();
-        var drop = _dropProgressProvider.GetDropStatus();
-        var scan = _scanProgressProvider?.GetScanStatus() ?? default;
-
-        return new ApplicationStates
-        {
-            CollectionType = DirectoryNavigator.GetCollectionType(),
-            CollectionIndex = navigation.CollectionIndex,
-            CollectionCount = navigation.CollectionCount,
-            DirectoryIndex = navigation.DirectoryIndex,
-            DirectoryCount = navigation.DirectoryCount,
-            InDuplicatesMode = DirectoryNavigator.IsDuplicatesMode,
-            Zoom = _zoomPercentage,
-            DisplayMode = _displayMode,
-            ViewLocked = _viewState.ViewLocked,
-            SamplingMode = GetSamplingModeDescription(),
-            InfoVisible = _viewState.InfoVisible,
-            HelpVisible = _viewState.HelpVisible,
-            SidebarVisible = _viewState.SidebarVisible,
-            DropActive = drop.Active,
-            DropAborted = drop.Aborted,
-            DropPathsEnqueued = drop.PathsEnqueued,
-            DropFilesEnumerated = drop.FilesEnumerated,
-            DropFilesSupported = drop.FilesSupported,
-            ScanActive = scan.Active,
-            ScanAborted = scan.Aborted,
-            ScanPhase = scan.Phase,
-            ScanDone = scan.Done,
-            ScanTotal = scan.Total,
-            Backend = _backend,
-            Display = Displays.Current,
-            BackendSupportsExtendedRange = BackendSupportsExtendedRange
-        };
-    }
-
-    private string GetSamplingModeDescription()
-    {
-        return _composite?.Content?.IsResolutionIndependent == true
-            ? "Disabled (resolution-independent)"
-            : _viewState.SamplingMode.Description();
-    }
-
     public void OnDrawableSizeChanged(DrawableSizeChangedEvent e)
     {
         WindowWidth = e.PixelWidth;
@@ -407,25 +269,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         ContentScale = e.ContentScale;
 
         OnDrawableSizeChangedInternal(WindowWidth, WindowHeight, DisplayScale);
-
-        UIManager.DisplayScale = ContentScale;
-        UIManager.PointerScale = DisplayScale / ContentScale;
-        UIManager.Invalidate();
     }
-
-    public void SetComposite(Composite? composite) => _composite = composite;
-    
-    public void MarkClosing() => _closing = true;
-
-    private bool _closing;
-
-    public void SetOffset(SKPoint offset) => _offset = offset;
-
-    public void SetDisplayMode(DisplayMode displayMode) => _displayMode = displayMode;
-
-    public void SetZoom(float zoomPercentage) => _zoomPercentage = zoomPercentage;
-    
-    public bool IsCompositeResolutionIndependent => _composite?.Content?.IsResolutionIndependent == true;
 
     public virtual void Dispose()
     {
@@ -434,8 +278,6 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             _attached = false;
             Unsubscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
         }
-
-        UIManager.Dispose();
     }
 
     private static SKRect ComputeVisibleFullRect(float imageW, float imageH, int windowPxW, int windowPxH, float displayScale, float zoomPercentage, SKPoint offsetPx)

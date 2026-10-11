@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using Lyra.Common.Settings.Enums;
-using Lyra.Renderer;
+using Lyra.GUI;
 using Lyra.Renderer.Drawing;
 using Lyra.UI.Theme;
 using SkiaSharp;

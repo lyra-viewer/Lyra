@@ -6,6 +6,7 @@ using Lyra.DropStatusProvider;
 using Lyra.FileLoader.Duplicates.Perceptual;
 using Lyra.FileLoader.Duplicates;
 using Lyra.FileLoader.Navigation;
+using Lyra.GUI;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging;
@@ -29,6 +30,7 @@ public partial class SdlCore : IDisposable
 
     private IntPtr _window;
     private SkiaRendererBase _renderer = null!;
+    private UIManager _ui = null!;
     private bool _running = true;
     
     private IDisplayCapabilityService _displays = DisplayCapabilityService.None;
@@ -151,6 +153,8 @@ public partial class SdlCore : IDisposable
         if (!candidates.Any(candidate => TryInitializeRenderer(candidate, w, h, flags, refusals)))
             throw new InvalidOperationException(DescribeRendererFailure(refusals));
 
+        _ui = new UIManager { PointerScale = PointerScaleOf(DimensionHelper.GetDrawableSize(_window)) };
+
         AttachDisplayCapabilities();
         ApplyWindowIcon();
 
@@ -209,8 +213,8 @@ public partial class SdlCore : IDisposable
 
             _renderer = backend switch
             {
-                Backend.Metal => new SkiaMetalRenderer(_window, drawableSize, _dropProgressTracker, _viewState, _duplicateScanService.Progress),
-                Backend.OpenGL => new SkiaOpenGlRenderer(_window, drawableSize, _dropProgressTracker, _viewState, _duplicateScanService.Progress),
+                Backend.Metal => new SkiaMetalRenderer(_window, drawableSize),
+                Backend.OpenGL => new SkiaOpenGlRenderer(_window, drawableSize),
                 _ => throw new ArgumentOutOfRangeException(nameof(backend), backend, "No renderer for this backend.")
             };
             
@@ -326,8 +330,11 @@ public partial class SdlCore : IDisposable
             HandleEvents();
             _displays.Poll();
             RecalculateDisplayModeIfNecessary();
-            _renderer.RefreshUI(_composite);
-            _renderer.Render();
+            _ui.Refresh(CurrentUIState());
+
+            var scene = CurrentScene();
+            UpdateStatusOverlay(scene);
+            _renderer.Render(scene, _ui);
 
             GLSwapWindow(_window);
 
@@ -359,15 +366,20 @@ public partial class SdlCore : IDisposable
         {
             _displayMode = ResolveInitialView(out var offset);
 
-            _renderer.SetDisplayMode(_displayMode);
-            _renderer.SetZoom(_zoomPercentage);
-
             _panHelper.UpdateZoom(_zoomPercentage);
             _panHelper.CurrentOffset = offset;
             _panHelper.Clamp();
-            _renderer.SetOffset(_panHelper.CurrentOffset);
         }
     }
+    
+    private RenderScene CurrentScene() => new(
+        Composite: _running ? _composite : null,
+        HasView: _displayMode != DisplayMode.Undefined,
+        ZoomPercentage: _zoomPercentage,
+        Offset: _panHelper?.CurrentOffset ?? SKPoint.Empty,
+        Background: _viewState.BackgroundMode,
+        Sampling: _viewState.SamplingMode
+    );
 
     private void DrainMainThreadQueue()
     {
@@ -447,11 +459,6 @@ public partial class SdlCore : IDisposable
             _panHelper = new PanHelper(_window, _composite, _zoomPercentage) { CurrentOffset = offset };
             _panHelper.Clamp();
         }
-
-        _renderer.SetComposite(_composite);
-        _renderer.SetOffset(_panHelper?.CurrentOffset ?? SKPoint.Empty);
-        _renderer.SetDisplayMode(_displayMode);
-        _renderer.SetZoom(_zoomPercentage);
     }
 
     private readonly ViewLock _viewLock = new();
@@ -502,7 +509,7 @@ public partial class SdlCore : IDisposable
 
     private void SetupCursorCallback()
     {
-        _renderer.UIManager.SetCursorCallback(cursor =>
+        _ui.SetCursorCallback(cursor =>
         {
             var sdlCursor = cursor switch
             {
@@ -524,7 +531,7 @@ public partial class SdlCore : IDisposable
 
     private void SetupUICallbacks()
     {
-        var events = _renderer.UIManager.Events;
+        var events = _ui.Events;
 
         // User-driven UI events (menu clicks, tree picks, dropdown changes)
         events.OpenFileRequested += OnOpenFileRequested;
@@ -556,13 +563,13 @@ public partial class SdlCore : IDisposable
         // ViewState changes auto-sync the dropdowns. UIManager.Set* is
         // documented as not re-firing, and ViewState's equality guard
         // is a second line of defense against feedback loops.
-        _viewState.BackgroundModeChanged += _renderer.UIManager.SetBackgroundMode;
-        _viewState.SamplingModeChanged += _renderer.UIManager.SetSamplingMode;
-        _viewState.ToneMapModeChanged += _renderer.UIManager.SetToneMapMode;
+        _viewState.BackgroundModeChanged += _ui.SetBackgroundMode;
+        _viewState.SamplingModeChanged += _ui.SetSamplingMode;
+        _viewState.ToneMapModeChanged += _ui.SetToneMapMode;
         _viewState.ToneMapModeChanged += OnToneMapModeChanged;
-        _viewState.ExposureStopsChanged += _renderer.UIManager.SetExposureStops;
+        _viewState.ExposureStopsChanged += _ui.SetExposureStops;
         _viewState.ExposureStopsChanged += OnExposureStopsChanged;
-        _viewState.InitDisplayModeChanged += _renderer.UIManager.SetInitDisplayMode;
+        _viewState.InitDisplayModeChanged += _ui.SetInitDisplayMode;
         _viewState.InitDisplayModeChanged += OnInitDisplayModeChanged;
     }
 
@@ -579,7 +586,7 @@ public partial class SdlCore : IDisposable
                     KeepViewAcrossVariants();
             }
 
-            _renderer.UIManager.RefreshCurrent();
+            _ui.RefreshCurrent();
         });
     }
 
@@ -589,13 +596,13 @@ public partial class SdlCore : IDisposable
     private void OnToneMapModeChanged(ToneMapMode mode)
     {
         HdrDecodeSettings.ToneMapMode = mode;
-        _renderer.UIManager.Invalidate();
+        _ui.Invalidate();
     }
 
     private void OnExposureStopsChanged(int stops)
     {
         HdrDecodeSettings.ExposureStops = stops;
-        _renderer.UIManager.Invalidate();
+        _ui.Invalidate();
     }
 
     private void OnVariantSelected(int index)
@@ -623,9 +630,8 @@ public partial class SdlCore : IDisposable
 
         _panHelper.UpdateZoom(_zoomPercentage);
         _panHelper.Clamp();
-        _renderer.SetOffset(_panHelper.CurrentOffset);
 
-        _renderer.UIManager.RefreshCurrent();
+        _ui.RefreshCurrent();
     }
 
     private void FitToShownVariant()
@@ -636,12 +642,7 @@ public partial class SdlCore : IDisposable
         _displayMode = DimensionHelper.GetDisplayMode(_window, _composite, _viewState.InitDisplayMode, out _zoomPercentage);
         _panHelper = new PanHelper(_window, _composite, _zoomPercentage);
 
-        _renderer.SetComposite(_composite);
-        _renderer.SetOffset(SKPoint.Empty);
-        _renderer.SetDisplayMode(_displayMode);
-        _renderer.SetZoom(_zoomPercentage);
-
-        _renderer.UIManager.RefreshCurrent();
+        _ui.RefreshCurrent();
     }
 
     private void OnAboutRequested()
@@ -649,7 +650,7 @@ public partial class SdlCore : IDisposable
         if (OperatingSystem.IsMacOS())
             SystemUtils.MacAboutPanel.Show();
         else
-            _renderer.UIManager.ShowAboutModal();
+            _ui.ShowAboutModal();
     }
 
     private void OnDirectoryPicked(string absoluteDir)
@@ -670,9 +671,7 @@ public partial class SdlCore : IDisposable
     {
         Logger.Info("[Core] Exiting application...");
         _running = false;
-        _renderer.MarkClosing();
         _duplicateScanService.Shutdown();
-        _renderer.SetComposite(null);
     }
 
     public void Dispose()
@@ -684,6 +683,7 @@ public partial class SdlCore : IDisposable
 
         SettingsManager.SaveUiSettings(_viewState.Export());
 
+        _ui.Dispose();
         _renderer.Dispose();
         ImageStore.SaveAndDispose();
         _composite?.Dispose();

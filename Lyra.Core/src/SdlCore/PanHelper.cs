@@ -1,4 +1,5 @@
 using Lyra.Imaging.Content;
+using Lyra.Renderer;
 using SkiaSharp;
 using static Lyra.SdlCore.DimensionHelper;
 

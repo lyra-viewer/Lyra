@@ -85,10 +85,10 @@ public partial class SdlCore
     
     private void HandleEscape()
     {
-        if (_renderer.UIManager.DismissPopupIfOpen())
+        if (_ui.DismissPopupIfOpen())
             return;
 
-        if (_renderer.UIManager.DismissModalIfOpen())
+        if (_ui.DismissModalIfOpen())
             return;
 
         if (CancelDropIfActive())
@@ -208,7 +208,7 @@ public partial class SdlCore
 
     private void ToggleSampling()
     {
-        if (_renderer.IsCompositeResolutionIndependent)
+        if (_composite?.Content?.IsResolutionIndependent == true)
             return;
 
         _viewState.ToggleSampling();
@@ -248,13 +248,9 @@ public partial class SdlCore
             _zoomPercentage = DimensionHelper.ActualSize;
         }
 
-        _renderer.SetDisplayMode(_displayMode);
-        _renderer.SetZoom(_zoomPercentage);
-
         _panHelper.UpdateZoom(_zoomPercentage);
         _panHelper.CurrentOffset = SKPoint.Empty; // reset offset on mode toggle
         _panHelper.Clamp();
-        _renderer.SetOffset(_panHelper.CurrentOffset);
     }
 
     private void ZoomIn() => ApplyZoom(DimensionHelper.GetNextZoom(_zoomPercentage, +1));
@@ -305,13 +301,9 @@ public partial class SdlCore
                 ? DisplayMode.FitToScreen
                 : DisplayMode.Free;
 
-        _renderer.SetDisplayMode(_displayMode);
-        _renderer.SetZoom(_zoomPercentage);
-
         _panHelper.UpdateZoom(_zoomPercentage);
         _panHelper.CurrentOffset = newOffset;
         _panHelper.Clamp();
-        _renderer.SetOffset(_panHelper.CurrentOffset);
     }
 
     private void UpdateFitToScreen()
@@ -321,8 +313,6 @@ public partial class SdlCore
 
         _zoomPercentage = DimensionHelper.GetZoomToFitScreen(_window, _composite.LogicalWidth, _composite.LogicalHeight);
         _displayMode = DimensionHelper.IsActualSize(_zoomPercentage) ? DisplayMode.OriginalImageSize : DisplayMode.FitToScreen;
-        _renderer.SetDisplayMode(_displayMode);
-        _renderer.SetZoom(_zoomPercentage);
     }
 
     private void StartPanning(float x, float y)
@@ -348,6 +338,5 @@ public partial class SdlCore
             return;
 
         _panHelper.Move(x, y);
-        _renderer.SetOffset(_panHelper.CurrentOffset);
     }
 }

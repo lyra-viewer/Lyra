@@ -1,0 +1,397 @@
+using Lyra.Common;
+using Lyra.Common.Estimation;
+using Lyra.Common.SystemExtensions;
+using Lyra.DuplicateStatusProvider;
+using Lyra.FileLoader.Store;
+using Lyra.Imaging;
+using Lyra.Imaging.Content;
+using Lyra.Renderer.Display;
+using Lyra.UI.Components;
+using Lyra.UI.Components.Controls;
+using Lyra.UI.Components.Controls.Button;
+using Lyra.UI.Components.Layout;
+using Lyra.UI.Components.Primitives;
+using Lyra.UI.SupportingTypes;
+using Lyra.UI.Theme;
+
+namespace Lyra.GUI.Sections;
+
+// ============================================================================
+//  DebugSection - sidebar collapsible with developer-facing diagnostics.
+// ----------------------------------------------------------------------------
+//  Uses the same two-column key/value layout as ExifSection / FormatSection,
+//  but with a private key column (not shared via KeyColumnRegistry). Debug
+//  keys are static and computed once at construction time.
+//
+//  Two kinds of content:
+//
+//    1. Input-driven rows (updated imperatively from UIManager input
+//       handlers via SetPointer / SetHit / SetAction):
+//         Pointer / Hit / Action
+//
+//    2. State-driven rows (refreshed from UIState):
+//         State / Decoder / Time Est / Time Complete
+//         Drop / Drop Enqueued / Drop Files / Drop Supported
+//         Scan / Scan Phase / Scan Progress
+//
+//  Hidden by default. Rows may clip horizontally inside narrow sidebars.
+//  The sidebar is user-resizable, so this is acceptable for a debug section.
+// ============================================================================
+public sealed class DebugSection : IUISection
+{
+    private readonly Collapsible _collapsible;
+
+    // Value labels - the only ones that change at runtime.
+    private readonly Label _pointerValue;
+    private readonly Label _hitValue;
+    private readonly Label _actionValue;
+
+    private readonly HStack _stateRow;
+    private readonly Label _stateValue;
+
+    private readonly HStack _decoderRow;
+    private readonly Label _decoderValue;
+
+    private readonly HStack _decodeEstRow;
+    private readonly Label _timeEstValue;
+
+    private readonly HStack _timeCompleteRow;
+    private readonly Label _timeCompleteValue;
+
+    private readonly HStack _timeTransferRow;
+    private readonly Label _timeTransferValue;
+
+    private readonly HStack _timeDecodeRow;
+    private readonly Label _timeDecodeValue;
+
+    private readonly HStack _sourceRow;
+    private readonly Label _sourceValue;
+
+    private readonly HStack _transferEstRow;
+    private readonly Label _transferEstValue;
+
+    private readonly Label _displayValue;
+    private readonly Label _edrValue;
+    private readonly Label _cacheValue;
+
+    private readonly HStack _dropStatusRow;
+    private readonly Label _dropStatusValue;
+
+    private readonly Label _dropEnqueuedValue;
+    private readonly Label _dropFilesValue;
+    private readonly Label _dropSupportedValue;
+
+    private readonly HStack _scanStatusRow;
+    private readonly Label _scanStatusValue;
+
+    private readonly Label _scanPhaseValue;
+    private readonly Label _scanProgressValue;
+
+    // Current FileRecord rows (size / content hash / pHash populate during a duplicate scan).
+    private readonly HStack _recordNameRow;
+    private readonly Label _recordNameValue;
+    private readonly HStack _recordDirRow;
+    private readonly Label _recordDirValue;
+    private readonly HStack _recordSizeRow;
+    private readonly Label _recordSizeValue;
+    private readonly HStack _recordContentHashRow;
+    private readonly Label _recordContentHashValue;
+    private readonly HStack _recordPHashRow;
+    private readonly Label _recordPHashValue;
+    private readonly HStack _recordGroupRow;
+    private readonly Label _recordGroupValue;
+
+    public Collapsible Collapsible => _collapsible;
+
+    public IComponent Root => _collapsible;
+
+    public DebugSection()
+    {
+        // Key labels are collected during row construction so we can
+        // compute the shared column width once all rows exist.
+        var keyLabels = new List<Label>();
+
+        // Input-driven rows
+        var pointerRow = BuildRow(keyLabels, "Pointer", "-", out _pointerValue).PadTop(4);
+        var hitRow = BuildRow(keyLabels, "Hit", "-", out _hitValue);
+        var actionRow = BuildRow(keyLabels, "Action", "-", out _actionValue);
+
+        // Composite state rows
+        _stateRow = BuildRow(keyLabels, "State", "", out _stateValue);
+        _decoderRow = BuildRow(keyLabels, "Decoder", "", out _decoderValue);
+        _decodeEstRow = BuildRow(keyLabels, "Decode Est", "", out _timeEstValue);
+        _timeDecodeRow = BuildRow(keyLabels, "Time Decode", "", out _timeDecodeValue);
+        _transferEstRow = BuildRow(keyLabels, "Transfer Est", "", out _transferEstValue);
+        _timeTransferRow = BuildRow(keyLabels, "Time Transfer", "", out _timeTransferValue);
+        _timeCompleteRow = BuildRow(keyLabels, "Time Complete", "", out _timeCompleteValue);
+        _sourceRow = BuildRow(keyLabels, "Source", "", out _sourceValue);
+        
+        var displayRow = BuildRow(keyLabels, "Display", "-", out _displayValue);
+        var edrRow = BuildRow(keyLabels, "EDR", "-", out _edrValue);
+        var cacheRow = BuildRow(keyLabels, "Cache", "-", out _cacheValue);
+
+        // Drag & drop rows
+        _dropStatusRow = BuildRow(keyLabels, "Drop", "", out _dropStatusValue);
+        var dropEnqueuedRow = BuildRow(keyLabels, "Drop Enqueued", "0", out _dropEnqueuedValue);
+        var dropFilesRow = BuildRow(keyLabels, "Drop Files", "0", out _dropFilesValue);
+        var dropSupportedRow = BuildRow(keyLabels, "Drop Supported", "0", out _dropSupportedValue);
+
+        // Duplicate scan rows
+        _scanStatusRow = BuildRow(keyLabels, "Scan", "", out _scanStatusValue);
+        var scanPhaseRow = BuildRow(keyLabels, "Scan Phase", "-", out _scanPhaseValue);
+        var scanProgressRow = BuildRow(keyLabels, "Scan Progress", "0/0", out _scanProgressValue);
+
+        // Current FileRecord rows
+        _recordNameRow = BuildRow(keyLabels, "Rec Name", "-", out _recordNameValue);
+        _recordDirRow = BuildRow(keyLabels, "Rec Dir", "-", out _recordDirValue);
+        _recordSizeRow = BuildRow(keyLabels, "Rec Size", "-", out _recordSizeValue);
+        _recordContentHashRow = BuildRow(keyLabels, "Rec Hash", "-", out _recordContentHashValue);
+        _recordPHashRow = BuildRow(keyLabels, "Rec pHash", "-", out _recordPHashValue);
+        _recordGroupRow = BuildRow(keyLabels, "Rec Group", "-", out _recordGroupValue);
+
+        // Compute the shared key-column width once and apply to every key label.
+        // .Width sets the Fixed size mode too - assigning the Width property
+        // alone would be ignored by Measure.
+        var maxKeyWidth = 0f;
+        foreach (var label in keyLabels)
+            maxKeyWidth = Math.Max(maxKeyWidth, Label.MeasureTextWidth(label.Text));
+
+        foreach (var label in keyLabels)
+            label.Width(maxKeyWidth);
+        
+        var rows = new VScrollContainer
+        {
+            HorizontalSize = SizeMode.Expand,
+            VerticalSize = SizeMode.Flexible,
+            Padding = new Padding(0, 4, 0, 0)
+        }.Children(
+                pointerRow,
+                hitRow,
+                actionRow,
+                Spacer(),
+                _stateRow,
+                _decoderRow,
+                _decodeEstRow,
+                _timeDecodeRow,
+                _transferEstRow,
+                _timeTransferRow,
+                _timeCompleteRow,
+                _sourceRow,
+                Spacer(),
+                displayRow,
+                edrRow,
+                cacheRow,
+                Spacer(),
+                _dropStatusRow,
+                dropEnqueuedRow,
+                dropFilesRow,
+                dropSupportedRow,
+                Spacer(),
+                _scanStatusRow,
+                scanPhaseRow,
+                scanProgressRow,
+                Spacer(),
+                _recordNameRow,
+                _recordDirRow,
+                _recordSizeRow,
+                _recordContentHashRow,
+                _recordPHashRow,
+                _recordGroupRow
+            );
+
+        _collapsible = new Collapsible("DEBUG")
+            .ExpandH()
+            .Expanded(false)
+            .Child(rows);
+    }
+
+    public void Refresh(UIState state)
+    {
+        if (state.Composite == null)
+        {
+            _stateRow.Present = false;
+            _decoderRow.Present = false;
+            _decodeEstRow.Present = false;
+            _timeCompleteRow.Present = false;
+            _timeTransferRow.Present = false;
+            _timeDecodeRow.Present = false;
+            _sourceRow.Present = false;
+            _transferEstRow.Present = false;
+            // Drop rows stay present - they track activity even before
+            // the first composite is loaded.
+        }
+        else
+        {
+            _stateRow.Present = true;
+            _decoderRow.Present = true;
+            _decodeEstRow.Present = true;
+            _timeCompleteRow.Present = true;
+
+            var composite = state.Composite;
+            _stateValue.Text = composite.State.Description();
+            _decoderValue.Text = composite.DecoderName ?? "-";
+            _timeEstValue.Text = Formatters.DurationToStr(composite.Timing.DecodeEstimateMs);
+            _timeCompleteValue.Text = Formatters.DurationToStr(composite.Timing.CompleteMs);
+
+            _timeTransferRow.Present = composite.Timing.TransferMeasured;
+            _timeDecodeRow.Present = composite.Timing.TransferMeasured;
+
+            if (composite.Timing.TransferMeasured)
+            {
+                _timeTransferValue.Text = FormatTransfer(composite);
+                _timeDecodeValue.Text = Formatters.DurationToStr(composite.Timing.DecodeMs);
+            }
+
+            _sourceRow.Present = true;
+            _transferEstRow.Present = true;
+            var path = composite.FileInfo.FullName;
+            _sourceValue.Text = StorageSource.RootFor(path);
+            _transferEstValue.Text = FormatTransferEstimate(SourceThroughputEstimator.EstimateTransfer(path), composite.Timing.TransferBytesTotal);
+        }
+
+        var app = state.AppStates;
+
+        _displayValue.Text = app.Display.DisplayName;
+        _edrValue.Text = FormatEdr(app.Display, app.BackendSupportsExtendedRange);
+        _cacheValue.Text = FormatCache(ImageStore.ResidentBytes(), ImageStore.CacheBudgetBytes);
+
+        if (app.DropAborted)
+        {
+            _dropStatusRow.Present = true;
+            _dropStatusValue.Text = "Aborted";
+        }
+        else if (app.DropActive)
+        {
+            _dropStatusRow.Present = true;
+            _dropStatusValue.Text = "Active";
+        }
+        else
+        {
+            _dropStatusRow.Present = false;
+        }
+
+        _dropEnqueuedValue.Text = app.DropPathsEnqueued.ToString();
+        _dropFilesValue.Text = app.DropFilesEnumerated.ToString();
+        _dropSupportedValue.Text = app.DropFilesSupported.ToString();
+
+        if (app.ScanAborted)
+        {
+            _scanStatusRow.Present = true;
+            _scanStatusValue.Text = "Aborted";
+        }
+        else if (app.ScanActive)
+        {
+            _scanStatusRow.Present = true;
+            _scanStatusValue.Text = "Active";
+        }
+        else
+        {
+            _scanStatusRow.Present = false;
+        }
+
+        // Left at the last reported position after an abort, so it shows where the scan stopped.
+        _scanPhaseValue.Text = app.ScanPhase == ScanPhase.None ? "-" : app.ScanPhase.ToString();
+        _scanProgressValue.Text = $"{app.ScanDone}/{app.ScanTotal}";
+
+        RefreshRecord(state.CurrentRecord);
+    }
+
+    private void RefreshRecord(FileRecord? current)
+    {
+        var present = current is not null;
+        _recordNameRow.Present = present;
+        _recordDirRow.Present = present;
+        _recordSizeRow.Present = present;
+        _recordContentHashRow.Present = present;
+        _recordPHashRow.Present = present;
+        _recordGroupRow.Present = present;
+
+        if (current is not { } record)
+            return;
+
+        _recordNameValue.Text = record.Name;
+        _recordDirValue.Text = record.Directory;
+        _recordSizeValue.Text = record.HasSize ? $"{record.Size:N0} B" : "-";
+        _recordContentHashValue.Text = record.HasContentHash ? record.ContentHash.ToString("X") : "-";
+        _recordPHashValue.Text = record.HasPHash ? record.PHash.ToString("X16") : "-";
+        _recordGroupValue.Text = record.HasGroup ? record.GroupId!.Value.ToString() : "-";
+    }
+    
+    internal static string FormatTransferEstimate(TransferEstimate? estimate, long bytes)
+    {
+        if (estimate is not { } source)
+            return "learning";
+
+        var rate = Formatters.SizeToStr((long)(source.BytesPerMs * 1000));
+        return $"{Formatters.DurationToStr(source.MsFor(bytes))} ({rate}/s +{Formatters.DurationToStr(source.LatencyMs)})";
+    }
+    
+    internal static string FormatTransfer(Composite composite)
+    {
+        var ms = composite.Timing.TransferMs;
+        var bytes = composite.Timing.TransferBytesRead;
+        var text = Formatters.DurationToStr(ms);
+
+        // Below a millisecond the rate is division noise, not a measurement worth printing.
+        if (ms is not > 1 || bytes <= 0)
+            return text;
+
+        var bytesPerSecond = (long)(bytes / (ms.Value / 1000.0));
+        return $"{text} ({Formatters.SizeToStr(bytesPerSecond)}/s)";
+    }
+    
+    internal static string FormatCache(long resident, long budget)
+    {
+        const long mb = 1024 * 1024;
+
+        return budget > 0
+            ? $"{resident / mb} / {budget / mb} MB ({100.0 * resident / budget:0}%)"
+            : $"{resident / mb} MB";
+    }
+
+    internal static string FormatEdr(DisplayCapabilities display, bool backendSupportsExtendedRange)
+    {
+        if (!display.SupportsExtendedRange)
+            return "none (SDR display)";
+
+        var headroom = $"{display.CurrentHeadroom:0.00}x now / {display.PotentialHeadroom:0.##}x max";
+
+        return backendSupportsExtendedRange ? headroom : $"{headroom} - backend cannot present it";
+    }
+
+    public void SetPointer(float x, float y) => _pointerValue.Text = $"{x:F1}, {y:F1}";
+
+    public void SetHover(IComponent? hovered)
+    {
+        var description = hovered switch
+        {
+            Button btn => $"Button \"{btn.Text}\"",
+            null       => "-",
+            _          => hovered.GetType().Name
+        };
+        SetHit(description);
+    }
+    
+    public void SetHit(string hitDescription) => _hitValue.Text = hitDescription;
+
+    public void SetAction(string actionDescription) => _actionValue.Text = actionDescription;
+
+    private static HStack BuildRow(List<Label> keyLabelCollector, string key, string initialValue, out Label valueLabel)
+    {
+        // Sizing is deliberately left alone here: the shared column width is
+        // applied by the constructor once every key is known, and .Width()
+        // sets the Fixed size mode along with the value.
+        var keyLabel = new Label(key).Color(Palette.Dim).Transient();
+        keyLabelCollector.Add(keyLabel);
+
+        valueLabel = new Label(initialValue).Color(Palette.Dim).Transient();
+
+        return new HStack()
+            .Spacing(8)
+            .ExpandH()
+            .Align(HAlign.Left)
+            .Children(keyLabel, valueLabel);
+    }
+
+    private static Label Spacer() => new Label(" ").Color(Palette.Dim).Transient();
+}

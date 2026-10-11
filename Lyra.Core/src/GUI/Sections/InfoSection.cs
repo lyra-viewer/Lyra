@@ -1,0 +1,261 @@
+using Lyra.Common;
+using Lyra.Common.SystemExtensions;
+using Lyra.Imaging.Content;
+using Lyra.UI.Components;
+using Lyra.UI.Components.Layout;
+using Lyra.UI.Components.Primitives;
+using Lyra.UI.SupportingTypes;
+using Lyra.UI.Theme;
+
+namespace Lyra.GUI.Sections;
+
+public sealed class InfoSection : IUISection
+{
+    private readonly VStack _root;
+
+    // File row
+    private readonly HStack _fileRow;
+    private readonly Label _collectionLabel;
+    private readonly Label _dirNavLabel;
+    private readonly Label _fileNameLabel;
+    private readonly Label _fileSizeLabel;
+
+    // Image row
+    private readonly HStack _imageRow;
+    private readonly Label _formatLabel;
+    private readonly Label _dimensionsLabel;
+    private readonly Label _rotationSeparator;
+    private readonly Label _rotationPrefix;
+    private readonly Label _rotationLabel;
+
+    // Collection row
+    private readonly HStack _collectionRow;
+    private readonly Label _collectionTypeLabel;
+    private readonly Label _directoryNameLabel;
+    
+    // Displaying row
+    private readonly HStack _displayingRow;
+    private readonly Label _zoomLabel;
+    private readonly Label _displayModeLabel;
+    private readonly Label _viewLockedLabel;
+    private readonly Label _samplingModeLabel;
+
+    // Large image row
+    private readonly HStack _largeImageRow;
+    private readonly Label _largeImagePreviewLabel;
+    private readonly Label _largeImageTilesLabel;
+
+    // Error row
+    private readonly HStack _errorRow;
+    private readonly Label _errorPrefixLabel;
+    private readonly Label _errorMessageLabel;
+    private readonly Label _errorDetailLabel;
+
+    public IComponent Root => _root;
+
+    public InfoSection()
+    {
+        _fileRow = BuildRow().Children(
+            DimPrefix("[File]        "),
+            _collectionLabel = ForegroundLabel(),
+            _dirNavLabel = HighlightedLabel(),
+            Separator(),
+            _fileNameLabel = ForegroundLabel(),
+            Separator(),
+            _fileSizeLabel = ForegroundLabel());
+
+        _imageRow = BuildRow().Children(
+            DimPrefix("[Image]       "),
+            _formatLabel = ForegroundLabel(),
+            Separator(),
+            _dimensionsLabel = ForegroundLabel(),
+            _rotationSeparator = Separator(),
+            _rotationPrefix = DimPrefix("Rotated:"),
+            _rotationLabel = ForegroundLabel());
+
+        _collectionRow = BuildRow().Children(
+            DimPrefix("[Collection]  "),
+            _collectionTypeLabel = ForegroundLabel(),
+            Separator(),
+            DimPrefix("Dir:"),
+            _directoryNameLabel = ForegroundLabel());
+
+        _displayingRow = BuildRow().Children(
+            DimPrefix("[Displaying]  "),
+            DimPrefix("Zoom:"),
+            _zoomLabel = ForegroundLabel(),
+            Separator(),
+            DimPrefix("Display Mode:"),
+            _displayModeLabel = ForegroundLabel(),
+            _viewLockedLabel = new Label("[keep]").Color(Palette.Danger).Transient(),
+            Separator(),
+            DimPrefix("Sampling:"),
+            _samplingModeLabel = ForegroundLabel());
+
+        _largeImageRow = BuildRow().Children(
+            DimPrefix("[Large Image] "),
+            DimPrefix("Preview:"),
+            _largeImagePreviewLabel = ForegroundLabel(),
+            Separator(),
+            DimPrefix("Tiles:"),
+            _largeImageTilesLabel = ForegroundLabel());
+
+        _errorRow = BuildRow().Children(
+            _errorPrefixLabel = DimPrefix(ErrorPrefix),
+            _errorMessageLabel = new Label("").Color(Palette.Danger).Transient(),
+            Separator(),
+            _errorDetailLabel = ForegroundLabel());
+
+        _root = new VStack()
+            .ExpandH()
+            .ShrinkV()
+            .Align(HAlign.Left)
+            .Spacing(2)
+            .Padding(8)
+            .Children(_fileRow, _imageRow, _collectionRow, _displayingRow, _largeImageRow, _errorRow);
+    }
+
+    public void Refresh(UIState state)
+    {
+        if (state.Composite == null)
+        {
+            _fileRow.Present = false;
+            _imageRow.Present = false;
+            _displayingRow.Present = false;
+            _collectionRow.Present = false;
+            _largeImageRow.Present = false;
+            _errorRow.Present = false;
+            return;
+        }
+
+        _fileRow.Present = true;
+        _imageRow.Present = true;
+        _displayingRow.Present = true;
+        _collectionRow.Present = true;
+
+        var composite = state.Composite;
+        var fileInfo = composite.FileInfo;
+        var app = state.AppStates;
+
+        // File row
+        _collectionLabel.Text = $"{app.CollectionIndex}/{app.CollectionCount}";
+
+        if (app.InDuplicatesMode)
+        {
+            _dirNavLabel.Present = true;
+            _dirNavLabel.Text = $"GROUP-ID: {state.CurrentRecord?.GroupId}";
+        }
+        else if (app is { DirectoryCount: not null, DirectoryIndex: not null })
+        {
+            _dirNavLabel.Present = true;
+            _dirNavLabel.Text = $"({app.DirectoryIndex}/{app.DirectoryCount})";
+        }
+        else
+        {
+            _dirNavLabel.Present = false;
+        }
+        
+        _fileNameLabel.Text = fileInfo.Name;
+        _fileSizeLabel.Text = Formatters.SizeToStr(composite.FileSizeBytes);
+
+        // Image row
+        _formatLabel.Text = composite.ImageFormatType.Description();
+        _dimensionsLabel.Text = $"{composite.LogicalWidth}x{composite.LogicalHeight}";
+        
+        var rotation = composite.AppliedOrientation;
+        var rotated = rotation is not (ExifOrientation.Normal or ExifOrientation.Unknown);
+
+        _rotationSeparator.Present = rotated;
+        _rotationPrefix.Present = rotated;
+        _rotationLabel.Present = rotated;
+
+        if (rotated)
+            _rotationLabel.Text = rotation.Description();
+
+        // Displaying row
+        _zoomLabel.Text = Formatters.ZoomToStr(app.Zoom);
+        _displayModeLabel.Text = app.DisplayMode.Description();
+        _viewLockedLabel.Present = app.ViewLocked;
+        _samplingModeLabel.Text = app.SamplingMode;
+
+        // Collection row
+        _collectionTypeLabel.Text = app.CollectionType.Description();
+        _directoryNameLabel.Text = $"{fileInfo.DirectoryName}/";
+
+        // Large image row
+        if (composite.Content is RasterLargeContent large)
+        {
+            _largeImageTilesLabel.Text = (large.TilesTotal != null)
+                ? $"{large.TilesReady}/{large.TilesTotal}"
+                : "Calculating";
+
+            _largeImagePreviewLabel.Text = composite.State is CompositeState.Ready or CompositeState.Complete
+                ? "Ready"
+                : composite.State.ToDisplayString();
+
+            _largeImageRow.Present = true;
+        }
+        else
+        {
+            _largeImageRow.Present = false;
+        }
+
+        // Error row
+        if (ProblemOf(composite) is { } problem)
+        {
+            _errorPrefixLabel.Text = problem.IsError ? ErrorPrefix : WarningPrefix;
+            _errorMessageLabel.Text = problem.Message;
+            _errorMessageLabel.Color = problem.IsError ? Palette.Danger : Palette.Warning;
+            _errorDetailLabel.Text = problem.Detail;
+            _errorRow.Present = true;
+        }
+        else
+        {
+            _errorRow.Present = false;
+        }
+    }
+
+    private const string ErrorPrefix   = "[Error]       ";
+    private const string WarningPrefix = "[Warning]     ";
+
+    internal readonly record struct Problem(bool IsError, string Message, string Detail);
+    
+    internal static Problem? ProblemOf(Composite composite)
+    {
+        if (composite is { State: CompositeState.Failed, Failure: { } failure })
+            return new Problem(true, failure.Message, failure.Description);
+
+        var set = composite.Content as VariantRasterContent;
+
+        if (set?.LastFailure is { } page)
+            return new Problem(true, $"{set.Variants[page.Index].Label}: {page.Failure.Message}", page.Failure.Description);
+
+        if (composite.Warning is { } warning)
+            return new Problem(false, warning.Message, warning.Detail);
+
+        if (set is not null && set.WarningOf(set.ShownIndex) is { } shown)
+            return new Problem(false, $"{set.Variants[set.ShownIndex].Label}: {shown.Message}", shown.Detail);
+
+        return null;
+    }
+
+    // ----- helpers -----------------------------------------------------------
+
+    private static HStack BuildRow() =>
+        new HStack()
+            .Spacing(11)
+            .ExpandH()
+            .Align(HAlign.Left);
+
+    private static Label DimPrefix(string text) =>
+        new Label(text).Color(Palette.Dim).Transient();
+
+    private static Label Separator() =>
+        new Label("|").Color(Palette.Dim).Transient();
+
+    private static Label ForegroundLabel() =>
+        new Label("").Color(Palette.Foreground).Transient();
+
+    private static Label HighlightedLabel() =>
+        new Label("").Color(Palette.SelectedForeground).Transient();
+}

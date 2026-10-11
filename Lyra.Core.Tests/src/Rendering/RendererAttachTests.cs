@@ -1,9 +1,7 @@
 using Lyra.Common.Events;
-using Lyra.Common.Settings;
-using Lyra.DropStatusProvider;
 using Lyra.Renderer.Backends;
 using Lyra.Renderer.Drawing;
-using Lyra.SdlCore;
+using Lyra.Renderer;
 using SkiaSharp;
 using Xunit;
 
@@ -73,7 +71,7 @@ public class RendererAttachTests
     private static void Publish(int width, int height) => EventManager.Publish(new DrawableSizeChangedEvent(width, height, 1f, 1f));
 
     /// <summary>A renderer with no GPU behind it: enough of one to be subscribed and counted.</summary>
-    private sealed class FakeRenderer() : SkiaRendererBase(new PixelSize(800, 600, 1f, 1f), new NoDrops(), new ViewState(UISettings.DefaultUiSettings), "Fake")
+    private sealed class FakeRenderer() : SkiaRendererBase(new PixelSize(800, 600, 1f, 1f), "Fake")
     {
         public int ResizeCount { get; private set; }
 
@@ -82,10 +80,5 @@ public class RendererAttachTests
         protected override SKSurface? CreateSurface() => null;
 
         protected override void OnDrawableSizeChangedInternal(int width, int height, float scale) => ResizeCount++;
-    }
-
-    private sealed class NoDrops : IDropProgressProvider
-    {
-        public DropProgress GetDropStatus() => default;
     }
 }

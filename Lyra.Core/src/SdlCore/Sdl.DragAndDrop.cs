@@ -208,7 +208,7 @@ public partial class SdlCore
                 DispatchToMain(() =>
                 {
                     DirectoryNavigator.ApplyCollection(result);
-                    _renderer.UIManager.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false);
+                    _ui.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false);
                     LoadImage();
                     RaiseWindow(_window);
                 }, requireWarm: true);

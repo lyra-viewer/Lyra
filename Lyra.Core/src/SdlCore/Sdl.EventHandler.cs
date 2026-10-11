@@ -83,6 +83,9 @@ public partial class SdlCore
         if (_displayMode == DisplayMode.FitToScreen && _composite != null)
             UpdateFitToScreen();
 
+        _ui.PointerScale = PointerScaleOf(bounds);
+        _ui.Invalidate();
+
         Publish(new DrawableSizeChangedEvent(bounds.PixelWidth, bounds.PixelHeight, bounds.Scale, bounds.ContentScale));
     }
 
@@ -101,12 +104,12 @@ public partial class SdlCore
         if (e.Button.Button == ButtonRight)
         {
             if (!_isPanning)
-                _renderer.UIManager.HandleContextClick(e.Button.X, e.Button.Y);
+                _ui.HandleContextClick(e.Button.X, e.Button.Y);
 
             return;
         }
 
-        if (_renderer.UIManager.HandlePointerDown(e.Motion.X, e.Motion.Y))
+        if (_ui.HandlePointerDown(e.Motion.X, e.Motion.Y))
             return;
 
         switch (e.Button.Button)
@@ -129,7 +132,7 @@ public partial class SdlCore
         if (e.Button.Button == ButtonRight)
             return;
 
-        if (_renderer.UIManager.HandlePointerUp(e.Motion.X, e.Motion.Y))
+        if (_ui.HandlePointerUp(e.Motion.X, e.Motion.Y))
             return;
 
         switch (e.Button.Button)
@@ -142,7 +145,7 @@ public partial class SdlCore
 
     private void OnMouseMotion(Event e)
     {
-        _renderer.UIManager.HandlePointerMove(e.Motion.X, e.Motion.Y);
+        _ui.HandlePointerMove(e.Motion.X, e.Motion.Y);
 
         if (_isPanning)
             HandlePanning(e.Motion.X, e.Motion.Y);
@@ -152,7 +155,7 @@ public partial class SdlCore
     {
         // e.Wheel.X (horizontal) is intentionally dropped: no UI component scrolls
         // sideways, and zooming reads the vertical delta only. Maybe in future.
-        if (_renderer.UIManager.HandleScroll(e.Wheel.MouseX, e.Wheel.MouseY, e.Wheel.Y))
+        if (_ui.HandleScroll(e.Wheel.MouseX, e.Wheel.MouseY, e.Wheel.Y))
             return;
 
 
