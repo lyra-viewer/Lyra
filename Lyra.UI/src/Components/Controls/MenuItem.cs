@@ -1,49 +1,61 @@
 using Lyra.UI.Components.Controls.Button;
 using Lyra.UI.Components.Primitives;
 using Lyra.UI.SupportingTypes;
+using Lyra.UI.Theme;
 using SkiaSharp;
 
 namespace Lyra.UI.Components.Controls;
 
 /// <summary>
-/// A selectable row used inside menus and pickers.
+/// A row inside a <see cref="ContextMenu"/> or <see cref="DropDownMenu{T}"/>.
 ///
-/// Layout is label-on-left with a check indicator pinned to the
-/// right edge, independent of label width. The check is only
-/// rendered when <see cref="IsPicked"/> is true, but its space is
-/// always reserved so labels align vertically across items.
-///
-/// Hover and press visuals are delegated to <see cref="ButtonDrawer"/>
-/// with <see cref="ButtonVariant.Ghost"/> for consistency with the
-/// rest of the UI — transparent default, subtle hover background.
+/// Layout: [check] label ··· shortcut [arrow]. The check slot is
+/// always reserved, the arrow slot only in panels holding a submenu,
+/// and the panel stretches every row to its widest, so labels and
+/// right-aligned shortcuts line up.
 /// </summary>
-public class MenuItem : ComponentBase, IPickable
+public class MenuItem : ComponentBase
 {
+    private const float ColumnGap = 16f;
+
     private readonly Label _label;
+    private readonly Label? _shortcut;
     private readonly SvgImage _checkIcon;
+    private readonly SvgImage? _arrowIcon;
 
     private bool _isPressed;
     private bool _isHovered;
 
-    // External events
     public event Action? Click;
 
-    // Pickable state
-    private bool _isPicked;
+    public event Action? Hovered;
 
-    public bool IsPicked
+    private bool _isChecked;
+
+    public bool IsChecked
     {
-        get => _isPicked;
-        set => Set(ref _isPicked, value);
+        get => _isChecked;
+        set => Set(ref _isChecked, value);
     }
 
-    // Visuals
-    private float _cornerRadius;
+    // Keeps a submenu header lit while its submenu is open.
+    private bool _isHighlighted;
 
-    public float CornerRadius
+    internal bool IsHighlighted
     {
-        get => _cornerRadius;
-        set => Set(ref _cornerRadius, value);
+        get => _isHighlighted;
+        set => Set(ref _isHighlighted, value);
+    }
+
+    internal bool HasSubmenu => _arrowIcon is not null;
+
+    // Set by the panel so shortcuts align with those of submenu rows.
+    private bool _reserveArrowSlot;
+
+    internal bool ReserveArrowSlot
+    {
+        get => _reserveArrowSlot;
+        set => Set(ref _reserveArrowSlot, value);
     }
 
     public string Text
@@ -56,19 +68,34 @@ public class MenuItem : ComponentBase, IPickable
     //  Constructor
     // --------------------------------------------------------
 
-    public MenuItem(string text, float iconSize = 16f)
+    public MenuItem(string text, string? shortcut = null, bool hasSubmenu = false, float iconSize = 16f)
     {
         MinHeight = 24;
 
         _label = new Label(text)
         {
-            Transient = true,
             HorizontalAlign = HAlign.Left,
             VerticalAlign = VAlign.Center,
             Padding = new Padding(2)
         };
 
+        if (!string.IsNullOrEmpty(shortcut))
+        {
+            _shortcut = new Label(shortcut)
+            {
+                HorizontalAlign = HAlign.Right,
+                VerticalAlign = VAlign.Center,
+                Padding = new Padding(2),
+                Color = Palette.Dim
+            };
+        }
+
         _checkIcon = new SvgImage(ResourceLoader.GetSvg("check_small"), iconSize, iconSize);
+
+        if (hasSubmenu)
+            _arrowIcon = new SvgImage(ResourceLoader.GetSvg("arrow_drop_right"), iconSize, iconSize);
+
+        _reserveArrowSlot = hasSubmenu;
     }
 
     // --------------------------------------------------------
@@ -78,23 +105,29 @@ public class MenuItem : ComponentBase, IPickable
     protected override SKSize MeasureContent(SKSize availableSize)
     {
         var labelSize = _label.Measure(availableSize);
+        var shortcutSize = _shortcut?.Measure(availableSize) ?? SKSize.Empty;
         var iconSize = _checkIcon.Measure(availableSize);
+        _arrowIcon?.Measure(availableSize);
 
-        // Always reserve space for the check, even when not picked,
-        // so sibling items align vertically on both the label and the indicator.
-        var width = labelSize.Width + ButtonDrawer.IconTextGap + iconSize.Width;
-        var height = Math.Max(labelSize.Height, iconSize.Height);
+        var trailing = _shortcut is not null ? ColumnGap + shortcutSize.Width : 0f;
+        var arrowSlot = ReserveArrowSlot ? ButtonDrawer.IconTextGap + iconSize.Width : 0f;
 
-        return new SKSize(
-            width + ButtonDrawer.ContentPadH * 2,
-            height + ButtonDrawer.ContentPadV * 2);
+        var width = iconSize.Width + ButtonDrawer.IconTextGap + labelSize.Width + trailing + arrowSlot;
+        var height = Math.Max(Math.Max(labelSize.Height, shortcutSize.Height), iconSize.Height);
+
+        return new SKSize(width + ButtonDrawer.ContentPadH * 2, height + ButtonDrawer.ContentPadV * 2);
     }
 
-    // Private structure, not reached by the base propagation.
     protected override void PropagateContext(UIContext? context)
     {
         _label.Context = context;
         _checkIcon.Context = context;
+
+        if (_shortcut is not null)
+            _shortcut.Context = context;
+
+        if (_arrowIcon is not null)
+            _arrowIcon.Context = context;
     }
 
     protected override void ArrangeContent(SKRect contentBounds)
@@ -105,22 +138,21 @@ public class MenuItem : ComponentBase, IPickable
             contentBounds.Right - ButtonDrawer.ContentPadH,
             contentBounds.Bottom - ButtonDrawer.ContentPadV);
 
-        var labelW = _label.DesiredSize.Width;
         var iconW = _checkIcon.DesiredSize.Width;
 
-        // Label anchored to the left edge
-        _label.Arrange(new SKRect(
-            inner.Left,
-            inner.Top,
-            inner.Left + labelW,
-            inner.Bottom));
+        _checkIcon.Arrange(new SKRect(inner.Left, inner.Top, inner.Left + iconW, inner.Bottom));
 
-        // Check pinned to the right edge (space is reserved regardless of IsPicked)
-        _checkIcon.Arrange(new SKRect(
-            inner.Right - iconW,
-            inner.Top,
-            inner.Right,
-            inner.Bottom));
+        var labelLeft = inner.Left + iconW + ButtonDrawer.IconTextGap;
+        _label.Arrange(new SKRect(labelLeft, inner.Top, labelLeft + _label.DesiredSize.Width, inner.Bottom));
+
+        var arrowLeft = inner.Right - iconW;
+        _arrowIcon?.Arrange(new SKRect(arrowLeft, inner.Top, inner.Right, inner.Bottom));
+
+        if (_shortcut is not null)
+        {
+            var shortcutRight = ReserveArrowSlot ? arrowLeft - ButtonDrawer.IconTextGap : inner.Right;
+            _shortcut.Arrange(new SKRect(shortcutRight - _shortcut.DesiredSize.Width, inner.Top, shortcutRight, inner.Bottom));
+        }
     }
 
     // --------------------------------------------------------
@@ -129,12 +161,15 @@ public class MenuItem : ComponentBase, IPickable
 
     protected override void RenderContent(SKCanvas canvas, SKRect contentBounds)
     {
-        ButtonDrawer.DrawBackground(canvas, contentBounds, ButtonVariant.Ghost, CornerRadius, _isHovered, _isPressed);
+        ButtonDrawer.DrawBackground(canvas, contentBounds, ButtonVariant.Ghost, 0f, _isHovered || IsHighlighted, _isPressed);
 
         _label.Color = ButtonDrawer.GetTextColor(ButtonVariant.Ghost);
         _label.Render(canvas);
 
-        if (IsPicked)
+        _shortcut?.Render(canvas);
+        _arrowIcon?.Render(canvas);
+
+        if (IsChecked)
             _checkIcon.Render(canvas);
     }
 
@@ -142,9 +177,11 @@ public class MenuItem : ComponentBase, IPickable
     //  Input
     // --------------------------------------------------------
 
-    protected virtual void OnClick()
+    internal void ResetInteraction()
     {
-        Click?.Invoke();
+        _isHovered = false;
+        _isPressed = false;
+        IsHighlighted = false;
     }
 
     protected override void OnPointerDownCore(SKPoint point)
@@ -160,11 +197,11 @@ public class MenuItem : ComponentBase, IPickable
         if (!IsEffectivelyEnabled)
             return;
 
-        if (!_isPressed)
-            return;
-
+        var wasPressed = _isPressed;
         _isPressed = false;
-        OnClick();
+
+        if (wasPressed && _isHovered)
+            Click?.Invoke();
     }
 
     protected override void OnPointerEnterCore()
@@ -173,6 +210,7 @@ public class MenuItem : ComponentBase, IPickable
             return;
 
         _isHovered = true;
+        Hovered?.Invoke();
     }
 
     protected override void OnPointerLeaveCore()
@@ -190,7 +228,9 @@ public class MenuItem : ComponentBase, IPickable
         if (disposing)
         {
             _label.Dispose();
+            _shortcut?.Dispose();
             _checkIcon.Dispose();
+            _arrowIcon?.Dispose();
         }
 
         base.Dispose(disposing);

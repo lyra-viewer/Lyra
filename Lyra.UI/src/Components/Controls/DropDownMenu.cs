@@ -1,8 +1,6 @@
 using Lyra.UI.Components.Controls.Button;
-using Lyra.UI.Components.Layout;
 using Lyra.UI.Components.Primitives;
 using Lyra.UI.SupportingTypes;
-using Lyra.UI.Theme;
 using SkiaSharp;
 
 namespace Lyra.UI.Components.Controls;
@@ -28,7 +26,7 @@ public class DropDownMenu<T> : ComponentBase, IContainer
     private readonly Func<T, string> _headerDisplay;
 
     private readonly Button.Button _headerButton;
-    private readonly VStack _optionsPanel;
+    private readonly MenuPanel _optionsPanel;
     private readonly List<(T Value, MenuItem Item)> _items = [];
 
     private readonly SvgImage _collapsedIcon;
@@ -83,19 +81,14 @@ public class DropDownMenu<T> : ComponentBase, IContainer
         _headerButton.Parent = this;
         _headerButton.Click += Toggle;
 
-        _optionsPanel = new VStack
-        {
-            BackgroundColor = Palette.Panel,
-            VerticalSize = SizeMode.Shrink
-        };
+        _optionsPanel = new MenuPanel();
 
         foreach (var value in values)
         {
             var capturedValue = value;
             var item = new MenuItem(displayName(value))
             {
-                HorizontalSize = SizeMode.Expand,
-                IsPicked = EqualityComparer<T>.Default.Equals(value, initialSelection)
+                IsChecked = EqualityComparer<T>.Default.Equals(value, initialSelection)
             };
             item.Click += () => PickValue(capturedValue);
 
@@ -123,10 +116,9 @@ public class DropDownMenu<T> : ComponentBase, IContainer
         var headerBounds = _headerButton.ArrangedBounds;
         var position = new SKPoint(headerBounds.Left, headerBounds.Bottom);
 
-        // Pin popup width to the header so it reads as part of the
-        // dropdown rather than a floating menu of arbitrary size.
-        _optionsPanel.HorizontalSize = SizeMode.Fixed;
-        _optionsPanel.Width = headerBounds.Width;
+        // At least as wide as the header so it reads as part of the
+        // dropdown; wider options grow it rather than being cut.
+        _optionsPanel.MinWidth = Math.Max(0f, headerBounds.Width - _optionsPanel.Padding.Horizontal);
 
         _isOpen = true;
         _headerButton.IconImage = _expandedIcon;
@@ -156,7 +148,7 @@ public class DropDownMenu<T> : ComponentBase, IContainer
         _headerButton.Text = _headerDisplay(value);
 
         foreach (var (v, item) in _items)
-            item.IsPicked = EqualityComparer<T>.Default.Equals(v, value);
+            item.IsChecked = EqualityComparer<T>.Default.Equals(v, value);
 
         if (fireEvent)
             SelectionChanged?.Invoke(value);

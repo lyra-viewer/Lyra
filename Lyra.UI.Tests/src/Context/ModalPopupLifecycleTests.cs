@@ -1,3 +1,4 @@
+using Lyra.UI.Components;
 using Lyra.UI.Components.Layout;
 using Lyra.UI.SupportingTypes;
 using SkiaSharp;
@@ -163,5 +164,66 @@ public class ModalPopupLifecycleTests
         context.HandlePointerDown(new SKPoint(5, 5));
 
         Assert.False(context.IsModalOpen);
+    }
+
+    // --------------------------------------------------------
+    //  Hover across a popup's lifetime
+    // --------------------------------------------------------
+
+    private sealed class HoverTarget : ComponentBase
+    {
+        public int Leaves { get; private set; }
+
+        protected override SKSize MeasureContent(SKSize availableSize) => new(100, 50);
+        protected override void ArrangeContent(SKRect contentBounds) { }
+        protected override void RenderContent(SKCanvas canvas, SKRect contentBounds) { }
+        protected override void OnPointerLeaveCore() => Leaves++;
+    }
+
+    private static void Layout(UIContext context)
+    {
+        foreach (var layer in context.Layers)
+        {
+            if (layer.Root is null)
+                continue;
+
+            layer.Root.Measure(new SKSize(400, 300));
+            layer.Root.Resolve();
+            layer.Root.Arrange(new SKRect(0, 0, 400, 300));
+        }
+    }
+
+    [Fact]
+    public void DismissingAPopupLeavesHoverOutsideItAlone()
+    {
+        // Escape over a sidebar button must not strip its highlight while the pointer is still on it.
+        using var context = new UIContext();
+        var target = new HoverTarget();
+        context.Root = new VStack().Child(target);
+        Layout(context);
+        context.HandlePointerMove(new SKPoint(10, 10));
+
+        context.ShowPopup(Content(), new SKPoint(300, 200));
+        context.DismissPopup();
+
+        Assert.Equal(0, target.Leaves);
+        Assert.Same(target, context.HoveredComponent);
+    }
+
+    [Fact]
+    public void DismissingAPopupReleasesHoverOnItsOwnRows()
+    {
+        using var context = new UIContext();
+        var row = new HoverTarget();
+
+        context.ShowPopup(new VStack().Child(row), new SKPoint(0, 0));
+        Layout(context);
+        context.HandlePointerMove(new SKPoint(10, 10));
+        Assert.Same(row, context.HoveredComponent);
+
+        context.DismissPopup();
+
+        Assert.Equal(1, row.Leaves);
+        Assert.Null(context.HoveredComponent);
     }
 }

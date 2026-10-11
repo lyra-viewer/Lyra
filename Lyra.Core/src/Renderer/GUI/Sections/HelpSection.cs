@@ -37,10 +37,11 @@ public sealed class HelpSection : IUISection
 
         (_dirEdgeKey, _dirEdgeDesc) = AddRow(isMac ? "⌥← / ⌥→" : "Ctrl← / Ctrl→", "Prev / Next directory edge");
 
-        AddRow("↲",             isMac ? "Reveal in Finder" : "Reveal in file explorer");
+        AddRow("↵",             isMac ? "Reveal in Finder" : "Reveal in file explorer");
         AddRow("+ / −",         "Zoom in / out");
         AddRow("Mouse Wheel",   "Zoom at cursor");
         AddRow("0",             "Fit screen / Original size");
+        AddRow("L",             "Lock zoom & pan");
         AddRow("I",             "Toggle info");
         AddRow("U",             "Toggle sidebar");
         AddRow("H",             "Toggle help");

@@ -16,6 +16,7 @@ public readonly record struct ApplicationStates(
 
     float Zoom,
     DisplayMode DisplayMode,
+    bool ViewLocked,
     string SamplingMode,
     
     bool InfoVisible,

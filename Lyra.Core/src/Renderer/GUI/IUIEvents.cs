@@ -9,6 +9,10 @@ public interface IUIEvents
     event Action? FullscreenRequested;
     event Action? QuitRequested;
     event Action? AboutRequested;
+    event Action? InfoToggleRequested;
+    event Action? SidebarToggleRequested;
+    event Action? HelpToggleRequested;
+    event Action? ViewLockToggleRequested;
     event Action? FindDuplicatesRequested;
     event Action<bool>? DuplicatesExactOnlyChanged;
     event Action<int>? DuplicatesHashToleranceChanged;
@@ -19,7 +23,5 @@ public interface IUIEvents
     event Action<SamplingMode>? SamplingModeChanged;
     event Action<ToneMapMode>? ToneMapModeChanged;
     event Action<int>? ExposureStopsChanged;
-
-    /// <summary>A rendition was picked in the VARIANTS dropdown; the payload is its index.</summary>
     event Action<int>? VariantSelected;
 }

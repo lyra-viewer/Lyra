@@ -14,6 +14,10 @@ public sealed class ViewState
     public bool HelpVisible { get; private set; }
     public bool SidebarVisible { get; private set; }
 
+    public bool ViewLocked => InitDisplayMode == InitDisplayMode.Locked;
+
+    private InitDisplayMode _unlockedDisplayMode;
+
     public event Action<SamplingMode>? SamplingModeChanged;
     public event Action<ToneMapMode>? ToneMapModeChanged;
     public event Action<int>? ExposureStopsChanged;
@@ -27,6 +31,7 @@ public sealed class ViewState
         ExposureStops = initial.ExposureStops;
         BackgroundMode = initial.BackgroundMode;
         InitDisplayMode = initial.InitDisplayMode;
+        _unlockedDisplayMode = ViewLocked ? UISettings.DefaultUiSettings.InitDisplayMode : InitDisplayMode;
         InfoVisible = initial.InfoVisible;
         HelpVisible = initial.HelpVisible;
         SidebarVisible = initial.SidebarVisible;
@@ -81,8 +86,14 @@ public sealed class ViewState
             return;
 
         InitDisplayMode = mode;
+
+        if (!ViewLocked)
+            _unlockedDisplayMode = mode;
+
         InitDisplayModeChanged?.Invoke(mode);
     }
+
+    public void ToggleViewLock() => SetInitDisplayMode(ViewLocked ? _unlockedDisplayMode : InitDisplayMode.Locked);
 
     public void ToggleInfo() => InfoVisible = !InfoVisible;
     public void ToggleHelp() => HelpVisible = !HelpVisible;

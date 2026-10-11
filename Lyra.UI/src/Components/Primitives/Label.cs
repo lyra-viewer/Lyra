@@ -98,15 +98,21 @@ public class Label : ComponentBase
     private float _textWidth;
     private SKFontMetrics _metrics;
 
+    // Font runs for Text; characters the font lacks are drawn with a fallback face.
+    private readonly List<TextRun> _runs = [];
+
     // What _font was built from, so a property change is noticed on next use.
     private FontKey _builtKey;
 
     // Cached ellipsis result. Truncation is a search over the string, and Render
     // runs every frame, so it is recomputed only when an input to it changes.
     private const string Ellipsis = "…";
+    
+    private const float ClipTolerance = 0.5f;
     private string? _clippedText;
     private float _clippedWidth;
     private float _clippedFor = -1f;
+    private readonly List<TextRun> _clippedRuns = [];
 
     public Label(string text)
     {
@@ -156,7 +162,7 @@ public class Label : ComponentBase
                 MeasureFonts[key] = font;
             }
 
-            return font.MeasureText(text);
+            return FontFallback.Layout(text, font, null);
         }
     }
 
@@ -180,19 +186,25 @@ public class Label : ComponentBase
 
         return _font;
     }
-
-    protected override SKSize MeasureContent(SKSize availableSize)
+    
+    private SKFont EnsureLayout()
     {
         var font = GetFont();
 
         if (_measureDirty)
         {
-            using var paint = new SKPaint();
-            _textWidth = font.MeasureText(Text, paint);
+            _textWidth = FontFallback.Layout(Text, font, _runs);
             font.GetFontMetrics(out _metrics);
             _measureDirty = false;
             _clippedFor = -1f;
         }
+
+        return font;
+    }
+
+    protected override SKSize MeasureContent(SKSize availableSize)
+    {
+        EnsureLayout();
 
         var textHeight = _metrics.Descent - _metrics.Ascent;
         return new SKSize(_textWidth, textHeight);
@@ -206,14 +218,16 @@ public class Label : ComponentBase
 
     protected override void RenderContent(SKCanvas canvas, SKRect contentBounds)
     {
-        var font = GetFont();
+        var font = EnsureLayout();
 
         var text = Text;
         var textWidth = _textWidth;
+        var runs = _runs;
 
-        if (Ellipsize && _textWidth > contentBounds.Width)
+        if (Ellipsize && _textWidth > contentBounds.Width + ClipTolerance)
         {
             (text, textWidth) = Clip(font, contentBounds.Width);
+            runs = _clippedRuns;
 
             if (text.Length == 0)
                 return;
@@ -238,7 +252,7 @@ public class Label : ComponentBase
         using var paint = new SKPaint();
         paint.Color = Color;
         paint.IsAntialias = Antialias;
-        canvas.DrawText(text, textX, textY, SKTextAlign.Left, font, paint);
+        FontFallback.Draw(canvas, runs, textX, textY, paint);
 
         if (Underline)
         {
@@ -263,12 +277,13 @@ public class Label : ComponentBase
         if (_clippedText is not null && _clippedFor == maxWidth)
             return (_clippedText, _clippedWidth);
 
-        var ellipsisWidth = font.MeasureText(Ellipsis);
+        var ellipsisWidth = FontFallback.Layout(Ellipsis, font, null);
         if (ellipsisWidth > maxWidth)
         {
             _clippedText = string.Empty;
             _clippedWidth = 0f;
             _clippedFor = maxWidth;
+            _clippedRuns.Clear();
             return (_clippedText, _clippedWidth);
         }
 
@@ -280,14 +295,18 @@ public class Label : ComponentBase
         while (low < high)
         {
             var mid = (low + high + 1) / 2;
-            if (font.MeasureText(Text.AsSpan(0, mid)) <= budget)
+            if (FontFallback.Layout(Text.AsSpan(0, mid), font, null) <= budget)
                 low = mid;
             else
                 high = mid - 1;
         }
 
+        // Never cut a surrogate pair in half.
+        if (low > 0 && char.IsHighSurrogate(Text[low - 1]))
+            low--;
+
         _clippedText = Text[..low] + Ellipsis;
-        _clippedWidth = font.MeasureText(_clippedText);
+        _clippedWidth = FontFallback.Layout(_clippedText, font, _clippedRuns);
         _clippedFor = maxWidth;
 
         return (_clippedText, _clippedWidth);

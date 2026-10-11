@@ -35,6 +35,7 @@ public partial class SdlCore
             { Scancode.S, ToggleSampling },
             { Scancode.H, ToggleHelp },
             { Scancode.U, ToggleSidebar },
+            { Scancode.L, ToggleViewLock },
             { Scancode.Return, OpenFileExplorer }
         };
     }
@@ -84,6 +85,9 @@ public partial class SdlCore
     
     private void HandleEscape()
     {
+        if (_renderer.UIManager.DismissPopupIfOpen())
+            return;
+
         if (_renderer.UIManager.DismissModalIfOpen())
             return;
 
@@ -217,6 +221,8 @@ public partial class SdlCore
     private void ToggleHelp() => _viewState.ToggleHelp();
 
     private void ToggleSidebar() => _viewState.ToggleSidebar();
+
+    private void ToggleViewLock() => _viewState.ToggleViewLock();
 
     private void OpenFileExplorer()
     {

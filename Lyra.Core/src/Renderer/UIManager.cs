@@ -146,6 +146,16 @@ public class UIManager : IDisposable
         Invalidate();
     }
 
+    public bool DismissPopupIfOpen()
+    {
+        if (!_context.IsPopupOpen)
+            return false;
+
+        _context.DismissPopup();
+        Invalidate();
+        return true;
+    }
+
     public bool DismissModalIfOpen()
     {
         var dismissed = _context.DismissModal();
@@ -243,6 +253,17 @@ public class UIManager : IDisposable
         var consumed = _context.HandlePointerUp(ToUiSpace(x, y));
         _context.Invalidate();
         return consumed;
+    }
+    
+    public void HandleContextClick(float x, float y)
+    {
+        if (_context.IsModalOpen)
+            return;
+
+        if (!_mainLayer.TryOpenContextMenu(ToUiSpace(x, y)))
+            _context.DismissPopup();
+
+        _context.Invalidate();
     }
 
     public void HandlePointerMove(float x, float y)

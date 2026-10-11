@@ -177,7 +177,9 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 | `+` `-`               | Zoom in / Zoom out                                |
 | `Mouse Wheel`         | Zoom at cursor position                           |
 | `Middle Mouse Button` | Customizable (see `app-settings.toml`)            |
+| `Right Mouse Button`  | Context menu                                      |
 | `0`                   | Toggle **Fit to Screen** / **Original Size**      |
+| `L`                   | Lock zoom & pan across images                     |
 | `S`                   | Toggle sampling mode                              |
 | `F`                   | Toggle fullscreen                                 |
 | `B`                   | Toggle background mode                            |
@@ -223,7 +225,7 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 | Library           | Purpose                                                                                    | License      | Repository                                                        |
 |-------------------|--------------------------------------------------------------------------------------------|--------------|-------------------------------------------------------------------|
 | SDL3-CS           | Core graphics, input, and windowing                                                        | zlib         | [github](https://github.com/edwardgushchin/SDL3-CS)               |
-| SkiaSharp         | Hardware-accelerated 2D rendering                                                          | BSD-3-Clause | [github](https://github.com/mono/SkiaSharp)                       |
+| SkiaSharp         | Hardware-accelerated 2D rendering                                                          | MIT          | [github](https://github.com/mono/SkiaSharp)                       |
 | Svg.Skia          | SVG parsing and rendering                                                                  | MIT          | [github](https://github.com/wieslawsoltes/Svg.Skia)               |
 | libheif           | HEIF / HEIC / AVIF decoding, stills and image sequences (direct interop)                   | LGPL-3.0     | [github](https://github.com/strukturag/libheif)                   |
 | OpenEXR           | High-dynamic-range OpenEXR (.exr) decoding                                                 | BSD-3-Clause | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
@@ -236,6 +238,9 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 | MetadataExtractor | EXIF metadata extraction                                                                   | Apache-2.0   | [github](https://github.com/drewnoakes/metadata-extractor-dotnet) |
 | Tomlyn            | TOML parsing for configuration files                                                       | BSD-2-Clause | [github](https://github.com/xoofx/Tomlyn)                         |
 | System.IO.Hashing | Fast non-cryptographic hashing (duplicate detection)                                       | MIT          | [github](https://github.com/dotnet/runtime)                       |
+
+Copyright notices and license texts for everything Lyra redistributes, including the components these libraries pull
+in, are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) and ship inside every package.
 
 ---
 

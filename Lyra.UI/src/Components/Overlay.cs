@@ -47,12 +47,15 @@ public sealed class Overlay : ComponentBase, IContainer
 
     protected override void ArrangeContent(SKRect contentBounds)
     {
-        var size = _content.DesiredSize;
-        _content.Arrange(new SKRect(
-            _position.X,
-            _position.Y,
-            _position.X + size.Width,
-            _position.Y + size.Height));
+        _content.Arrange(Place(_position.X, _position.Y, _content.DesiredSize, contentBounds));
+    }
+
+    /// <summary>Clamps a popup inside the bounds; one larger than the window pins to its top-left.</summary>
+    internal static SKRect Place(float x, float y, SKSize size, SKRect bounds)
+    {
+        x = Math.Max(bounds.Left, Math.Min(x, bounds.Right - size.Width));
+        y = Math.Max(bounds.Top, Math.Min(y, bounds.Bottom - size.Height));
+        return new SKRect(x, y, x + size.Width, y + size.Height);
     }
 
     protected override void RenderContent(SKCanvas canvas, SKRect contentBounds)

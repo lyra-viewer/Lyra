@@ -14,5 +14,9 @@
     <ItemGroup>
         <EmbeddedResource Include="Resources\Icons\**\*.svg" />
     </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Lyra.UI.Tests" />
+    </ItemGroup>
     
 </Project>

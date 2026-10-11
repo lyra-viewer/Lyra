@@ -14,5 +14,8 @@ public enum InitDisplayMode
     FitSmall,
 
     [Description("Actual size")]
-    ActualSize
+    ActualSize,
+
+    [Description("Locked (keep zoom & pan)")]
+    Locked
 }

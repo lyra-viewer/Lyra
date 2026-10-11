@@ -9,6 +9,8 @@ public partial class UIContext : IPopupHost
 
     private Action? _popupDismissCallback;
 
+    public bool IsPopupOpen => GetLayer(PopupLayerName)?.Root is not null;
+
     public void ShowPopup(IComponent content, SKPoint position, Action? onDismiss = null)
     {
         // Replace any open popup atomically - fire its dismiss
@@ -33,6 +35,13 @@ public partial class UIContext : IPopupHost
         // disposing the overlay detaches it without touching the panel, which
         // the source component still owns and will dispose.
         var overlay = layer.Root;
+
+        if (IsWithin(_hoveredComponent, overlay))
+        {
+            _hoveredComponent!.OnPointerLeave();
+            _hoveredComponent = null;
+        }
+
         layer.Root = null;
         layer.BlocksInput = false;
         overlay.Dispose();
@@ -42,5 +51,16 @@ public partial class UIContext : IPopupHost
         cb?.Invoke();
 
         Invalidate();
+    }
+
+    private static bool IsWithin(IComponent? component, IComponent root)
+    {
+        for (var c = component; c is not null; c = c.Parent)
+        {
+            if (ReferenceEquals(c, root))
+                return true;
+        }
+
+        return false;
     }
 }

@@ -37,6 +37,7 @@ public sealed class InfoSection : IUISection
     private readonly HStack _displayingRow;
     private readonly Label _zoomLabel;
     private readonly Label _displayModeLabel;
+    private readonly Label _viewLockedLabel;
     private readonly Label _samplingModeLabel;
 
     // Large image row
@@ -86,6 +87,7 @@ public sealed class InfoSection : IUISection
             Separator(),
             DimPrefix("Display Mode:"),
             _displayModeLabel = ForegroundLabel(),
+            _viewLockedLabel = new Label("[keep]").Color(Palette.Danger).Transient(),
             Separator(),
             DimPrefix("Sampling:"),
             _samplingModeLabel = ForegroundLabel());
@@ -173,6 +175,7 @@ public sealed class InfoSection : IUISection
         // Displaying row
         _zoomLabel.Text = Formatters.ZoomToStr(app.Zoom);
         _displayModeLabel.Text = app.DisplayMode.Description();
+        _viewLockedLabel.Present = app.ViewLocked;
         _samplingModeLabel.Text = app.SamplingMode;
 
         // Collection row

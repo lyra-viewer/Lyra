@@ -357,13 +357,13 @@ public partial class SdlCore : IDisposable
 
         if (!_composite.IsEmpty && _displayMode == DisplayMode.Undefined)
         {
-            _displayMode = DimensionHelper.GetDisplayMode(_window, _composite, _viewState.InitDisplayMode, out _zoomPercentage);
+            _displayMode = ResolveInitialView(out var offset);
 
             _renderer.SetDisplayMode(_displayMode);
             _renderer.SetZoom(_zoomPercentage);
 
             _panHelper.UpdateZoom(_zoomPercentage);
-            _panHelper.CurrentOffset = SKPoint.Empty;
+            _panHelper.CurrentOffset = offset;
             _panHelper.Clamp();
             _renderer.SetOffset(_panHelper.CurrentOffset);
         }
@@ -422,6 +422,8 @@ public partial class SdlCore : IDisposable
         var keepPaths = DirectoryNavigator.GetRange(CleanupSafeRange);
         ImageStore.Cleanup(keepPaths);
 
+        CaptureLockedView();
+
         // Detach from the outgoing composite before it's replaced.
         if (_composite is not null)
             _composite.ProgressChanged -= OnCompositeProgress;
@@ -441,14 +443,45 @@ public partial class SdlCore : IDisposable
 
             var preloadPaths = DirectoryNavigator.GetRange(PreloadDepth);
             ImageStore.Preload(preloadPaths);
-            _displayMode = DimensionHelper.GetDisplayMode(_window, _composite, _viewState.InitDisplayMode, out _zoomPercentage);
-            _panHelper = new PanHelper(_window, _composite, _zoomPercentage);
+            _displayMode = ResolveInitialView(out var offset);
+            _panHelper = new PanHelper(_window, _composite, _zoomPercentage) { CurrentOffset = offset };
+            _panHelper.Clamp();
         }
 
         _renderer.SetComposite(_composite);
-        _renderer.SetOffset(SKPoint.Empty);
+        _renderer.SetOffset(_panHelper?.CurrentOffset ?? SKPoint.Empty);
         _renderer.SetDisplayMode(_displayMode);
         _renderer.SetZoom(_zoomPercentage);
+    }
+
+    private readonly ViewLock _viewLock = new();
+
+    private void CaptureLockedView()
+    {
+        var hasView = _composite is { IsEmpty: false } && _panHelper is not null && _displayMode != DisplayMode.Undefined;
+        _viewLock.Capture(_viewState.ViewLocked, hasView ? new ViewLock.View(_zoomPercentage, _panHelper!.CurrentOffset) : null);
+    }
+
+    private DisplayMode ResolveInitialView(out SKPoint offset)
+    {
+        offset = SKPoint.Empty;
+
+        if (_viewLock.Inherit(_viewState.ViewLocked) is { } locked && _composite is { IsEmpty: false } composite)
+        {
+            _zoomPercentage = locked.Zoom;
+            offset = locked.Offset;
+
+            var fitZoom = DimensionHelper.GetZoomToFitScreen(_window, composite.LogicalWidth, composite.LogicalHeight);
+            return DimensionHelper.GetLockedDisplayMode(locked.Zoom, fitZoom);
+        }
+
+        return DimensionHelper.GetDisplayMode(_window, _composite, _viewState.InitDisplayMode, out _zoomPercentage);
+    }
+
+    private void OnInitDisplayModeChanged(InitDisplayMode mode)
+    {
+        if (mode != InitDisplayMode.Locked)
+            _viewLock.Release();
     }
 
     private void PurgeNotExistingFiles(NavigationDirection direction = NavigationDirection.None)
@@ -499,6 +532,10 @@ public partial class SdlCore : IDisposable
         events.QuitRequested += ExitApplication;
         events.AboutRequested += OnAboutRequested;
         events.FullscreenRequested += ToggleFullscreen;
+        events.InfoToggleRequested += ToggleInfo;
+        events.SidebarToggleRequested += ToggleSidebar;
+        events.HelpToggleRequested += ToggleHelp;
+        events.ViewLockToggleRequested += ToggleViewLock;
         events.FindDuplicatesRequested += OnFindDuplicatesRequested;
         events.DuplicatesGoBackRequested += OnDuplicatesGoBack;
         events.DuplicatesExactOnlyChanged += OnDuplicatesExactOnlyChanged;
@@ -526,6 +563,7 @@ public partial class SdlCore : IDisposable
         _viewState.ExposureStopsChanged += _renderer.UIManager.SetExposureStops;
         _viewState.ExposureStopsChanged += OnExposureStopsChanged;
         _viewState.InitDisplayModeChanged += _renderer.UIManager.SetInitDisplayMode;
+        _viewState.InitDisplayModeChanged += OnInitDisplayModeChanged;
     }
 
     private void OnCompositeProgress(Composite c)

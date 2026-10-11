@@ -371,6 +371,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             InDuplicatesMode = DirectoryNavigator.IsDuplicatesMode,
             Zoom = _zoomPercentage,
             DisplayMode = _displayMode,
+            ViewLocked = _viewState.ViewLocked,
             SamplingMode = GetSamplingModeDescription(),
             InfoVisible = _viewState.InfoVisible,
             HelpVisible = _viewState.HelpVisible,

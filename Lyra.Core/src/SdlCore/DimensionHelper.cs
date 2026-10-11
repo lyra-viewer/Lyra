@@ -47,6 +47,17 @@ public static class DimensionHelper
         return DisplayMode.FitToScreen;
     }
 
+    public static DisplayMode GetLockedDisplayMode(float zoomPercentage, float fitZoom)
+    {
+        if (IsActualSize(zoomPercentage))
+            return DisplayMode.OriginalImageSize;
+
+        if (fitZoom > 0 && MathF.Abs(zoomPercentage - fitZoom) <= fitZoom * FitSnapTolerance)
+            return DisplayMode.FitToScreen;
+
+        return DisplayMode.Free;
+    }
+
     public static PixelSize GetDrawableSize(IntPtr window)
     {
         GetWindowSize(window, out var logicalWidth, out var logicalHeight);

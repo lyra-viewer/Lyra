@@ -8,6 +8,7 @@ using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Layout;
 using Lyra.UI.SupportingTypes;
 using Lyra.UI.Theme;
+using SkiaSharp;
 #if !DEBUG
 using Lyra.Common.Settings;
 #endif
@@ -53,6 +54,8 @@ public class MainLayer : IUIEvents, IDisposable
     // UIContext.ShowModal
     private AboutSection? _aboutSection;
 
+    private readonly ViewContextMenu _contextMenu;
+
     private readonly SectionEntry[] _entries;
     private readonly VStack _sidebar;
 
@@ -65,6 +68,10 @@ public class MainLayer : IUIEvents, IDisposable
     public event Action? FullscreenRequested;
     public event Action? QuitRequested;
     public event Action? AboutRequested;
+    public event Action? InfoToggleRequested;
+    public event Action? SidebarToggleRequested;
+    public event Action? HelpToggleRequested;
+    public event Action? ViewLockToggleRequested;
     public event Action? FindDuplicatesRequested;
     public event Action? DuplicatesGoBackRequested;
     public event Action<bool>? DuplicatesExactOnlyChanged;
@@ -93,6 +100,7 @@ public class MainLayer : IUIEvents, IDisposable
         _hdrDecodeSection = new HdrDecodeSection();
         _helpSection = new HelpSection();
         _debugSection = new DebugSection();
+        _contextMenu = new ViewContextMenu(_context);
 
         // Cross-section wiring
         _menuSection.OpenFileClicked += () => OnMenu("OPEN", OpenFileRequested);
@@ -106,6 +114,13 @@ public class MainLayer : IUIEvents, IDisposable
         _menuSection.SamplingModeChanged += mode => OnMenu("SAMPLING", SamplingModeChanged, mode);
         _hdrDecodeSection.ToneMapModeChanged += mode => OnMenu("TONE MAP", ToneMapModeChanged, mode);
         _hdrDecodeSection.ExposureStopsChanged += stops => OnMenu("EXPOSURE", ExposureStopsChanged, stops);
+        _contextMenu.InfoToggleClicked += () => OnMenu("TOGGLE INFO", InfoToggleRequested);
+        _contextMenu.SidebarToggleClicked += () => OnMenu("TOGGLE SIDEBAR", SidebarToggleRequested);
+        _contextMenu.HelpToggleClicked += () => OnMenu("TOGGLE HELP", HelpToggleRequested);
+        _contextMenu.ViewLockToggleClicked += () => OnMenu("TOGGLE VIEW LOCK", ViewLockToggleRequested);
+        _contextMenu.SamplingModeChanged += mode => OnMenu("SAMPLING", SamplingModeChanged, mode);
+        _contextMenu.BackgroundModeChanged += mode => OnMenu("BACKGROUND", BackgroundModeChanged, mode);
+        _contextMenu.InitDisplayModeChanged += mode => OnMenu("INIT DISPLAY MODE", InitDisplayModeChanged, mode);
         _directoryTreeSection.DirectoryPicked += path => DirectoryPicked?.Invoke(path);
         _variantsSection.VariantSelected += index => OnMenu("SIZE", VariantSelected, index);
 
@@ -181,6 +196,8 @@ public class MainLayer : IUIEvents, IDisposable
         foreach (var entry in _entries)
             entry.Section.Refresh(state);
 
+        _contextMenu.Refresh(state);
+
         _context.Invalidate();
     }
 
@@ -204,11 +221,23 @@ public class MainLayer : IUIEvents, IDisposable
     //  Programmatic dropdown sync (driven by keyboard toggles)
     // --------------------------------------------------------
 
-    public void SetInitDisplayMode(InitDisplayMode mode) => _menuSection.SetInitDisplayMode(mode);
+    public void SetInitDisplayMode(InitDisplayMode mode)
+    {
+        _menuSection.SetInitDisplayMode(mode);
+        _contextMenu.SetInitDisplayMode(mode);
+    }
 
-    public void SetBackgroundMode(BackgroundMode mode) => _menuSection.SetBackgroundMode(mode);
+    public void SetBackgroundMode(BackgroundMode mode)
+    {
+        _menuSection.SetBackgroundMode(mode);
+        _contextMenu.SetBackgroundMode(mode);
+    }
 
-    public void SetSamplingMode(SamplingMode mode) => _menuSection.SetSamplingMode(mode);
+    public void SetSamplingMode(SamplingMode mode)
+    {
+        _menuSection.SetSamplingMode(mode);
+        _contextMenu.SetSamplingMode(mode);
+    }
 
     public void SetToneMapMode(ToneMapMode mode) => _hdrDecodeSection.SetToneMapMode(mode);
 
@@ -220,6 +249,19 @@ public class MainLayer : IUIEvents, IDisposable
         _context.Invalidate();
     }
     
+    // --------------------------------------------------------
+    //  Context menu
+    // --------------------------------------------------------
+    
+    public bool TryOpenContextMenu(SKPoint point)
+    {
+        if (_sidebar.Present && _sidebar.ArrangedBounds.Contains(point))
+            return false;
+
+        _contextMenu.Open(point);
+        return true;
+    }
+
     public void ShowAboutModal()
     {
         _aboutSection ??= new AboutSection();
@@ -305,6 +347,7 @@ public class MainLayer : IUIEvents, IDisposable
         }
         
         _aboutSection?.Dispose();
+        _contextMenu.Dispose();
 
         // Component tree disposed by Layer via UIContext.Dispose.
     }

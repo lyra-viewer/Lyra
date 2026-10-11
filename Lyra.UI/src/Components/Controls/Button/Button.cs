@@ -60,7 +60,8 @@ public class Button : ComponentBase
             Transient = true,
             HorizontalAlign = HAlign.Center,
             VerticalAlign = VAlign.Center,
-            Padding = new Padding(2)
+            Padding = new Padding(2),
+            Ellipsize = true
         };
     }
 
@@ -114,8 +115,11 @@ public class Button : ComponentBase
             return;
         }
 
-        var labelW = IsIconOnly ? 0f : _label.DesiredSize.Width;
         var iconW = HasIcon ? IconImage!.DesiredSize.Width : 0f;
+
+        // Narrower than its text: the label takes what the icon leaves and ellipsizes.
+        var labelRoom = Math.Max(0f, inner.Width - (HasIcon ? iconW + ButtonDrawer.IconTextGap : 0f));
+        var labelW = IsIconOnly ? 0f : Math.Min(_label.DesiredSize.Width, labelRoom);
         var totalWidth = ComputeContentWidth(labelW, iconW);
 
         var startX = ContentAlign switch

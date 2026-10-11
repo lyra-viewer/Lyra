@@ -98,6 +98,14 @@ public partial class SdlCore
 
     private void OnMouseButtonDown(Event e)
     {
+        if (e.Button.Button == ButtonRight)
+        {
+            if (!_isPanning)
+                _renderer.UIManager.HandleContextClick(e.Button.X, e.Button.Y);
+
+            return;
+        }
+
         if (_renderer.UIManager.HandlePointerDown(e.Motion.X, e.Motion.Y))
             return;
 
@@ -117,6 +125,9 @@ public partial class SdlCore
             StopPanning();
             return;
         }
+
+        if (e.Button.Button == ButtonRight)
+            return;
 
         if (_renderer.UIManager.HandlePointerUp(e.Motion.X, e.Motion.Y))
             return;

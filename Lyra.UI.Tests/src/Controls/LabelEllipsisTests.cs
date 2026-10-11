@@ -141,4 +141,17 @@ public class LabelEllipsisTests
 
         Assert.True(second < first, "a shorter string should paint less");
     }
+
+    [Fact]
+    public void AnArrangedWidthAFloatStepShortOfTheTextDoesNotCutIt()
+    {
+        float Painted(bool ellipsize)
+        {
+            var label = new Label(Long) { Ellipsize = ellipsize };
+            var measured = label.Measure(new SKSize(1000, 30)).Width;
+            return PaintedWidth(label, MathF.BitDecrement(measured));
+        }
+
+        Assert.Equal(Painted(ellipsize: false), Painted(ellipsize: true));
+    }
 }
