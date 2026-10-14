@@ -119,7 +119,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
     {
     }
 
-    public virtual void Render(in RenderScene scene, IRenderOverlay? overlay)
+    public virtual bool Render(in RenderScene scene, IRenderOverlay? overlay)
     {
         BeforeRender();
 
@@ -127,7 +127,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
         {
             var surface = CreateSurface();
             if (surface is null)
-                return;
+                return false;
 
             try
             {
@@ -144,6 +144,7 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
                     _presentedPeak.Observe(surface, Backend, scene.Composite?.Content is not null);
 
                 AfterRender(surface);
+                return true;
             }
             finally
             {

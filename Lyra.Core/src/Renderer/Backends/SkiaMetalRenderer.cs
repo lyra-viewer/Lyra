@@ -11,12 +11,13 @@ namespace Lyra.Renderer.Backends;
 public sealed class SkiaMetalRenderer : SkiaRendererBase
 {
     // SDL3 metal glue
-    private readonly IntPtr _metalView; // SDL_MetalView (typedef void*)
+    private readonly IntPtr _metalView;  // SDL_MetalView (typedef void*)
     private readonly IntPtr _metalLayer; // CAMetalLayer*
+    private readonly IntPtr _nsWindow;   // NSWindow*, zero if SDL did not expose it
 
     // Metal objects
     private readonly IntPtr _device; // id<MTLDevice>
-    private readonly IntPtr _queue; // id<MTLCommandQueue>
+    private readonly IntPtr _queue;  // id<MTLCommandQueue>
 
     private readonly GRMtlBackendContext _mtlBackend;
     private readonly GRContext _grContext;
@@ -33,6 +34,10 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
 
     /// <summary>Whether the layer was successfully configured for extended range.</summary>
     private readonly bool _extendedRange;
+
+    private const ulong NSWindowOcclusionStateVisible = 1UL << 1;
+
+    private readonly HiddenWindowGate _hiddenWindowGate = new();
     
     private static readonly IntPtr SelNextDrawable = ObjC.Sel("nextDrawable");
     private static readonly IntPtr SelTexture = ObjC.Sel("texture");
@@ -43,6 +48,7 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     private static readonly IntPtr SelCommit = ObjC.Sel("commit");
     private static readonly IntPtr SelNew = ObjC.Sel("new");
     private static readonly IntPtr SelDrain = ObjC.Sel("drain");
+    private static readonly IntPtr SelOcclusionState = ObjC.Sel("occlusionState");
     private static readonly IntPtr ClassAutoreleasePool = ObjC.Class("NSAutoreleasePool");
     
     private static readonly SKColorSpace DisplayP3 = SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Srgb, SKColorSpaceXyz.DisplayP3);
@@ -50,6 +56,8 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     public SkiaMetalRenderer(IntPtr window, PixelSize drawableSize)
         : base(drawableSize, "Metal")
     {
+        _nsWindow = GetPointerProperty(GetWindowProperties(window), Props.WindowCocoaWindowPointer, IntPtr.Zero);
+
         _metalView = MetalCreateView(window);
         if (_metalView == IntPtr.Zero)
             throw new InvalidOperationException("SDL_Metal_CreateView failed.");
@@ -151,6 +159,9 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
     /// </summary>
     protected override SKSurface? CreateSurface()
     {
+        if (!_hiddenWindowGate.ShouldDraw(IsWindowVisible(), Environment.TickCount64))
+            return null;
+
         var drawable = ObjC.Send(_metalLayer, SelNextDrawable);
         if (drawable == IntPtr.Zero)
         {
@@ -183,6 +194,9 @@ public sealed class SkiaMetalRenderer : SkiaRendererBase
 
         return surface;
     }
+
+    private bool IsWindowVisible() =>
+        _nsWindow == IntPtr.Zero || (ObjC.SendUInt64(_nsWindow, SelOcclusionState) & NSWindowOcclusionStateVisible) != 0;
 
     /// <summary>Presents the frame. Only reached when the frame actually drew.</summary>
     protected override void AfterRender(SKSurface surface)

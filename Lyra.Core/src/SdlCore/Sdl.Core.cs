@@ -47,6 +47,8 @@ public partial class SdlCore : IDisposable
     private const int MaxFps = 240;
     private const ulong NsPerSecond = 1_000_000_000UL;
     private const ulong TargetFrameNs = NsPerSecond / MaxFps;
+    private const ulong IdleFrameNs = NsPerSecond / 60;
+    
     private ulong _nextFrameDeadlineNs;
 
     // -------------------------------------------------------------------------
@@ -334,21 +336,22 @@ public partial class SdlCore : IDisposable
 
             var scene = CurrentScene();
             UpdateStatusOverlay(scene);
-            _renderer.Render(scene, _ui);
+            var presented = _renderer.Render(scene, _ui);
 
             GLSwapWindow(_window);
 
             // Safety pacing
+            var frameNs = presented || !_coldStartSafe ? TargetFrameNs : IdleFrameNs;
             var now = GetTicksNS();
             if (now < _nextFrameDeadlineNs)
             {
                 DelayNS(_nextFrameDeadlineNs - now);
-                _nextFrameDeadlineNs += TargetFrameNs;
+                _nextFrameDeadlineNs += frameNs;
             }
             else
             {
                 // Running late - resync to avoid drift.
-                _nextFrameDeadlineNs = now + TargetFrameNs;
+                _nextFrameDeadlineNs = now + frameNs;
             }
 
             // Advance cold start countdown

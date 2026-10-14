@@ -204,14 +204,15 @@ public partial class SdlCore
 
                 FlushStatsIfDue(force: true);
 
-                // Apply results back on the main thread
+                // Apply results back on the main thread. Only raising the window waits for warm-up.
                 DispatchToMain(() =>
                 {
                     DirectoryNavigator.ApplyCollection(result);
                     _ui.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false);
                     LoadImage();
-                    RaiseWindow(_window);
-                }, requireWarm: true);
+                });
+
+                DispatchToMain(() => RaiseWindow(_window), requireWarm: true);
 
                 batch.Clear();
                 await Task.Yield();
