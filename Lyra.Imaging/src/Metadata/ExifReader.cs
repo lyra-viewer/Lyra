@@ -22,7 +22,7 @@ internal static class ExifReader
         var exifInfo = new ExifInfo();
 
         var ifd0 = directories.OfType<ExifIfd0Directory>().FirstOrDefault();
-        var subIfd = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault();
+        var subIfd = FindExifIfd(directories);
         var gps = directories.OfType<GpsDirectory>().FirstOrDefault();
         var icc = directories.OfType<IccDirectory>().FirstOrDefault();
 
@@ -75,6 +75,24 @@ internal static class ExifReader
         return exifInfo;
     }
     
+    /// <summary>
+    /// The EXIF IFD (0x8769). MetadataExtractor gives the image SubIFDs of tag 330 the same type,
+    /// and in a NEF, ARW or DNG they come first, so the first one is the raw data, not EXIF.
+    /// </summary>
+    private static ExifSubIfdDirectory? FindExifIfd(IReadOnlyList<Directory> directories)
+    {
+        var candidates = directories.OfType<ExifSubIfdDirectory>().ToList();
+        return candidates.FirstOrDefault(directory => !DescribesImage(directory)) ?? candidates.FirstOrDefault();
+    }
+
+    // A NEF's JPEG previews have no width or strips, only the JPEG offset.
+    private static bool DescribesImage(Directory directory) =>
+        directory.ContainsTag(ExifDirectoryBase.TagNewSubfileType)
+        || directory.ContainsTag(ExifDirectoryBase.TagImageWidth)
+        || directory.ContainsTag(ExifThumbnailDirectory.TagThumbnailOffset)
+        || directory.ContainsTag(ExifDirectoryBase.TagStripOffsets)
+        || directory.ContainsTag(ExifDirectoryBase.TagTileOffsets);
+
     private static string ReadTaken(Directory? subIfd, Directory? ifd0)
     {
         if (TryReadDateTime(subIfd, ExifDirectoryBase.TagDateTimeOriginal, out var taken)

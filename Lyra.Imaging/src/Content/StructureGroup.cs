@@ -14,5 +14,11 @@ public sealed class StructureGroup
 
     public long? SizeBytes { get; init; }
 
+    /// <summary>Where the part starts in the file, for containers whose layout is the point.</summary>
+    public long? Offset { get; init; }
+
+    /// <summary>How deep the part sits: 0 for the file's own parts, 1 for what one of them points at, and so on.</summary>
+    public int Depth { get; init; }
+
     public IReadOnlyList<KeyValuePair<string, string>> Fields { get; init; } = [];
 }

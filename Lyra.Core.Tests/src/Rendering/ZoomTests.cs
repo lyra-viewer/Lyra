@@ -1,4 +1,3 @@
-using System.Globalization;
 using Lyra.Common;
 using Lyra.SdlCore;
 using Xunit;
@@ -132,9 +131,6 @@ public class ZoomTests
     [InlineData(10000f, "10000%")]
     public void ZoomIsShownWithADecimalOnlyWhereAWholePercentWouldSayNothing(float zoom, string expected)
     {
-        // The info panel formats numbers in the user's culture, as SizeToStr already does.
-        var separator = CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
-
-        Assert.Equal(expected.Replace(".", separator), Formatters.ZoomToStr(zoom));
+        Assert.Equal(expected, Formatters.ZoomToStr(zoom));
     }
 }

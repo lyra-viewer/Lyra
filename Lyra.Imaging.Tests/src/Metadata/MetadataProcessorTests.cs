@@ -283,4 +283,24 @@ public class MetadataProcessorTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void ParseMetadata_ReadsTheExifIfdOfARawWhoseImageSubIfdComesFirst()
+    {
+        // A DNG's raw data is a SubIFD (330) listed before the EXIF pointer (34665), and
+        // MetadataExtractor types both the same, so the first one is the wrong one.
+        var dng = DngBuilder.Build(new DngBuilder.Spec(PreviewWidth: 16, PreviewHeight: 12, Exif:
+        [
+            TiffWriter.Rational(33434, 1, 250),                // ExposureTime
+            TiffWriter.Shorts(34855, 400),                     // ISO
+            TiffWriter.Ascii(36867, "2024:09:26 18:32:17")     // DateTimeOriginal
+        ]));
+
+        using var stream = new MemoryStream(dng, writable: false);
+        var rows = MetadataProcessor.ParseMetadata(stream, "synthetic.dng").ToKeyValuePairs();
+
+        Assert.Contains(new ExifEntry("Exposure Time", "1/250 sec"), rows);
+        Assert.Contains(new ExifEntry("ISO", "400"), rows);
+        Assert.Contains(new ExifEntry("Taken", "2024-09-26 18:32:17"), rows);
+    }
 }

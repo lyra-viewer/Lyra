@@ -94,7 +94,7 @@ public class MainLayer : IUIEvents, IDisposable
         _directoryTreeSection = new DirectoryTreeSection();
         _exifSection = new ExifSection(_keyColumnRegistry);
         _formatSection = new FormatSection(_keyColumnRegistry);
-        _structureSection = new StructureSection(_keyColumnRegistry);
+        _structureSection = new StructureSection();
         _layersSection = new LayersSection();
         _variantsSection = new VariantsSection();
         _hdrDecodeSection = new HdrDecodeSection();

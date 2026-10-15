@@ -66,6 +66,19 @@ public sealed class Composite : IDisposable
     public volatile ExifOrientation AppliedOrientation = ExifOrientation.Normal;
 
     /// <summary>
+    /// A status line for work that keeps running after the first image is on screen, such as a raw
+    /// developing behind its preview; once the work is done, it says how it went. Null when there
+    /// is nothing to report. Set from the decoder thread, which signals progress after each change.
+    /// </summary>
+    public volatile LoadStage? Stage;
+
+    /// <summary>
+    /// True while a preview stands in for a scene-referred image that is still on its way, so the
+    /// HDR controls show up right away instead of popping in when the image arrives.
+    /// </summary>
+    public volatile bool HdrPending;
+
+    /// <summary>
     /// Set by a decoder when the image is shown, but not whole. A set of renditions keeps one per
     /// rendition instead, on <see cref="VariantRasterContent.WarningOf"/>.
     /// </summary>
@@ -88,6 +101,14 @@ public sealed class Composite : IDisposable
 
     /// <summary>Whether the pixels are still scene-referred, and so whether exposure and curve apply at draw time.</summary>
     public bool IsHdrDecoded => Displayed is HdrRasterContent or RasterLargeContent { HasScenePreview: true };
+
+    /// <summary>What the image on screen says about where its light ends, and its own curve.</summary>
+    public SceneRange DisplayedRange => Displayed switch
+    {
+        HdrRasterContent hdr => hdr.Range,
+        RasterLargeContent large => large.Range,
+        _ => default
+    };
 
     /// <summary>What is on screen: the content itself, or the rendition a page set is showing.</summary>
     private ICompositeContent? Displayed => Content is VariantRasterContent variants ? variants.Active : Content;

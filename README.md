@@ -101,7 +101,7 @@ cannot be parallelised, so performance over a NAS or remote share will always be
 Lyra is built on .NET 9 with SDL3 for windowing and input, and SkiaSharp for hardware-accelerated rendering via OpenGL
 or Metal. It is not an Electron app - there is no embedded browser, no web runtime, and no hidden resource overhead
 (and definitely no AI client). Decoding is split between **Lyra.ManagedCodecs**, a pure-managed codec library, and
-lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
+lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL, TIFF and camera raw.
 
 **See [Technical Documentation](docs/technical.md)** for the full detail:
 
@@ -151,6 +151,31 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 |--------------|-------------------------------------------------|------------|----------------------------------------------|
 | OpenEXR      | High-dynamic range, multi-channel raster format | `.exr`     |                                              |
 | Radiance HDR | High-dynamic range RGBE / XYZE format           | `.hdr`     | See [HDR / EDR](docs/technical.md#hdr--edr). |
+
+### Camera Raw
+
+See [Camera Raw](docs/technical.md#camera-raw) for the details.
+
+| Maker               | Extensions           | Notes                                                                                                                                                                                           |
+|---------------------|----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Adobe DNG           | `.dng`               | Adobe's open raw format, used by Leica, Pentax, Hasselblad, many phones and raw converters. If the file brings its own tone curve and local tone mapping, as Apple ProRAW does, Lyra uses them. |
+| Canon               | `.cr3` `.cr2` `.crw` | CR3 (2018 on, ISO media container), CR2 (TIFF-based) and the early CRW.                                                                                                                         |
+| Nikon               | `.nef` `.nrw`        | NRW is the Coolpix variant.                                                                                                                                                                     |
+| Sony                | `.arw` `.srf` `.sr2` | ARW includes lossless compressed raws.                                                                                                                                                          |
+| Fujifilm            | `.raf`               | Bayer and X-Trans sensors.                                                                                                                                                                      |
+| Panasonic / Leica   | `.rw2` `.rwl`        | RWL is Leica's name for the same format.                                                                                                                                                        |
+| Olympus / OM System | `.orf`               |                                                                                                                                                                                                 |
+| Pentax / Ricoh      | `.pef`               | Newer bodies can also write DNG.                                                                                                                                                                |
+| Samsung             | `.srw`               |                                                                                                                                                                                                 |
+| Hasselblad          | `.3fr` `.fff`        |                                                                                                                                                                                                 |
+| Phase One           | `.iiq`               |                                                                                                                                                                                                 |
+| Leaf                | `.mos`               |                                                                                                                                                                                                 |
+| Mamiya              | `.mef`               |                                                                                                                                                                                                 |
+| Kodak               | `.kdc` `.dcr`        |                                                                                                                                                                                                 |
+| Konica Minolta      | `.mrw`               |                                                                                                                                                                                                 |
+| Epson               | `.erf`               |                                                                                                                                                                                                 |
+
+> _Note:_ The generic `.raw` extension is deliberately not claimed.
 
 ### GPU Formats
 
@@ -222,22 +247,23 @@ lightweight native interop wrappers for EXR, JPEG 2000, JPEG XL and TIFF.
 
 ## Dependencies
 
-| Library           | Purpose                                                                                    | License      | Repository                                                        |
-|-------------------|--------------------------------------------------------------------------------------------|--------------|-------------------------------------------------------------------|
-| SDL3-CS           | Core graphics, input, and windowing                                                        | zlib         | [github](https://github.com/edwardgushchin/SDL3-CS)               |
-| SkiaSharp         | Hardware-accelerated 2D rendering                                                          | MIT          | [github](https://github.com/mono/SkiaSharp)                       |
-| Svg.Skia          | SVG parsing and rendering                                                                  | MIT          | [github](https://github.com/wieslawsoltes/Svg.Skia)               |
-| libheif           | HEIF / HEIC / AVIF decoding, stills and image sequences (direct interop)                   | LGPL-3.0     | [github](https://github.com/strukturag/libheif)                   |
-| OpenEXR           | High-dynamic-range OpenEXR (.exr) decoding                                                 | BSD-3-Clause | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
-| OpenJPEG          | JPEG 2000 still-image decoding                                                             | BSD-2-Clause | [github](https://github.com/uclouvain/openjpeg)                   |
-| libjxl            | JPEG XL decoding (native wrapper)                                                          | BSD-3-Clause | [github](https://github.com/libjxl/libjxl)                        |
-| libtiff           | TIFF decoding                                                                              | BSD-like     | [gitlab](https://gitlab.com/libtiff/libtiff)                      |
-| Basis Universal   | KTX2 ETC1S / UASTC transcoding (native wrapper)                                            | Apache-2.0   | [github](https://github.com/BinomialLLC/basis_universal)          |
-| ZstdSharp.Port    | Zstandard decompression for KTX2 supercompression                                          | MIT          | [github](https://github.com/oleg-st/ZstdSharp)                    |
-| Unicolour         | Color space conversions & perceptual color math (transitive, via the in-house PSD decoder) | MIT          | [github](https://github.com/waacton/Unicolour)                    |
-| MetadataExtractor | EXIF metadata extraction                                                                   | Apache-2.0   | [github](https://github.com/drewnoakes/metadata-extractor-dotnet) |
-| Tomlyn            | TOML parsing for configuration files                                                       | BSD-2-Clause | [github](https://github.com/xoofx/Tomlyn)                         |
-| System.IO.Hashing | Fast non-cryptographic hashing (duplicate detection)                                       | MIT          | [github](https://github.com/dotnet/runtime)                       |
+| Library           | Purpose                                                                                    | License              | Repository                                                        |
+|-------------------|--------------------------------------------------------------------------------------------|----------------------|-------------------------------------------------------------------|
+| SDL3-CS           | Core graphics, input, and windowing                                                        | zlib                 | [github](https://github.com/edwardgushchin/SDL3-CS)               |
+| SkiaSharp         | Hardware-accelerated 2D rendering                                                          | MIT                  | [github](https://github.com/mono/SkiaSharp)                       |
+| Svg.Skia          | SVG parsing and rendering                                                                  | MIT                  | [github](https://github.com/wieslawsoltes/Svg.Skia)               |
+| libheif           | HEIF / HEIC / AVIF decoding, stills and image sequences (direct interop)                   | LGPL-3.0             | [github](https://github.com/strukturag/libheif)                   |
+| OpenEXR           | High-dynamic-range OpenEXR (.exr) decoding                                                 | BSD-3-Clause         | [github](https://github.com/AcademySoftwareFoundation/openexr)    |
+| OpenJPEG          | JPEG 2000 still-image decoding                                                             | BSD-2-Clause         | [github](https://github.com/uclouvain/openjpeg)                   |
+| LibRaw            | Camera raw decoding (native wrapper)                                                       | LGPL-2.1 or CDDL-1.0 | [libraw.org](https://www.libraw.org/)                             |
+| libjxl            | JPEG XL decoding (native wrapper)                                                          | BSD-3-Clause         | [github](https://github.com/libjxl/libjxl)                        |
+| libtiff           | TIFF decoding                                                                              | BSD-like             | [gitlab](https://gitlab.com/libtiff/libtiff)                      |
+| Basis Universal   | KTX2 ETC1S / UASTC transcoding (native wrapper)                                            | Apache-2.0           | [github](https://github.com/BinomialLLC/basis_universal)          |
+| ZstdSharp.Port    | Zstandard decompression for KTX2 supercompression                                          | MIT                  | [github](https://github.com/oleg-st/ZstdSharp)                    |
+| Unicolour         | Color space conversions & perceptual color math (transitive, via the in-house PSD decoder) | MIT                  | [github](https://github.com/waacton/Unicolour)                    |
+| MetadataExtractor | EXIF metadata extraction                                                                   | Apache-2.0           | [github](https://github.com/drewnoakes/metadata-extractor-dotnet) |
+| Tomlyn            | TOML parsing for configuration files                                                       | BSD-2-Clause         | [github](https://github.com/xoofx/Tomlyn)                         |
+| System.IO.Hashing | Fast non-cryptographic hashing (duplicate detection)                                       | MIT                  | [github](https://github.com/dotnet/runtime)                       |
 
 Copyright notices and license texts for everything Lyra redistributes, including the components these libraries pull
 in, are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) and ship inside every package.
@@ -246,8 +272,8 @@ in, are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) and ship inside ev
 
 ## Native Libraries & Bundling
 
-A handful of formats are decoded through native libraries (libheif, OpenJPEG, libjxl, OpenEXR, libtiff, plus the Basis
-Universal transcoder). How those libraries are delivered depends on the platform:
+A handful of formats are decoded through native libraries (libheif, OpenJPEG, libjxl, LibRaw, OpenEXR, libtiff, plus the
+Basis Universal transcoder). How those libraries are delivered depends on the platform:
 
 - **macOS** - expected from the package manager (Homebrew).
 - **Linux** - resolved as APT dependencies of the `.deb`, except for **libjxl**, which is vendored inside the

@@ -33,9 +33,14 @@ internal static class ExifJpegBuilder
         bool wideGamut = false,
         string? artist = null,
         XmpFields? xmp = null,
-        IptcFields? iptc = null)
+        IptcFields? iptc = null,
+        string? make = null)
     {
-        var ifd0 = new List<Entry> { Entry.Short(0x0112, orientation) };
+        var ifd0 = new List<Entry>();
+        if (make is not null)
+            ifd0.Add(Entry.Ascii(0x010F, make));
+
+        ifd0.Add(Entry.Short(0x0112, orientation));
         if (dateTime is not null)
             ifd0.Add(Entry.Ascii(0x0132, dateTime));
         

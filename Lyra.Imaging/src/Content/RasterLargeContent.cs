@@ -39,6 +39,9 @@ public sealed class RasterLargeContent : ICompositeContent
     public float? TileWhitePoint { get; private set; }
 
     public ITileSource? TileSource { get; private set; }
+
+    /// <summary>Where the light ends, when the format knows; set before the content is published.</summary>
+    public SceneRange Range { get; internal set; }
     
     public float? DecodedWidth => PreviewImage?.Width;
 
@@ -129,5 +132,6 @@ public sealed class RasterLargeContent : ICompositeContent
             PreviewImage.Dispose();
 
         TileSource?.Dispose();
+        Range.Curve?.Dispose();
     }
 }

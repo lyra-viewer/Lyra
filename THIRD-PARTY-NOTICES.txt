@@ -10,7 +10,8 @@ too long to inline are kept verbatim in licenses/.
 
 Not listed: libraries Lyra loads from the system rather than shipping -
 OpenEXR, OpenJPEG, libtiff, Zstandard (libzstd), libheif and libde265 come
-from Homebrew on macOS and from APT on Linux.
+from Homebrew on macOS and from APT on Linux. LibRaw comes from Homebrew on
+macOS; elsewhere Lyra ships it (19).
 
 CONTENTS
 
@@ -32,6 +33,7 @@ CONTENTS
   16. Highway (libhwy)
   17. Brotli
   18. Little CMS (liblcms2)
+  19. LibRaw (libraw_r)
 
 
 ================================================================================
@@ -718,6 +720,32 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
 CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+================================================================================
+19. LibRaw (libraw_r)
+================================================================================
+
+Source:    https://www.libraw.org/
+Copyright: Copyright (C) 2008-2025 LibRaw LLC
+License:   LGPL-2.1 (LibRaw is offered under LGPL-2.1 or CDDL-1.0; Lyra uses it
+           under LGPL-2.1)
+Ships in:  Linux .deb, Windows
+
+Lyra ships LibRaw 0.22.2 unmodified, as a separate shared library (libraw_r.so
+on Linux, raw_r.dll on Windows) that can be replaced with another build of the
+same version. Its corresponding source is the release archive
+
+  https://www.libraw.org/data/LibRaw-0.22.2.tar.gz
+  SHA-256 de86b035655accff8d4010f1a221fdf50d353cb7b1422ba26f14a0db92612cfa
+
+and a copy is available from the Lyra maintainer on request for three years
+after any release that ships it.
+
+LibRaw incorporates code from dcraw (Dave Coffin), DCB and FBDD (Jacek Gozdz,
+BSD-3-Clause), the X3F library (Roland Karlsson, BSD-style) and the Adobe DNG
+SDK 1.4 (MIT). LibRaw's COPYRIGHT file and the full text of the GNU LGPL 2.1
+are in licenses/LibRaw-LICENSE.txt.
+
 
 ================================================================================
 Apache License, Version 2.0

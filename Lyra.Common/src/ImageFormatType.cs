@@ -9,6 +9,13 @@ public enum ImageFormatType
     [Description("Windows Bitmap")]
     Bmp,
 
+    [FileExtension([
+        ".dng", ".cr2", ".cr3", ".crw", ".nef", ".nrw", ".arw", ".srf", ".sr2", ".raf", ".orf", ".rw2", ".rwl",
+        ".pef", ".srw", ".3fr", ".fff", ".iiq", ".erf", ".kdc", ".dcr", ".mrw", ".mos", ".mef"
+    ])]
+    [Description("Camera Raw Image")]
+    Raw,
+
     [FileExtension([".dds"])]
     [Description("DirectDraw Surface Texture")]
     Dds,

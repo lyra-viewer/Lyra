@@ -69,7 +69,7 @@ public sealed class VariantRasterContent : ICompositeContent
         _recent.Add(ActiveIndex);
     }
 
-    public IReadOnlyList<ImageVariant> Variants { get; }
+    public IReadOnlyList<ImageVariant> Variants { get; private set; }
 
     /// <summary>What the renditions are. Defaults to the icon case: sizes of one image.</summary>
     public VariantKind Kind { get; init; } = VariantKind.Variants;
@@ -294,6 +294,46 @@ public sealed class VariantRasterContent : ICompositeContent
             VariantReady?.Invoke(this);
         else if (failed)
             VariantFailed?.Invoke(this);
+    }
+
+    public void ReplaceVariant(int index, ICompositeContent content, ImageVariant? variant = null)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+
+        lock (_gate)
+        {
+            if (_disposed || index < 0 || index >= _contents.Count)
+            {
+                content.Dispose();
+                return;
+            }
+
+            if (_contents[index] is { } old)
+                _retired.Add(old);
+
+            _contents[index] = content;
+
+            if (variant is not null)
+                Variants = [.. Variants.Select((existing, i) => i == index ? variant : existing)];
+
+            if (_failures.Remove(index))
+                Interlocked.Increment(ref _failureVersion);
+
+            // A fetch of the same rendition, asked for while the stand-in was trimmed, is now moot.
+            if (_pendingIndex == index)
+            {
+                _pending?.Cancel();
+                Show(index);
+            }
+
+            // Just arrived, so the last thing to trim.
+            _recent.Remove(index);
+            _recent.Add(index);
+
+            Trim();
+        }
+
+        VariantReady?.Invoke(this);
     }
 
     /// <summary>Marks a rendition as the one on screen and the most recently used. Call under the lock.</summary>

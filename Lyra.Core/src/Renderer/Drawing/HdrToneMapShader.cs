@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.Common.Settings.Enums;
+using Lyra.Imaging.Content;
 using SkiaSharp;
 
 namespace Lyra.Renderer.Drawing;
@@ -54,13 +55,15 @@ internal static class HdrToneMapShader
         }
     }
     
-    public static SKPaint? CreatePaint(SKImage image, SKSamplingOptions sampling, SKMatrix localMatrix, ToneMapMode mode, float exposureScale, float whitePoint, SurfaceProfile surface)
+    public static SKPaint? CreatePaint(SKImage image, SKSamplingOptions sampling, SKMatrix localMatrix, ToneMapMode mode, float exposureScale, float whitePoint, SurfaceProfile surface, SceneRange range = default)
     {
         var effect = Effect.Value;
         if (effect is null)
             return null;
         
         using var imageShader = image.ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, sampling, localMatrix);
+
+        var toneLut = mode == ToneMapMode.Aces ? range.Curve?.Image : null;
 
         var transfer = TransferOf(surface.ColorSpace);
 
@@ -71,12 +74,18 @@ internal static class HdrToneMapShader
             ["mode"]        = (float)mode,
             ["gamut"]       = GamutTransform.Between(image.ColorSpace, surface.ColorSpace),
             ["ceiling"]     = surface.Ceiling,
+            ["sceneWhite"]  = range.SceneWhite ?? 0f,
+            ["peak"]        = range.Peak ?? 0f,
+            ["toneLutSize"] = toneLut?.Width ?? 0f,
+            ["toWorking"]   = GamutTransform.Between(image.ColorSpace, CameraToneCurve.WorkingSpace),
+            ["fromWorking"] = GamutTransform.Between(CameraToneCurve.WorkingSpace, surface.ColorSpace),
             ["lumaWeights"] = GamutTransform.LuminanceWeights(surface.ColorSpace),
             ["encodeGABC"]  = new[] { transfer.G, transfer.A, transfer.B, transfer.C },
             ["encodeDEF"]   = new[] { transfer.D, transfer.E, transfer.F }
         };
 
-        var children = new SKRuntimeEffectChildren(effect) { ["image"] = imageShader };
+        using var toneShader = (toneLut ?? NoToneLut.Value).ToRawShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, new SKSamplingOptions(SKFilterMode.Linear), SKMatrix.Identity);
+        var children = new SKRuntimeEffectChildren(effect) { ["image"] = imageShader, ["toneLut"] = toneShader };
         using var shader = effect.ToShader(uniforms, children);
 
         return new SKPaint { Shader = shader, IsAntialias = false };
@@ -93,6 +102,14 @@ internal static class HdrToneMapShader
 
         return SKColorSpaceTransferFn.Srgb;
     }
+
+    private static readonly Lazy<SKImage> NoToneLut = new(() =>
+    {
+        using var bitmap = new SKBitmap(new SKImageInfo(1, 1, SKColorType.RgbaF16, SKAlphaType.Unpremul, null));
+        bitmap.Erase(SKColors.Black);
+        bitmap.SetImmutable();
+        return SKImage.FromBitmap(bitmap);
+    });
 
     /// <summary>Whether draw-time tone mapping is usable at all on this machine.</summary>
     public static bool IsAvailable => Effect.Value is not null;

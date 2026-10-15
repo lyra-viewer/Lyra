@@ -1,6 +1,5 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
-using Lyra.GUI.Support;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Layout;
@@ -10,19 +9,13 @@ using Lyra.UI.Theme;
 
 namespace Lyra.GUI.Sections;
 
-// ============================================================================
-//  StructureSection - sidebar collapsible showing the file's internal structure.
-// ----------------------------------------------------------------------------
-//  Renders Composite.Structure as a stack of per-part collapsibles: each part
-//  has a rich header (name + description + size badge) and expands to a list of
-//  key-value fields. Populated for DDS, KTX and PSD; any decoder that fills
-//  Composite.Structure participates automatically.
-// ============================================================================
 public sealed class StructureSection : IUISection
 {
-    private const string KeyColumn = "structure";
+    /// <summary>How far each level of a nested structure is indented.</summary>
+    private const int DepthIndent = 14;
 
-    private readonly KeyColumnRegistry _registry;
+    /// <summary>The widest a part's key column grows, in characters; longer keys end in an ellipsis.</summary>
+    private const int MaxKeyCharacters = 32;
 
     private readonly Collapsible _collapsible;
     private readonly VScrollContainer _groups;
@@ -34,10 +27,8 @@ public sealed class StructureSection : IUISection
 
     public IComponent Root => _collapsible;
 
-    public StructureSection(KeyColumnRegistry registry)
+    public StructureSection()
     {
-        _registry = registry;
-
         _groups = new VScrollContainer
         {
             HorizontalSize = SizeMode.Expand,
@@ -57,9 +48,7 @@ public sealed class StructureSection : IUISection
     public void Refresh(UIState state)
     {
         var composite = state.Composite;
-        
-        ReportWidths(composite);
-        
+
         if (composite == _lastComposite && state.CompositeState == _lastState)
             return;
 
@@ -67,17 +56,6 @@ public sealed class StructureSection : IUISection
         _lastState = state.CompositeState;
 
         ApplyData(composite);
-    }
-
-    private void ReportWidths(Composite? composite)
-    {
-        var structure = composite?.Structure;
-        if (structure is null)
-            return;
-
-        foreach (var group in structure)
-        foreach (var field in group.Fields)
-            _registry.Report(KeyColumn, Label.MeasureTextWidth(field.Key));
     }
 
     private void ApplyData(Composite? composite)
@@ -97,35 +75,50 @@ public sealed class StructureSection : IUISection
             _groups.AddComponent(BuildGroupPanel(group));
     }
 
-    private Collapsible BuildGroupPanel(StructureGroup group)
+    private static Collapsible BuildGroupPanel(StructureGroup group)
     {
         var titleColumn = new VStack { HorizontalSize = SizeMode.Expand, Transient = true };
-        titleColumn.AddComponent(new Label(group.Name) { Color = Palette.Foreground, Bold = false });
+        titleColumn.AddComponent(new Label(group.Name) { Color = Palette.Foreground, Bold = false, HorizontalSize = SizeMode.Expand, Ellipsize = true });
 
         if (!string.IsNullOrEmpty(group.Description))
-            titleColumn.AddComponent(new Label(group.Description) { Color = Palette.Dim });
+            titleColumn.AddComponent(new Label(group.Description) { Color = Palette.Dim, HorizontalSize = SizeMode.Expand, Ellipsize = true });
 
         var header = new HStack
         {
             Spacing = 8,
             HorizontalSize = SizeMode.Expand,
-            VerticalAlign = VAlign.Center,
+            VerticalAlign = VAlign.Top,
             Padding = new Padding(0, 2, 0, 2)
         };
         header.AddComponent(titleColumn);
 
+        // Offset beside the name, size beside the description: a narrow column leaves the name room.
+        var placement = new VStack { HorizontalSize = SizeMode.Shrink, Transient = true };
+
+        if (group.Offset is { } offset)
+            placement.AddComponent(new Label($"0x{offset:X}") { Color = Palette.Muted, HorizontalAlign = HAlign.Right });
+
         if (group.SizeBytes.HasValue)
-            header.AddComponent(new Label(Formatters.SizeToStr(group.SizeBytes.Value)) { Color = Palette.Muted });
+            placement.AddComponent(new Label(Formatters.SizeToStr(group.SizeBytes.Value)) { Color = Palette.Muted, HorizontalAlign = HAlign.Right });
+
+        if (placement.Children.Count > 0)
+            header.AddComponent(placement);
 
         var panel = new Collapsible(header)
         {
             HorizontalSize = SizeMode.Expand,
-            Padding = new Padding(10, 0, 0, 0)
+            Padding = new Padding(10 + DepthIndent * group.Depth, 0, 0, 0),
+            Expandable = group.Fields.Count > 0
         };
+
+        if (group.Fields.Count == 0)
+            return panel;
+
+        var keyWidth = KeyWidth(group);
 
         // Shrink vertically so the outer VScrollContainer owns scrolling and the
         // ListView never grows its own scrollbar (no nested double-scroll).
-        var list = new ListView<KeyValuePair<string, string>>([..group.Fields], RenderRow)
+        var list = new ListView<KeyValuePair<string, string>>([..group.Fields], (field, _) => RenderRow(field, keyWidth))
         {
             HorizontalSize = SizeMode.Expand,
             VerticalSize = SizeMode.Shrink,
@@ -136,7 +129,17 @@ public sealed class StructureSection : IUISection
         return panel;
     }
 
-    private HStack RenderRow(KeyValuePair<string, string> field, bool isPicked)
+    /// <summary>The part's own key column: as wide as its longest key, up to <see cref="MaxKeyCharacters"/>.</summary>
+    private static float KeyWidth(StructureGroup group)
+    {
+        var longest = 0f;
+        foreach (var field in group.Fields)
+            longest = Math.Max(longest, Label.MeasureTextWidth(field.Key));
+
+        return Math.Min(longest, Label.MeasureTextWidth(new string('M', MaxKeyCharacters)));
+    }
+
+    private static HStack RenderRow(KeyValuePair<string, string> field, float keyWidth)
     {
         return new HStack
             {
@@ -149,12 +152,15 @@ public sealed class StructureSection : IUISection
                 {
                     Color = Palette.Dim,
                     HorizontalSize = SizeMode.Fixed,
-                    Width = _registry.Get(KeyColumn)
+                    Width = keyWidth,
+                    Ellipsize = true
                 },
                 new Label(field.Value)
                 {
                     Color = Palette.Foreground,
-                    HorizontalAlign = HAlign.Left
+                    HorizontalAlign = HAlign.Left,
+                    HorizontalSize = SizeMode.Expand,
+                    Ellipsize = true
                 });
     }
 }

@@ -20,13 +20,14 @@ public class Collapsible : ComponentBase, IContainer
     private readonly bool _customHeader;
 
     private bool _isExpanded;
+    private bool _expandable = true;
 
     public bool IsExpanded
     {
         get => _isExpanded;
         set
         {
-            if (_isExpanded == value)
+            if (_isExpanded == value || (value && !Expandable))
                 return;
 
             _isExpanded = value;
@@ -41,6 +42,33 @@ public class Collapsible : ComponentBase, IContainer
             else
             {
                 _headerButton.IconImage = value ? _expandedIcon : _collapsedIcon;
+            }
+
+            Invalidate();
+        }
+    }
+    
+    public bool Expandable
+    {
+        get => _expandable;
+        set
+        {
+            if (_expandable == value)
+                return;
+
+            if (!value)
+                IsExpanded = false;
+
+            _expandable = value;
+
+            if (_customHeader)
+            {
+                _collapsedIcon.Visible = value;
+                _expandedIcon.Visible = value;
+            }
+            else
+            {
+                _headerButton.IconImage = value ? _collapsedIcon : null;
             }
 
             Invalidate();
@@ -127,6 +155,9 @@ public class Collapsible : ComponentBase, IContainer
 
     public void Toggle()
     {
+        if (!Expandable)
+            return;
+
         IsExpanded = !IsExpanded;
         Toggled?.Invoke();
     }

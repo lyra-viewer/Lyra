@@ -26,7 +26,7 @@ public class RasterContent : ICompositeContent
 
     public long ByteSize => ImageBytes.Of(Image);
 
-    public void Dispose()
+    public virtual void Dispose()
     {
         if (Image.Handle != IntPtr.Zero)
             Image.Dispose();

@@ -426,6 +426,13 @@ internal class ImageLoader : IDisposable
             
             EnforceByteBudgetAfterDecode();
 
+            var background = composite.BackgroundDecodeTask;
+            if (!background.IsCompleted)
+            {
+                _ = background.ContinueWith(_ => EnforceByteBudgetAfterDecode(), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                return;
+            }
+
             // Promote to Complete if:
             // - decoder finished everything synchronously (still Loading), or
             // - content is not a streaming RasterLarge (no tiles), or tiles are already fully ready.

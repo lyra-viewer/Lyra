@@ -27,4 +27,13 @@ public sealed class HdrRasterContent(SKBitmap backingBitmap, SKImage image, floa
     /// every frame, and the answer never changes once the image is decoded.
     /// </summary>
     public float WhitePoint { get; } = whitePoint;
+
+    /// <summary>Where the light ends, when the format knows; set before the content is published.</summary>
+    public SceneRange Range { get; internal set; }
+
+    public override void Dispose()
+    {
+        base.Dispose();
+        Range.Curve?.Dispose();
+    }
 }

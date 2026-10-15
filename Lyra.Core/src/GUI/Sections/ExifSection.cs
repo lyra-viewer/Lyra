@@ -108,14 +108,20 @@ public sealed class ExifSection : IUISection
         _list.UpdateData([]);
         _collapsible.Present = composite != null;
         _statusLabel.Present = composite != null;
-        _statusLabel.Text = composite switch
-        {
-            null => "",
-            _ when composite.ExifInfo is null => "No EXIF metadata.",
-            _ when !composite.ExifInfo.IsValid() => "Failed to parse EXIF metadata.",
-            _ => "No recognized EXIF metadata."
-        };
+        _statusLabel.Text = composite is null ? "" : StatusOf(composite);
+        _statusLabel.Color = composite is not null && IsReading(composite) ? Palette.Warning : Palette.Danger;
     }
+
+    private static bool IsReading(Composite composite) =>
+        composite is { ExifInfo: null, State: CompositeState.Pending or CompositeState.Loading or CompositeState.Ready };
+
+    private static string StatusOf(Composite composite) => composite switch
+    {
+        _ when IsReading(composite) => "Reading EXIF metadata...",
+        { ExifInfo: null } => "No EXIF metadata.",
+        _ when !composite.ExifInfo.IsValid() => "Failed to parse EXIF metadata.",
+        _ => "No recognized EXIF metadata."
+    };
 
     private HStack RenderRow(ExifEntry item, bool isPicked)
     {

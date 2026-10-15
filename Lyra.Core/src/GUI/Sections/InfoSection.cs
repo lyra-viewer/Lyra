@@ -40,6 +40,11 @@ public sealed class InfoSection : IUISection
     private readonly Label _viewLockedLabel;
     private readonly Label _samplingModeLabel;
 
+    // Stage row
+    private readonly HStack _stageRow;
+    private readonly Label _stagePrefixLabel;
+    private readonly Label _stageTextLabel;
+
     // Large image row
     private readonly HStack _largeImageRow;
     private readonly Label _largeImagePreviewLabel;
@@ -92,6 +97,10 @@ public sealed class InfoSection : IUISection
             DimPrefix("Sampling:"),
             _samplingModeLabel = ForegroundLabel());
 
+        _stageRow = BuildRow().Children(
+            _stagePrefixLabel = DimPrefix(string.Empty),
+            _stageTextLabel = ForegroundLabel());
+
         _largeImageRow = BuildRow().Children(
             DimPrefix("[Large Image] "),
             DimPrefix("Preview:"),
@@ -112,7 +121,7 @@ public sealed class InfoSection : IUISection
             .Align(HAlign.Left)
             .Spacing(2)
             .Padding(8)
-            .Children(_fileRow, _imageRow, _collectionRow, _displayingRow, _largeImageRow, _errorRow);
+            .Children(_fileRow, _imageRow, _collectionRow, _displayingRow, _stageRow, _largeImageRow, _errorRow);
     }
 
     public void Refresh(UIState state)
@@ -123,6 +132,7 @@ public sealed class InfoSection : IUISection
             _imageRow.Present = false;
             _displayingRow.Present = false;
             _collectionRow.Present = false;
+            _stageRow.Present = false;
             _largeImageRow.Present = false;
             _errorRow.Present = false;
             return;
@@ -182,8 +192,20 @@ public sealed class InfoSection : IUISection
         _collectionTypeLabel.Text = app.CollectionType.Description();
         _directoryNameLabel.Text = $"{fileInfo.DirectoryName}/";
 
+        // Stage row
+        if (composite.Stage is { } stage)
+        {
+            _stagePrefixLabel.Text = StagePrefix(stage);
+            _stageTextLabel.Text = stage.Text;
+            _stageRow.Present = true;
+        }
+        else
+        {
+            _stageRow.Present = false;
+        }
+
         // Large image row
-        if (composite.Content is RasterLargeContent large)
+        if (composite.Content is RasterLargeContent large && ShowsLargeImageRow(large))
         {
             _largeImageTilesLabel.Text = (large.TilesTotal != null)
                 ? $"{large.TilesReady}/{large.TilesTotal}"
@@ -214,6 +236,10 @@ public sealed class InfoSection : IUISection
             _errorRow.Present = false;
         }
     }
+
+    private static string StagePrefix(LoadStage stage) => $"[{stage.Label}]".PadRight(ErrorPrefix.Length);
+    
+    private static bool ShowsLargeImageRow(RasterLargeContent large) => large.TilesTotal is not { } total || large.TilesReady < total;
 
     private const string ErrorPrefix   = "[Error]       ";
     private const string WarningPrefix = "[Warning]     ";

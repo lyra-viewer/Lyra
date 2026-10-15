@@ -1,4 +1,8 @@
 uniform shader image;
+uniform shader toneLut;
+uniform float toneLutSize;
+uniform float3x3 toWorking;
+uniform float3x3 fromWorking;
 uniform float exposure;
 uniform float whitePoint;
 uniform float mode;
@@ -10,6 +14,9 @@ uniform float3 encodeDEF;
 uniform float3 lumaWeights;
 
 uniform float ceiling;
+
+uniform float sceneWhite;
+uniform float peak;
 
 float encodeChannel(float linear) {
     float g = encodeGABC.x;
@@ -42,6 +49,18 @@ float reinhardCurve(float x, float white) {
     return x * (1.0 + x / w2) / (1.0 + x);
 }
 
+float cameraTone(float v) {
+    return toneLut.eval(float2(clamp(v, 0.0, 1.0) * (toneLutSize - 1.0) + 0.5, 0.5)).r;
+}
+
+float3 cameraToneRgb(float3 w) {
+    float lo = min(w.r, min(w.g, w.b));
+    float hi = max(w.r, max(w.g, w.b));
+    float toneLo = cameraTone(lo);
+    float toneHi = cameraTone(hi);
+    return hi > lo ? toneLo + (toneHi - toneLo) * (w - lo) / (hi - lo) : float3(toneLo);
+}
+
 const float highlightKnee = 0.8;
 
 float spendHeadroom(float mapped, float ceiling) {
@@ -56,28 +75,42 @@ float spendHeadroom(float mapped, float ceiling) {
 
 half4 main(float2 coord) {
     half4 src = image.eval(coord);
-    float3 x = max(float3(src.rgb) * exposure, float3(0.0));
+    float3 scene = max(float3(src.rgb) * exposure, float3(0.0));
+    float3 x = max(gamut * scene, float3(0.0));
 
-    x = max(gamut * x, float3(0.0));
+    float top = peak > 0.0 ? min(ceiling, max(peak, 1.0)) : ceiling;
 
     float3 mapped;
-    if (mode > 1.5) {
-        mapped = x;
+    if (mode < 0.5 && toneLutSize > 0.0) {
+        float3 toned = cameraToneRgb(clamp(toWorking * scene, 0.0, 1.0));
+        mapped = max(fromWorking * toned, float3(0.0));
+
+        float brightest = max(mapped.r, max(mapped.g, mapped.b));
+        if (brightest > 1e-5) {
+            mapped *= spendHeadroom(brightest, top) / brightest;
+        }
+    } else if (mode > 1.5) {
+        mapped = sceneWhite > 0.0 ? x / sceneWhite : x;
     } else {
         float luminance = max(dot(x, lumaWeights), 0.0);
-        float curved = (mode > 0.5) ? reinhardCurve(luminance, whitePoint) : acesCurve(luminance);
-        float target = spendHeadroom(curved, ceiling);
+        float white = sceneWhite > 0.0 ? sceneWhite * exposure : whitePoint;
+        float curved = (mode > 0.5) ? reinhardCurve(luminance, white) : acesCurve(luminance);
+        if (mode < 0.5 && sceneWhite > 0.0) {
+            curved /= acesCurve(sceneWhite);
+        }
+
+        float target = spendHeadroom(curved, top);
 
         mapped = luminance > 1e-5 ? x * (target / luminance) : float3(0.0);
 
-        float peak = max(mapped.r, max(mapped.g, mapped.b));
-        if (peak > ceiling) {
-            float t = clamp((peak - ceiling) / max(peak - target, 1e-5), 0.0, 1.0);
+        float brightest = max(mapped.r, max(mapped.g, mapped.b));
+        if (brightest > top) {
+            float t = clamp((brightest - top) / max(brightest - target, 1e-5), 0.0, 1.0);
             mapped = mix(mapped, float3(target), t);
         }
     }
 
-    mapped = clamp(mapped, float3(0.0), float3(ceiling));
+    mapped = clamp(mapped, float3(0.0), float3(top));
 
     mapped = float3(encodeChannel(mapped.r), encodeChannel(mapped.g), encodeChannel(mapped.b));
 

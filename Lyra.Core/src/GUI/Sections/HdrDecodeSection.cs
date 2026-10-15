@@ -19,6 +19,7 @@ public sealed class HdrDecodeSection : IUISection, IDisposable
     private readonly ValueSlider _exposure;
     
     private readonly VStack _controls;
+    private readonly Label _cameraCurveNote;
     private readonly VStack _note;
     private readonly Label _noteHeadline;
     private readonly Label _noteReason;
@@ -45,8 +46,12 @@ public sealed class HdrDecodeSection : IUISection, IDisposable
             Spacing = 2f
         };
 
+        _cameraCurveNote = Caption(CameraCurveNote);
+        _cameraCurveNote.Present = false;
+
         _controls.AddComponent(Caption("Tone curve:"));
         _controls.AddComponent(_curve);
+        _controls.AddComponent(_cameraCurveNote);
         _controls.AddComponent(Caption("Exposure (stops):"));
         _controls.AddComponent(_exposure);
 
@@ -96,10 +101,22 @@ public sealed class HdrDecodeSection : IUISection, IDisposable
     {
         var composite = state.Composite;
 
-        _collapsible.Present = composite?.IsHdrImage == true;
+        _collapsible.Present = composite is { IsHdrImage: true } or { HdrPending: true };
 
         if (!_collapsible.Present)
             return;
+
+        // In place but disabled while a stand-in is shown, so nothing moves when the image arrives.
+        if (IsAwaitingContent(composite!))
+        {
+            _controls.Present = true;
+            _controls.Enabled = false;
+            _note.Present = false;
+            return;
+        }
+
+        _controls.Enabled = true;
+        _cameraCurveNote.Present = UsesCameraCurve(composite!);
 
         var live = composite!.IsHdrDecoded && HdrToneMapShader.IsAvailable;
 
@@ -114,7 +131,13 @@ public sealed class HdrDecodeSection : IUISection, IDisposable
         _noteReason.Text = reason;
     }
 
-    internal static (string Headline, string Reason) Explain(Composite composite)
+    private const string CameraCurveNote = "ACES filmic uses this file's own camera curve.";
+
+    private static bool UsesCameraCurve(Composite composite) => composite.DisplayedRange.Curve is not null;
+
+    private static bool IsAwaitingContent(Composite composite) => composite is { HdrPending: true, IsHdrImage: false };
+
+    private static (string Headline, string Reason) Explain(Composite composite)
     {
         if (composite.IsHdrDecoded)
             return ("Tone mapping unavailable here.", "The runtime effect did not compile.");

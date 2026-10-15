@@ -1,4 +1,5 @@
 using Lyra.Common.Settings.Enums;
+using Lyra.Imaging.Content;
 using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Support;
@@ -30,42 +31,103 @@ internal static class HdrToneMap
     public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, ToneMapMode mode, float exposureScale, CancellationToken ct, out bool isGrayscale) =>
         Convert(rgba, bitmap, mode, exposureScale, null, ct, out isGrayscale);
 
-    private static void Convert(Span<float> rgba, SKBitmap bitmap, ToneMapMode mode, float exposureScale, float? sceneWhitePoint, CancellationToken ct, out bool isGrayscale)
+    /// <summary>The same, from linear rows of any layout, landing <paramref name="range"/>'s scene white on white.</summary>
+    public static void ToBitmap(LinearRows rows, SKBitmap bitmap, float sceneWhitePoint, SceneRange range, CancellationToken ct, out bool isGrayscale) =>
+        Convert(rows, bitmap, HdrDecodeSettings.ToneMapMode, HdrDecodeSettings.ExposureScale, sceneWhitePoint, ct, out isGrayscale, range);
+
+    /// <summary>Overload taking explicit settings, so tests do not depend on the user's.</summary>
+    internal static void ToBitmap(LinearRows rows, SKBitmap bitmap, ToneMapMode mode, float exposureScale, SceneRange range, CancellationToken ct, out bool isGrayscale) =>
+        Convert(rows, bitmap, mode, exposureScale, null, ct, out isGrayscale, range);
+
+    private static unsafe void Convert(Span<float> rgba, SKBitmap bitmap, ToneMapMode mode, float exposureScale, float? sceneWhitePoint, CancellationToken ct, out bool isGrayscale)
     {
+        if (rgba.Length < (long)bitmap.Width * bitmap.Height * 4)
+            throw new ArgumentException("Fewer pixels than the bitmap holds.", nameof(rgba));
+
+        fixed (float* pin = rgba)
+            Convert(new FloatRgbaRows(pin, bitmap.Width, bitmap.Height), bitmap, mode, exposureScale, sceneWhitePoint, ct, out isGrayscale);
+    }
+
+    private static unsafe void Convert(LinearRows rows, SKBitmap bitmap, ToneMapMode mode, float exposureScale, float? sceneWhitePoint, CancellationToken ct, out bool isGrayscale, SceneRange range = default)
+    {
+        if (mode == ToneMapMode.Aces && range.Curve is { } curve)
+        {
+            ConvertWithCameraCurve(rows, bitmap, curve, exposureScale, ct, out isGrayscale);
+            return;
+        }
+
         var width = bitmap.Width;
-        var height = bitmap.Height;
+        // Where the content says its light ends, every curve lands it on white.
+        float? sceneWhite = range.SceneWhite is > 0f and var known ? known : null;
+
         var whitePoint = mode == ToneMapMode.ReinhardExtended
-            ? (sceneWhitePoint ?? MeasureWhitePoint(rgba)) * exposureScale
+            ? (sceneWhite ?? sceneWhitePoint ?? MeasureWhitePoint(rows)) * exposureScale
             : 1f;
 
-        unsafe
+        var acesScale = sceneWhite is { } acesWhite ? 1f / Aces(acesWhite) : 1f;
+
+        if (mode == ToneMapMode.Clip && sceneWhite is { } clipWhite)
+            exposureScale /= clipWhite;
+
+        var dst = (nint)bitmap.GetPixels();
+        var dstRowBytes = bitmap.RowBytes;
+
+        isGrayscale = rows.AllRows(ct, (y, row) =>
+            ConvertRow(row, (byte*)dst + (nint)y * dstRowBytes, width, mode, whitePoint, exposureScale, acesScale));
+    }
+
+    /// <summary>
+    /// The camera's own curve in place of the default one, as the shader applies it: in linear
+    /// ProPhoto, on the largest and smallest channel, the middle one kept in proportion.
+    /// </summary>
+    private static unsafe void ConvertWithCameraCurve(LinearRows rows, SKBitmap bitmap, CameraToneCurve curve, float exposureScale, CancellationToken ct, out bool isGrayscale)
+    {
+        var width = bitmap.Width;
+        var dst = (nint)bitmap.GetPixels();
+        var dstRowBytes = bitmap.RowBytes;
+        var to = ColorMatrix.ToCurveSpace;
+        var from = ColorMatrix.FromCurveSpace;
+
+        isGrayscale = rows.AllRows(ct, (y, row) =>
         {
-            fixed (float* srcPin = rgba)
+            var gray = true;
+            var dstRow = (byte*)dst + (nint)y * dstRowBytes;
+
+            for (var x = 0; x < width; x++)
             {
-                var dstPin = (byte*)bitmap.GetPixels();
-                var src = (nint)srcPin;
-                var dst = (nint)dstPin;
-                var dstRowBytes = bitmap.RowBytes;
-                var options = new ParallelOptions { CancellationToken = ct };
+                var i = x * 4;
+                float r = Sanitize(row[i]) * exposureScale, g = Sanitize(row[i + 1]) * exposureScale, b = Sanitize(row[i + 2]) * exposureScale;
 
-                var gray = true;
+                if (row[i] != row[i + 1] || row[i + 2] != row[i])
+                    gray = false;
 
-                Parallel.For(0, height, options, y =>
-                {
-                    if (!ConvertRow((float*)src, (byte*)dst, y, width, dstRowBytes, mode, whitePoint, exposureScale))
-                        gray = false;
-                });
+                var wr = Math.Clamp(to[0] * r + to[1] * g + to[2] * b, 0f, 1f);
+                var wg = Math.Clamp(to[3] * r + to[4] * g + to[5] * b, 0f, 1f);
+                var wb = Math.Clamp(to[6] * r + to[7] * g + to[8] * b, 0f, 1f);
 
-                isGrayscale = gray;
+                var lo = MathF.Min(wr, MathF.Min(wg, wb));
+                var hi = MathF.Max(wr, MathF.Max(wg, wb));
+                var toneLo = curve.Evaluate(lo);
+                var toneHi = curve.Evaluate(hi);
+                var span = hi > lo ? (toneHi - toneLo) / (hi - lo) : 0f;
+
+                wr = toneLo + (wr - lo) * span;
+                wg = toneLo + (wg - lo) * span;
+                wb = toneLo + (wb - lo) * span;
+
+                dstRow[i] = Encode(from[0] * wr + from[1] * wg + from[2] * wb);
+                dstRow[i + 1] = Encode(from[3] * wr + from[4] * wg + from[5] * wb);
+                dstRow[i + 2] = Encode(from[6] * wr + from[7] * wg + from[8] * wb);
+                dstRow[i + 3] = AlphaToByte(row[i + 3]);
             }
-        }
+
+            return gray;
+        });
     }
 
     /// <summary>Converts one row; returns true when every pixel in the row has R == G == B.</summary>
-    private static unsafe bool ConvertRow(float* src, byte* dst, int y, int width, int dstRowBytes, ToneMapMode mode, float whitePoint, float exposureScale)
+    private static unsafe bool ConvertRow(float* srcRow, byte* dstRow, int width, ToneMapMode mode, float whitePoint, float exposureScale, float acesScale)
     {
-        var srcRow = src + (nint)y * width * 4;
-        var dstRow = dst + (nint)y * dstRowBytes;
         var gray = true;
 
         for (var x = 0; x < width; x++)
@@ -79,7 +141,7 @@ internal static class HdrToneMap
             if (g != r || b != r)
                 gray = false;
 
-            ToneMapPixel(r, g, b, mode, whitePoint, exposureScale, out var outR, out var outG, out var outB);
+            ToneMapPixel(r, g, b, mode, whitePoint, exposureScale, acesScale, out var outR, out var outG, out var outB);
 
             dstRow[idx + 0] = outR;
             dstRow[idx + 1] = outG;
@@ -107,6 +169,16 @@ internal static class HdrToneMap
         if (pixels <= 0)
             return 1f;
 
+        fixed (float* pin = rgba)
+            return MeasureWhitePoint(new FloatRgbaRows(pin, pixels, 1));
+    }
+
+    internal static float MeasureWhitePoint(LinearRows rows)
+    {
+        var pixels = rows.PixelCount;
+        if (pixels <= 0)
+            return 1f;
+
         var stride = Math.Max(1, pixels / WhitePointSampleBudget);
         var samples = pixels / stride;
         const float scale = HistogramBins / (LogMax - LogMin);
@@ -115,38 +187,32 @@ internal static class HdrToneMap
         var partitions = Math.Clamp(Environment.ProcessorCount, 1, 16);
         var perPartition = new int[partitions][];
         var counts = new int[partitions];
+        var chunk = (samples + partitions - 1) / partitions;
 
-        fixed (float* pin = rgba)
+        Parallel.For(0, partitions, p =>
         {
-            var src = (nint)pin;
-            var chunk = (samples + partitions - 1) / partitions;
+            var histogram = new int[HistogramBins];
+            var counted = 0;
 
-            Parallel.For(0, partitions, p =>
+            var from = p * chunk;
+            var to = Math.Min(from + chunk, samples);
+
+            for (var s = from; s < to; s++)
             {
-                var histogram = new int[HistogramBins];
-                var counted = 0;
+                rows.Rgb(s * stride, out var r, out var g, out var b);
+                var luminance = (0.2126f * r) + (0.7152f * g) + (0.0722f * b);
 
-                var from = p * chunk;
-                var to = Math.Min(from + chunk, samples);
-                var data = (float*)src;
+                if (!float.IsFinite(luminance) || luminance <= 0f)
+                    continue;
 
-                for (var s = from; s < to; s++)
-                {
-                    var i = (nint)s * stride * 4;
-                    var luminance = (0.2126f * data[i]) + (0.7152f * data[i + 1]) + (0.0722f * data[i + 2]);
+                var bin = (int)((MathF.Log2(luminance) - LogMin) * scale);
+                histogram[Math.Clamp(bin, 0, HistogramBins - 1)]++;
+                counted++;
+            }
 
-                    if (!float.IsFinite(luminance) || luminance <= 0f)
-                        continue;
-
-                    var bin = (int)((MathF.Log2(luminance) - LogMin) * scale);
-                    histogram[Math.Clamp(bin, 0, HistogramBins - 1)]++;
-                    counted++;
-                }
-
-                perPartition[p] = histogram;
-                counts[p] = counted;
-            });
-        }
+            perPartition[p] = histogram;
+            counts[p] = counted;
+        });
 
         var merged = new int[HistogramBins];
         var total = 0L;
@@ -216,7 +282,7 @@ internal static class HdrToneMap
     /// Curves one pixel, keeping its color: luminance goes through the curve and all three
     /// channels are scaled by the same factor.
     /// </summary>
-    private static void ToneMapPixel(float r, float g, float b, ToneMapMode mode, float whitePoint, float exposureScale, out byte outR, out byte outG, out byte outB)
+    private static void ToneMapPixel(float r, float g, float b, ToneMapMode mode, float whitePoint, float exposureScale, float acesScale, out byte outR, out byte outG, out byte outB)
     {
         if (mode == ToneMapMode.Clip)
         {
@@ -248,7 +314,7 @@ internal static class HdrToneMap
 
         var target = mode == ToneMapMode.ReinhardExtended
             ? ReinhardExtended(luminance, whitePoint)
-            : Aces(luminance);
+            : Aces(luminance) * acesScale;
 
         var scale = target / luminance;
         var mappedR = linearR * scale;
@@ -304,7 +370,7 @@ internal static class HdrToneMap
     }
 
     /// <summary>ACES filmic tone curve (Narkowicz 2015).</summary>
-    private static float Aces(float x)
+    internal static float Aces(float x)
     {
         const float a = 2.51f;
         const float b = 0.03f;

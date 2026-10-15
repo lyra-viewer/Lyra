@@ -1,3 +1,4 @@
+using System.Buffers;
 using Lyra.Common;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Loading;
@@ -33,21 +34,43 @@ internal static class HdrImageBuilder
     /// Builds HDR content from interleaved RGBA float pixels. <paramref name="facts"/> says whether
     /// every pixel has R == G == B and how far above SDR white they reach, for the caller to publish.
     /// </summary>
-    public static ICompositeContent Build(Span<float> rgba, int width, int height, Composite composite, CancellationToken ct, out PixelFacts facts)
+    public static unsafe ICompositeContent Build(Span<float> rgba, int width, int height, Composite composite, CancellationToken ct, out PixelFacts facts)
     {
-        var whitePoint = HdrToneMap.MeasureWhitePoint(rgba);
-        var content = Build(rgba, width, height, whitePoint, composite, ct, out var isGrayscale);
+        if (rgba.Length < (long)width * height * 4)
+            throw new ArgumentException("Fewer pixels than the dimensions say.", nameof(rgba));
+
+        fixed (float* pin = rgba)
+            return Build(new FloatRgbaRows(pin, width, height), composite, ct, out facts);
+    }
+
+    /// <summary>The same, from linear rows of any layout, carrying what is known of where the light ends.</summary>
+    public static ICompositeContent Build(LinearRows rows, Composite composite, CancellationToken ct, out PixelFacts facts, SceneRange range = default)
+    {
+        var whitePoint = HdrToneMap.MeasureWhitePoint(rows);
+        var content = Build(rows, whitePoint, range, composite, ct, out var isGrayscale);
+
+        switch (content)
+        {
+            case HdrRasterContent hdr:
+                hdr.Range = range;
+                break;
+            case RasterLargeContent large:
+                large.Range = range;
+                break;
+        }
 
         facts = new PixelFacts(isGrayscale, DescribeDynamicRange(whitePoint));
         return content;
     }
 
-    private static ICompositeContent Build(Span<float> rgba, int width, int height, float whitePoint, Composite composite, CancellationToken ct, out bool isGrayscale)
+    private static ICompositeContent Build(LinearRows rows, float whitePoint, SceneRange range, Composite composite, CancellationToken ct, out bool isGrayscale)
     {
-        var pixels = (long)width * height;
+        var width = rows.Width;
+        var height = rows.Height;
+        var pixels = rows.PixelCount;
         if (pixels <= LivePixelBudget)
         {
-            var single = TryBuildHalfFloat(rgba, width, height, ct, out isGrayscale);
+            var single = TryBuildHalfFloat(rows, ct, out isGrayscale);
             if (single is not null)
             {
                 composite.HdrBakedReason = null;
@@ -57,13 +80,13 @@ internal static class HdrImageBuilder
             Logger.Warning($"[HdrImageBuilder] {width}x{height} does not fit as half-float; falling back to a tone-mapped 8-bit decode (HDR controls will not apply).");
 
             composite.HdrBakedReason = "Half-float allocation failed.";
-            return BuildToneMapped(rgba, width, height, composite, whitePoint, ct, out isGrayscale);
+            return BuildToneMapped(rows, composite, whitePoint, range, ct, out isGrayscale);
         }
 
         var halfFloatBytes = pixels * 8;
         if (halfFloatBytes <= TiledSceneBudget)
         {
-            var tiled = TryBuildHalfFloat(rgba, width, height, ct, out isGrayscale);
+            var tiled = TryBuildHalfFloat(rows, ct, out isGrayscale);
             if (tiled is not null)
             {
                 Logger.Info($"[HdrImageBuilder] {width}x{height} is {pixels / 1024 / 1024} MP, over the " +
@@ -84,12 +107,13 @@ internal static class HdrImageBuilder
         composite.HdrBakedReason = $"{halfFloatBytes / 1024 / 1024} MB over the " +
                                    $"{TiledSceneBudget / 1024 / 1024} MB scene budget.";
 
-        return BuildToneMapped(rgba, width, height, composite, whitePoint, ct, out isGrayscale);
+        return BuildToneMapped(rows, composite, whitePoint, range, ct, out isGrayscale);
     }
 
     private static string DescribeDynamicRange(float whitePoint)
     {
-        if (whitePoint <= 1.001f)
+        // The white point is a histogram bin's upper edge, so clipped content lands a hair above 1.0.
+        if (MathF.Log2(whitePoint) < 0.05f)
             return "Within SDR white";
 
         var multiplier = whitePoint < 100f ? whitePoint.ToString("0.0") : whitePoint.ToString("0");
@@ -100,38 +124,25 @@ internal static class HdrImageBuilder
     /// <summary>
     /// Converts the source light into a half-float image, or null when it will not fit in memory.
     /// </summary>
-    private static SKBitmap? TryBuildHalfFloat(Span<float> rgba, int width, int height, CancellationToken ct, out bool isGrayscale)
+    private static unsafe SKBitmap? TryBuildHalfFloat(LinearRows rows, CancellationToken ct, out bool isGrayscale)
     {
         isGrayscale = true;
 
         // Linear, because the values are linear - tagging them sRGB would have Skia apply a
         // transfer function to data that has not been encoded with one.
-        var info = new SKImageInfo(width, height, SKColorType.RgbaF16, SKAlphaType.Unpremul, SKColorSpace.CreateSrgbLinear());
+        var info = new SKImageInfo(rows.Width, rows.Height, SKColorType.RgbaF16, SKAlphaType.Unpremul, SKColorSpace.CreateSrgbLinear());
 
         var bitmap = TryAllocate(info);
         if (bitmap is null)
             return null;
 
-        var gray = true;
-
         try
         {
-            unsafe
-            {
-                fixed (float* srcPin = rgba)
-                {
-                    var src = (nint)srcPin;
-                    var dst = bitmap.GetPixels();
-                    var dstRowBytes = bitmap.RowBytes;
-                    var options = new ParallelOptions { CancellationToken = ct };
+            var dst = (nint)bitmap.GetPixels();
+            var dstRowBytes = bitmap.RowBytes;
+            var width = rows.Width;
 
-                    Parallel.For(0, height, options, y =>
-                    {
-                        if (!ConvertRow((float*)src, (byte*)dst, y, width, dstRowBytes))
-                            gray = false;
-                    });
-                }
-            }
+            isGrayscale = rows.AllRows(ct, (y, row) => ConvertRow(row, (Half*)((byte*)dst + (nint)y * dstRowBytes), width));
         }
         catch
         {
@@ -139,7 +150,6 @@ internal static class HdrImageBuilder
             throw;
         }
 
-        isGrayscale = gray;
         bitmap.SetImmutable();
 
         return bitmap;
@@ -158,14 +168,14 @@ internal static class HdrImageBuilder
         }
     }
 
-    private static ICompositeContent BuildToneMapped(Span<float> rgba, int width, int height, Composite composite, float whitePoint, CancellationToken ct, out bool isGrayscale)
+    private static ICompositeContent BuildToneMapped(LinearRows rows, Composite composite, float whitePoint, SceneRange range, CancellationToken ct, out bool isGrayscale)
     {
-        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul, SKColorSpace.CreateSrgb());
+        var info = new SKImageInfo(rows.Width, rows.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul, SKColorSpace.CreateSrgb());
         var bitmap = new SKBitmap(info);
 
         try
         {
-            HdrToneMap.ToBitmap(rgba, bitmap, whitePoint, ct, out isGrayscale);
+            HdrToneMap.ToBitmap(rows, bitmap, whitePoint, range, ct, out isGrayscale);
         }
         catch
         {
@@ -176,7 +186,7 @@ internal static class HdrImageBuilder
         // Large by definition at this point, so the builder decides between one texture and tiles.
         var content = RasterContentBuilder.Build(bitmap, composite);
         if (content is RasterLargeContent large)
-            AttachScenePreview(large, rgba, width, height, whitePoint, ct);
+            AttachScenePreview(large, rows, whitePoint, ct);
 
         return content;
     }
@@ -188,13 +198,13 @@ internal static class HdrImageBuilder
     /// <remarks>
     /// About 130 MB for a 128 MP panorama. On failure the tone-mapped preview stands.
     /// </remarks>
-    private static void AttachScenePreview(RasterLargeContent large, Span<float> rgba, int width, int height, float whitePoint, CancellationToken ct)
+    private static void AttachScenePreview(RasterLargeContent large, LinearRows rows, float whitePoint, CancellationToken ct)
     {
         try
         {
-            var (targetWidth, targetHeight) = RasterContentBuilder.PreviewSize(width, height);
+            var (targetWidth, targetHeight) = RasterContentBuilder.PreviewSize(rows.Width, rows.Height);
 
-            var preview = DownsampleToHalfFloat(rgba, width, height, targetWidth, targetHeight, ct);
+            var preview = DownsampleToHalfFloat(rows, targetWidth, targetHeight, ct);
             if (preview is null)
                 return;
 
@@ -211,9 +221,9 @@ internal static class HdrImageBuilder
     }
 
     /// <summary>
-    /// Box-averages the float pixels straight into a half-float image of the requested size.
+    /// Box-averages the light straight into a half-float image of the requested size.
     /// </summary>
-    internal static SKImage? DownsampleToHalfFloat(Span<float> rgba, int width, int height, int targetWidth, int targetHeight, CancellationToken ct)
+    internal static SKImage? DownsampleToHalfFloat(LinearRows rows, int targetWidth, int targetHeight, CancellationToken ct)
     {
         var info = new SKImageInfo(targetWidth, targetHeight, SKColorType.RgbaF16, SKAlphaType.Unpremul, SKColorSpace.CreateSrgbLinear());
 
@@ -221,12 +231,9 @@ internal static class HdrImageBuilder
         if (bitmap is null)
             return null;
 
-        var xScale = width / (double)targetWidth;
-        var yScale = height / (double)targetHeight;
-
         try
         {
-            Downsample(rgba, width, height, targetWidth, targetHeight, xScale, yScale, bitmap, ct);
+            Downsample(rows, targetWidth, targetHeight, bitmap, ct);
         }
         catch
         {
@@ -238,63 +245,77 @@ internal static class HdrImageBuilder
         return SKImage.FromBitmap(bitmap);
     }
 
-    private static void Downsample(Span<float> rgba, int width, int height, int targetWidth, int targetHeight, double xScale, double yScale, SKBitmap bitmap, CancellationToken ct)
+    private static unsafe void Downsample(LinearRows rows, int targetWidth, int targetHeight, SKBitmap bitmap, CancellationToken ct)
     {
-        unsafe
+        var width = rows.Width;
+        var height = rows.Height;
+        var xScale = width / (double)targetWidth;
+        var yScale = height / (double)targetHeight;
+
+        var dst = (nint)bitmap.GetPixels();
+        var dstRowBytes = bitmap.RowBytes;
+
+        var x0 = new int[targetWidth];
+        var x1 = new int[targetWidth];
+        for (var tx = 0; tx < targetWidth; tx++)
         {
-            fixed (float* srcPin = rgba)
-            {
-                var src = (nint)srcPin;
-                var dst = bitmap.GetPixels();
-                var dstRowBytes = bitmap.RowBytes;
-                var options = new ParallelOptions { CancellationToken = ct };
-
-                Parallel.For(0, targetHeight, options, ty =>
-                {
-                    var y0 = (int)(ty * yScale);
-                    var y1 = Math.Max(y0 + 1, Math.Min(height, (int)((ty + 1) * yScale)));
-                    var row = (Half*)((byte*)dst + ((nint)ty * dstRowBytes));
-
-                    for (var tx = 0; tx < targetWidth; tx++)
-                    {
-                        var x0 = (int)(tx * xScale);
-                        var x1 = Math.Max(x0 + 1, Math.Min(width, (int)((tx + 1) * xScale)));
-
-                        double r = 0, g = 0, b = 0, a = 0;
-                        var samples = 0;
-
-                        for (var y = y0; y < y1; y++)
-                        {
-                            var line = (float*)src + ((nint)y * width * 4);
-
-                            for (var x = x0; x < x1; x++)
-                            {
-                                var i = x * 4;
-                                r += line[i];
-                                g += line[i + 1];
-                                b += line[i + 2];
-                                a += line[i + 3];
-                                samples++;
-                            }
-                        }
-
-                        var scale = samples > 0 ? 1.0 / samples : 0.0;
-                        var o = tx * 4;
-
-                        row[o + 0] = (Half)(r * scale);
-                        row[o + 1] = (Half)(g * scale);
-                        row[o + 2] = (Half)(b * scale);
-                        row[o + 3] = (Half)(a * scale);
-                    }
-                });
-            }
+            x0[tx] = (int)(tx * xScale);
+            x1[tx] = Math.Max(x0[tx] + 1, Math.Min(width, (int)((tx + 1) * xScale)));
         }
+
+        rows.AllOf(targetHeight, ct, (ty, scratch) =>
+        {
+            var y0 = (int)(ty * yScale);
+            var y1 = Math.Max(y0 + 1, Math.Min(height, (int)((ty + 1) * yScale)));
+            var sums = ArrayPool<double>.Shared.Rent(targetWidth * 4);
+            Array.Clear(sums, 0, targetWidth * 4);
+
+            for (var y = y0; y < y1; y++)
+            {
+                var line = rows.Row(y, scratch);
+
+                for (var tx = 0; tx < targetWidth; tx++)
+                {
+                    double r = 0, g = 0, b = 0, a = 0;
+
+                    for (var x = x0[tx]; x < x1[tx]; x++)
+                    {
+                        var i = x * 4;
+                        r += line[i];
+                        g += line[i + 1];
+                        b += line[i + 2];
+                        a += line[i + 3];
+                    }
+
+                    var o = tx * 4;
+                    sums[o] += r;
+                    sums[o + 1] += g;
+                    sums[o + 2] += b;
+                    sums[o + 3] += a;
+                }
+            }
+
+            var row = (Half*)((byte*)dst + (nint)ty * dstRowBytes);
+
+            for (var tx = 0; tx < targetWidth; tx++)
+            {
+                var samples = (y1 - y0) * (x1[tx] - x0[tx]);
+                var scale = samples > 0 ? 1.0 / samples : 0.0;
+                var o = tx * 4;
+
+                row[o + 0] = (Half)(sums[o] * scale);
+                row[o + 1] = (Half)(sums[o + 1] * scale);
+                row[o + 2] = (Half)(sums[o + 2] * scale);
+                row[o + 3] = (Half)(sums[o + 3] * scale);
+            }
+
+            ArrayPool<double>.Shared.Return(sums);
+            return true;
+        });
     }
 
-    private static unsafe bool ConvertRow(float* src, byte* dst, int y, int width, int dstRowBytes)
+    private static unsafe bool ConvertRow(float* srcRow, Half* dstRow, int width)
     {
-        var srcRow = src + ((nint)y * width * 4);
-        var dstRow = (Half*)(dst + ((nint)y * dstRowBytes));
         var gray = true;
 
         for (var x = 0; x < width; x++)

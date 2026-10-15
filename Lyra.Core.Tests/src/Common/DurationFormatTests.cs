@@ -1,4 +1,3 @@
-using System.Globalization;
 using Lyra.Common;
 using Xunit;
 
@@ -17,8 +16,7 @@ public class DurationFormatTests
     [InlineData(58_550.0, "58.55 s")]
     public void ADuration_CarriesItsUnit_AndNeverRoundsIntoTheNextOne(double ms, string expected)
     {
-        var separator = CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
-        Assert.Equal(expected.Replace(".", separator), Formatters.DurationToStr(ms));
+        Assert.Equal(expected, Formatters.DurationToStr(ms));
     }
 
     [Fact]

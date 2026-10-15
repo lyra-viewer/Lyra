@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Lyra.Common;
 using SkiaSharp;
 
@@ -13,9 +14,20 @@ internal static class GamutTransform
     private static readonly float[] Identity = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
     private static readonly Lock Gate = new();
-    private static SKColorSpace? _lastSource;
-    private static SKColorSpace? _lastDestination;
-    private static float[] _lastMatrix = Identity;
+
+    /// <summary>A draw asks for a few pairs at once (image to display, and into and out of a camera curve's space).</summary>
+    private const int CachedPairs = 16;
+
+    private readonly record struct Pair(SKColorSpace Source, SKColorSpace Destination);
+
+    private sealed class SameInstances : IEqualityComparer<Pair>
+    {
+        public bool Equals(Pair a, Pair b) => ReferenceEquals(a.Source, b.Source) && ReferenceEquals(a.Destination, b.Destination);
+
+        public int GetHashCode(Pair pair) => HashCode.Combine(RuntimeHelpers.GetHashCode(pair.Source), RuntimeHelpers.GetHashCode(pair.Destination));
+    }
+
+    private static readonly Dictionary<Pair, float[]> Cache = new(new SameInstances());
 
     /// <summary>
     /// Source primaries to destination primaries, ready to upload as a <c>float3x3</c>. Falls back
@@ -29,14 +41,17 @@ internal static class GamutTransform
 
         lock (Gate)
         {
-            if (!ReferenceEquals(source, _lastSource) || !ReferenceEquals(destination, _lastDestination))
+            var pair = new Pair(source, destination);
+            if (!Cache.TryGetValue(pair, out var matrix))
             {
-                _lastMatrix = Build(source, destination);
-                _lastSource = source;
-                _lastDestination = destination;
+                if (Cache.Count >= CachedPairs)
+                    Cache.Clear();
+
+                matrix = Build(source, destination);
+                Cache[pair] = matrix;
             }
 
-            return (float[])_lastMatrix.Clone();
+            return (float[])matrix.Clone();
         }
     }
 

@@ -9,6 +9,7 @@ static class Program
 {
     private static int Main(string[] args)
     {
+        NumberCulture.Apply();
         LogSetup();
         Logger.Info($"[Application] Application started on {RuntimeInformation.RuntimeIdentifier}");
 
