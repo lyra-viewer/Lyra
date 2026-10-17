@@ -83,7 +83,7 @@ public class J2KColorSpaceTests
             using var composite = new Composite(new FileInfo(tempPath));
             new J2KDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
 
-            var entry = Assert.Single(composite.FormatSpecificSnapshot(), pair => pair.Key == "GrayScale");
+            var entry = Assert.Single(composite.FormatSpecificSnapshot(), pair => pair.Key == "Grayscale");
             Assert.Equal("No", entry.Value);
         }
         finally

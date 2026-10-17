@@ -80,6 +80,43 @@ internal static class MetadataProcessor
         }
     }
 
+    /// <summary>
+    /// Camera raw: an MRW's EXIF is read from its TTW block, and what EXIF leaves out is filled
+    /// from LibRaw's own reading, which also stands in when EXIF cannot be read at all.
+    /// </summary>
+    public static ExifInfo ParseRawMetadata(Stream stream, string path, RawCapture capture)
+    {
+        IReadOnlyList<Directory> directories;
+        try
+        {
+            if (RawMetadata.MrwTiff(stream) is { } tiff)
+            {
+                using var tiffStream = new MemoryStream(tiff, writable: false);
+                directories = ImageMetadataReader.ReadMetadata(tiffStream);
+            }
+            else
+            {
+                directories = ReadTolerating(stream, path);
+            }
+        }
+        catch (Exception e)
+        {
+            Logger.Warning($"[MetadataProcessor] Could not read metadata from {path}: {e.Message}");
+            directories = [];
+        }
+
+        try
+        {
+            var exifInfo = ProcessMetadata(directories, info => RawMetadata.Apply(info, capture));
+            return directories.Count == 0 && !exifInfo.HasData() ? ExifInfo.Failed() : exifInfo;
+        }
+        catch (Exception e)
+        {
+            Logger.Warning($"[MetadataProcessor] Could not read metadata from {path}: {e.Message}");
+            return ExifInfo.Failed();
+        }
+    }
+
     /// <summary>Reads the stream, retrying a PNG that <see cref="PngChunkRepair"/> can mend.</summary>
     private static IReadOnlyList<Directory> ReadTolerating(Stream stream, string path)
     {
@@ -102,11 +139,12 @@ internal static class MetadataProcessor
         }
     }
 
-    private static ExifInfo ProcessMetadata(IReadOnlyList<Directory> directories)
+    private static ExifInfo ProcessMetadata(IReadOnlyList<Directory> directories, Action<ExifInfo>? adjust = null)
     {
         var exifInfo = ExifReader.Read(directories);
         FormatHeaderReader.Apply(directories, exifInfo);
         DescriptiveReader.Apply(directories, exifInfo);
+        adjust?.Invoke(exifInfo);
         ResolveOverlaps(exifInfo);
 
         return exifInfo.Seal();

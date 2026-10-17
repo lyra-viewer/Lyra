@@ -92,7 +92,7 @@ public class ExrGrayscaleTests
             Assert.True(bitmap.GetPixel(0, 1).Red > bitmap.GetPixel(3, 1).Red);
 
             // 3. And it is reported as grayscale in the metadata panel, with its range.
-            Assert.Contains(new KeyValuePair<string, string>("GrayScale", "Yes"), formatSpecific);
+            Assert.Contains(new KeyValuePair<string, string>("Grayscale", "Yes"), formatSpecific);
             Assert.Contains(formatSpecific, pair => pair.Key == "Dynamic Range");
         });
     }
@@ -118,7 +118,7 @@ public class ExrGrayscaleTests
             Assert.Contains(new KeyValuePair<string, string>("Bit Depth", "16-bit float"), formatSpecific);
             Assert.Contains(new KeyValuePair<string, string>("Has Alpha", "Yes"), formatSpecific);
             Assert.Contains(new KeyValuePair<string, string>("Color Space", "Linear Rec.709"), formatSpecific);
-            Assert.Contains(new KeyValuePair<string, string>("GrayScale", "No"), formatSpecific);
+            Assert.Contains(new KeyValuePair<string, string>("Grayscale", "No"), formatSpecific);
         });
     }
 

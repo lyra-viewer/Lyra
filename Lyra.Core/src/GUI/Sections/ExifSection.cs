@@ -147,6 +147,11 @@ public sealed class ExifSection : IUISection
                     HorizontalSize = SizeMode.Fixed,
                     Width = _registry.Get(KeyColumn)
                 },
-                new Label(item.Value) { Color = Palette.Foreground });
+                new Label(item.Value)
+                {
+                    Color = Palette.Foreground,
+                    HorizontalSize = SizeMode.Expand,
+                    Ellipsize = true
+                });
     }
 }

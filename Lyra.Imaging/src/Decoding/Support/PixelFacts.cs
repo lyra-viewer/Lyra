@@ -9,6 +9,6 @@ internal readonly record struct PixelFacts(bool IsGrayscale, string? DynamicRang
         if (DynamicRange is not null)
             composite.AddFormatSpecific("Dynamic Range", DynamicRange);
 
-        composite.AddFormatSpecific("GrayScale", IsGrayscale);
+        composite.AddFormatSpecific("Grayscale", IsGrayscale);
     }
 }

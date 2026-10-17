@@ -18,8 +18,7 @@ internal static class HdrImageBuilder
     ///
     /// Half-float costs 8 bytes per pixel against 4, which is a fair price for live exposure and
     /// curve controls at 4K (64 MB) or 6K (183 MB), and a bad one at 16K (1 GB) - precisely the
-    /// sizes where the controls are least usable because the image barely fits anyway. 32
-    /// megapixels puts the boundary above every common HDR panorama and below the 16K plates.
+    /// sizes where the controls are least usable because the image barely fits anyway.
     /// </summary>
     private const long LivePixelBudget = 32L * 1024 * 1024;
 
@@ -89,20 +88,20 @@ internal static class HdrImageBuilder
             var tiled = TryBuildHalfFloat(rows, ct, out isGrayscale);
             if (tiled is not null)
             {
-                Logger.Info($"[HdrImageBuilder] {width}x{height} is {pixels / 1024 / 1024} MP, over the " +
-                            $"{LivePixelBudget / 1024 / 1024} MP live-controls budget but within the " +
-                            $"{TiledSceneBudget / 1024 / 1024} MB scene-referred budget " +
-                            $"({halfFloatBytes / 1024 / 1024} MB); keeping the whole image as light.");
+                Logger.Debug($"[HdrImageBuilder] {width}x{height} is {pixels / 1024 / 1024} MP, over the " +
+                             $"{LivePixelBudget / 1024 / 1024} MP live-controls budget but within the " +
+                             $"{TiledSceneBudget / 1024 / 1024} MB scene-referred budget " +
+                             $"({halfFloatBytes / 1024 / 1024} MB); keeping the whole image as light.");
 
                 composite.HdrBakedReason = null;
                 return RasterContentBuilder.Build(tiled, composite, whitePoint);
             }
         }
 
-        Logger.Info($"[HdrImageBuilder] {width}x{height} is {pixels / 1024 / 1024} MP " +
-                    $"({halfFloatBytes / 1024 / 1024} MB as half-float), over the " +
-                    $"{TiledSceneBudget / 1024 / 1024} MB scene-referred tile budget; tone-mapping at " +
-                    "decode instead (halves the footprint; HDR controls apply to the preview only).");
+        Logger.Debug($"[HdrImageBuilder] {width}x{height} is {pixels / 1024 / 1024} MP " +
+                     $"({halfFloatBytes / 1024 / 1024} MB as half-float), over the " +
+                     $"{TiledSceneBudget / 1024 / 1024} MB scene-referred tile budget; tone-mapping at " +
+                     "decode instead (halves the footprint; HDR controls apply to the preview only).");
 
         composite.HdrBakedReason = $"{halfFloatBytes / 1024 / 1024} MB over the " +
                                    $"{TiledSceneBudget / 1024 / 1024} MB scene budget.";

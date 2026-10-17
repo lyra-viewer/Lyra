@@ -46,6 +46,10 @@ typedef struct raw_image raw_image;
 #define RAW_DAMAGE_TRUNCATED 1 // the file ends before the raw data does
 #define RAW_DAMAGE_CORRUPT 2   // LibRaw read past data it could not decode
 
+#define RAW_STAGE_IDLE 0
+#define RAW_STAGE_EARLY 1     // a cancel lands soon
+#define RAW_STAGE_FINISHING 2 // demosaiced, or in a demosaic with no cancel point: a cancel lands about when it ends
+
 #define RAW_PREVIEW_NONE 0
 #define RAW_PREVIEW_JPEG 1
 #define RAW_PREVIEW_RGB8 2
@@ -69,6 +73,13 @@ typedef struct {
     char make[64];
     char model[64];
     int32_t preview_color_space;  // DNG PreviewColorSpace: 0 unknown, 1 gray 2.2, 2 sRGB, 3 Adobe RGB, 4 ProPhoto
+    
+    float iso_speed;
+    float shutter;                // seconds
+    float aperture;               // f-number
+    float focal_length;           // mm
+    int64_t timestamp;            // capture time as LibRaw's mktime: seconds, camera wall clock read as local time
+    char lens[64];
 } raw_info;
 
 typedef struct {
@@ -126,6 +137,9 @@ RAW_NATIVE_API bool raw_develop(raw_image *image, const raw_develop_options *opt
 RAW_NATIVE_API void free_raw_pixels(void *owner);
 
 RAW_NATIVE_API void raw_cancel(raw_image *image);
+
+// RAW_STAGE_* of a develop running on another thread; safe to call alongside it.
+RAW_NATIVE_API int32_t raw_develop_stage(raw_image *image);
 
 RAW_NATIVE_API void raw_close(raw_image *image);
 

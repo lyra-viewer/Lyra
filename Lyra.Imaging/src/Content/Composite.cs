@@ -54,6 +54,12 @@ public sealed class Composite : IDisposable
     /// </summary>
     internal Task BackgroundDecodeTask = Task.CompletedTask;
 
+    /// <summary>The queued task that starts <see cref="BackgroundDecodeTask"/>, which the loader promotes.</summary>
+    internal Task BackgroundDecodeStart = Task.CompletedTask;
+
+    /// <summary>Whether this is the image on screen; set by the loader. Its work goes ahead of preloads.</summary>
+    internal volatile bool IsCurrent;
+
     private int _readySignaled;
     private int _completeSignaled;
 

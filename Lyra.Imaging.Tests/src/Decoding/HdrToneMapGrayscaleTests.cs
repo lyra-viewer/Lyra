@@ -35,7 +35,7 @@ public class HdrToneMapGrayscaleTests
     }
 
     private static string GrayScaleFlag(Composite composite)
-        => composite.FormatSpecificSnapshot().Single(kv => kv.Key == "GrayScale").Value;
+        => composite.FormatSpecificSnapshot().Single(kv => kv.Key == "Grayscale").Value;
 
     [Fact]
     public void PureRedHdr_StaysRed_AndIsNotFlaggedGrayscale()

@@ -5,7 +5,6 @@ using Lyra.Imaging.Decoding.Decoders.Raw;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
-using Lyra.Imaging.Loading;
 using Lyra.Imaging.Metadata;
 using Lyra.ManagedCodecs.Raster.Dng;
 using SkiaSharp;
@@ -32,24 +31,44 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
         var clock = Stopwatch.StartNew();
         composite.Structure = DescribeStructure(path);
 
-        if (TryShowPreview(composite, path, ct) is not { } renditions)
-        {
-            var developed = DevelopFile(composite, path, warning => composite.Warning = warning, ct);
-            composite.Content = RawRenditions.Around(composite, path, developed);
-            composite.Stage = Developed(clock);
-            return;
-        }
-
-        clock.Restart();
+        // From the start, so no other develop gets under way while this image is on screen.
+        IDisposable? announced = RawDevelopQueue.Shared.Announce(() => composite.IsCurrent);
 
         try
         {
-            composite.BackgroundDecodeTask = Task.Factory.StartNew(() => DevelopBehindPreview(composite, path, renditions, clock, ct),
-                CancellationToken.None, TaskCreationOptions.DenyChildAttach, TaskScheduler.Current);
+            if (TryShowPreview(composite, path, ct) is not { } renditions)
+            {
+                var developed = DevelopFile(composite, path, warning => composite.Warning = warning, ct);
+                composite.Content = RawRenditions.Around(composite, path, developed);
+                composite.Stage = Developed(clock);
+                return;
+            }
+
+            clock.Restart();
+
+            try
+            {
+                // Reading and opening the file run on the scheduler's thread; the wait for LibRaw holds none.
+                var handedOver = announced;
+                var start = Task.Factory.StartNew(async () =>
+                    {
+                        using (handedOver)
+                            await DevelopBehindPreviewAsync(composite, path, renditions, clock, ct).ConfigureAwait(false);
+                    },
+                    CancellationToken.None, TaskCreationOptions.DenyChildAttach, TaskScheduler.Current);
+
+                composite.BackgroundDecodeStart = start;
+                composite.BackgroundDecodeTask = start.Unwrap();
+                announced = null;
+            }
+            catch (Exception e) when (e is InvalidOperationException or TaskSchedulerException)
+            {
+                DevelopBehindPreviewAsync(composite, path, renditions, clock, ct).GetAwaiter().GetResult();
+            }
         }
-        catch (InvalidOperationException)
+        finally
         {
-            DevelopBehindPreview(composite, path, renditions, clock, ct);
+            announced?.Dispose();
         }
     }
 
@@ -131,7 +150,7 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
         }
 
         composite.Content = renditions;
-        composite.Stage = new LoadStage(StageLabel, "Camera preview developing...");
+        composite.Stage = new LoadStage(StageLabel, "Showing camera preview, developing raw.");
         composite.HdrPending = true;
         composite.SignalReady();
 
@@ -142,13 +161,13 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
     /// Develops the raw data and puts it in place of the stand-in. On failure the preview stays,
     /// marked as all there is; completion is signaled either way unless the load was canceled.
     /// </summary>
-    private static void DevelopBehindPreview(Composite composite, string path, VariantRasterContent renditions, Stopwatch clock, CancellationToken ct)
+    private static async Task DevelopBehindPreviewAsync(Composite composite, string path, VariantRasterContent renditions, Stopwatch clock, CancellationToken ct)
     {
         try
         {
             ct.ThrowIfCancellationRequested();
 
-            var developed = DevelopFile(composite, path, warning => renditions.RecordWarning(RawRenditions.Developed, warning), ct);
+            var developed = await DevelopFileAsync(composite, path, warning => renditions.RecordWarning(RawRenditions.Developed, warning), ct).ConfigureAwait(false);
             renditions.ReplaceVariant(RawRenditions.Developed, developed.Content, RawRenditions.DescribeDeveloped(composite, developed));
             composite.Stage = Developed(clock);
         }
@@ -173,34 +192,24 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
 
     internal readonly record struct DevelopedImage(ICompositeContent Content, int Width, int Height);
     
-    internal static DevelopedImage DevelopFile(Composite composite, string path, Action<LoadWarning> warn, CancellationToken ct)
+    internal static DevelopedImage DevelopFile(Composite composite, string path, Action<LoadWarning> warn, CancellationToken ct) => DevelopFileAsync(composite, path, warn, ct).GetAwaiter().GetResult();
+
+    /// <summary>Every await here resumes off the caller's scheduler, so a caller may block on it.</summary>
+    private static async Task<DevelopedImage> DevelopFileAsync(Composite composite, string path, Action<LoadWarning> warn, CancellationToken ct)
     {
         if (!NativeFileBuffer.ShouldBuffer(composite.FileSizeBytes ?? 0))
         {
-            composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
-            composite.SignalProgress();
-
             using var opened = RawNative.OpenFile(path, out var fileInfo) ?? throw NativeErrors.DecodeFailed(RawNative.get_last_raw_error(), path);
-            var fileProfile = ReadProfile(fileInfo, () => DecoderIO.OpenRandomAccessRead(path), path);
-
-            return Develop(composite, opened, fileInfo, fileProfile, path, warn, ct);
+            return await DevelopAsync(composite, opened, fileInfo, () => DecoderIO.OpenRandomAccessRead(path), path, warn, ct).ConfigureAwait(false);
         }
 
         using var data = NativeFileBuffer.Read(path, ct, out var readMs, composite.ReportTransferred);
         composite.CompleteTransfer((long)data.Length, readMs);
         ct.ThrowIfCancellationRequested();
 
-        using (var stream = data.AsStream())
-            composite.ExifInfo = MetadataProcessor.ParseMetadata(stream, path);
-
-        // Behind a preview the image is already on screen, and the panel only redraws when told.
-        composite.SignalProgress();
-
         // LibRaw reads the buffer in place, so it is disposed only after the handle.
         using var image = RawNative.OpenMemory(data.Data, data.Length, out var info) ?? throw NativeErrors.DecodeFailed(RawNative.get_last_raw_error(), path);
-        var profile = ReadProfile(info, data.AsStream, path);
-
-        return Develop(composite, image, info, profile, path, warn, ct);
+        return await DevelopAsync(composite, image, info, data.AsStream, path, warn, ct).ConfigureAwait(false);
     }
 
     /// <summary>The DNG's own tone curve and local tone map, when it carries them; null otherwise or on any trouble.</summary>
@@ -221,8 +230,16 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
         }
     }
 
-    private static DevelopedImage Develop(Composite composite, RawNative.ImageHandle image, RawNative.RawInfo info, DngRenderingProfile? profile, string path, Action<LoadWarning> warn, CancellationToken ct)
+    /// <summary>Develops an opened file; <paramref name="open"/> reads it again for its EXIF and DNG profile.</summary>
+    private static async Task<DevelopedImage> DevelopAsync(Composite composite, RawNative.ImageHandle image, RawNative.RawInfo info, Func<Stream> open, string path, Action<LoadWarning> warn, CancellationToken ct)
     {
+        using (var stream = open())
+            composite.ExifInfo = MetadataProcessor.ParseRawMetadata(stream, path, RawCapture.From(info));
+
+        // Behind a preview the image is already on screen, and the panel only redraws when told.
+        composite.SignalProgress();
+        var profile = ReadProfile(info, open, path);
+
         DecoderValidation.RequireSaneDimensions(info.Width, info.Height, bytesPerPixel: 8);
         composite.ReportPixelCount(info.Width, info.Height);
         Describe(composite, info);
@@ -231,12 +248,19 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
 
         var previewMedian = PreviewMedian(image, info, ct);
 
-        if (!TryDevelop(image, new RawNative.DevelopOptions { Demosaic = RawNative.DemosaicAhd }, ct, out var pixels, out var error))
+        var result = await TryDevelopAsync(image, new RawNative.DevelopOptions { Demosaic = RawNative.DemosaicAhd }, () => composite.IsCurrent, ct).ConfigureAwait(false);
+        if (!result.Developed)
         {
             ct.ThrowIfCancellationRequested();
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(error) ? $"Failed to decode: {path}" : error);
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(result.Error) ? $"Failed to decode: {path}" : result.Error);
         }
 
+        return Render(composite, result.Pixels, info, profile, previewMedian, path, warn, ct);
+    }
+
+    /// <summary>Turns developed pixels into the composite's content, and frees them.</summary>
+    private static DevelopedImage Render(Composite composite, RawNative.Pixels pixels, RawNative.RawInfo info, DngRenderingProfile? profile, float? previewMedian, string path, Action<LoadWarning> warn, CancellationToken ct)
+    {
         try
         {
             DecoderValidation.RequireSaneDimensions(pixels.Width, pixels.Height, bytesPerPixel: 8);
@@ -317,7 +341,7 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
     private static Exposure MatchedExposure(float? previewMedian, float? rawMedian, RawNative.RawInfo info)
     {
         if (previewMedian is { } preview && rawMedian is { } raw && RawExposure.MatchStops(preview, raw) is { } matched)
-            return new Exposure(matched, "matched to the camera's preview");
+            return new Exposure(matched, "matched");
 
         return new Exposure(Math.Clamp(RawExposure.FallbackStops + info.BaselineExposure, RawExposure.MinStops, RawExposure.MaxStops), "default");
     }
@@ -351,27 +375,53 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
             composite.AddFormatSpecific("Local Tone Map", $"{map.PointsV} x {map.PointsH} tables of {map.PointsN}");
     }
     
-    private static bool TryDevelop(RawNative.ImageHandle image, RawNative.DevelopOptions options, CancellationToken ct, out RawNative.Pixels pixels, out string? error)
+    private static Task<DevelopResult> TryDevelopAsync(RawNative.ImageHandle image, RawNative.DevelopOptions options, Func<bool> foreground, CancellationToken ct)
     {
-        var preload = TaskScheduler.Current is PreloadTaskScheduler;
+        var rerun = false;
+        RawNative.ImageHandle? developing = null;
 
-        var result = RawDevelopQueue.Shared.Run(() =>
+        return RawDevelopQueue.Shared.RunAsync(preempt =>
         {
-            var developed = TryDevelopNow(image, options, ct, out var developedPixels);
-            return new DevelopResult(developed, developedPixels, developed ? null : NativeErrors.GetUtf8ZOrAnsiZ(RawNative.get_last_raw_error()));
-        }, preload, ct);
+            preempt.ThrowIfCancellationRequested();
 
-        pixels = result.Pixels;
-        error = result.Error;
-        return result.Developed;
+            // Cut short for the image on screen, this runs again later; LibRaw spends the handle it cancels.
+            using var reopened = rerun ? image.Reopen() : null;
+            if (rerun && reopened is null)
+                return new DevelopResult(false, default, NativeErrors.GetUtf8ZOrAnsiZ(RawNative.get_last_raw_error()));
+
+            rerun = true;
+
+            var handle = reopened ?? image;
+            bool developed;
+            RawNative.Pixels developedPixels;
+
+            // Only while this run is under way: a handle spent by an earlier cut may claim to be finishing.
+            Volatile.Write(ref developing, handle);
+
+            try
+            {
+                developed = TryDevelopNow(handle, options, ct, preempt, out developedPixels);
+            }
+            finally
+            {
+                Volatile.Write(ref developing, null);
+            }
+
+            if (!developed && preempt.IsCancellationRequested)
+                throw new OperationCanceledException(preempt);
+
+            return new DevelopResult(developed, developedPixels, developed ? null : NativeErrors.GetUtf8ZOrAnsiZ(RawNative.get_last_raw_error()));
+        }, foreground, () => IsFinishing(Volatile.Read(ref developing)), ct);
     }
+
+    /// <summary>A handle closed meanwhile throws, which the queue takes as no.</summary>
+    private static bool IsFinishing(RawNative.ImageHandle? image) => image is not null && RawNative.raw_develop_stage(image) == RawNative.StageFinishing;
 
     private readonly record struct DevelopResult(bool Developed, RawNative.Pixels Pixels, string? Error);
 
-    private static bool TryDevelopNow(RawNative.ImageHandle image, RawNative.DevelopOptions options, CancellationToken ct, out RawNative.Pixels pixels)
+    private static bool TryDevelopNow(RawNative.ImageHandle image, RawNative.DevelopOptions options, CancellationToken ct, CancellationToken preempt, out RawNative.Pixels pixels)
     {
-        // Disposed before the handle is, so the callback never sees a closed one.
-        using var cancellation = ct.Register(() =>
+        void Cancel()
         {
             try
             {
@@ -380,7 +430,11 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
             catch (ObjectDisposedException)
             {
             }
-        });
+        }
+
+        // Disposed before the handle is, so the callback never sees a closed one.
+        using var cancellation = ct.Register(Cancel);
+        using var preemption = preempt.Register(Cancel);
 
         if (RawNative.raw_develop(image, options, out pixels) && pixels.Data != IntPtr.Zero)
             return true;
@@ -427,7 +481,7 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
             : $"{info.PreviewWidth}x{info.PreviewHeight} {(info.PreviewFormat == RawNative.PreviewJpeg ? "JPEG" : "RGB")}");
 
         composite.AddFormatSpecific("Demosaic", info.Sensor is RawNative.SensorBayer or RawNative.SensorXTrans ? "AHD" : "None");
-        composite.AddFormatSpecific("Decoder", $"LibRaw {RawNative.LibRawVersion}");
+        composite.AddFormatSpecific("Decoder", $"LibRaw {RawNative.LibRawShortVersion}");
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)
@@ -541,8 +595,11 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
     /// <summary>A half-size development, tone-mapped, for files without a usable preview.</summary>
     private static SKBitmap? DevelopSmall(RawNative.ImageHandle image, RawNative.RawInfo info, CancellationToken ct)
     {
-        if (!TryDevelop(image, new RawNative.DevelopOptions { HalfSize = 1 }, ct, out var pixels, out _))
+        var result = TryDevelopAsync(image, new RawNative.DevelopOptions { HalfSize = 1 }, static () => false, ct).GetAwaiter().GetResult();
+        if (!result.Developed)
             return null;
+
+        var pixels = result.Pixels;
 
         try
         {

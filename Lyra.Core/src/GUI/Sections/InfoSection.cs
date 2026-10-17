@@ -1,6 +1,7 @@
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
+using Lyra.SdlCore;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Layout;
 using Lyra.UI.Components.Primitives;
@@ -23,6 +24,7 @@ public sealed class InfoSection : IUISection
     // Image row
     private readonly HStack _imageRow;
     private readonly Label _formatLabel;
+    private readonly Label _dimensionsSeparator;
     private readonly Label _dimensionsLabel;
     private readonly Label _rotationSeparator;
     private readonly Label _rotationPrefix;
@@ -36,6 +38,8 @@ public sealed class InfoSection : IUISection
     // Displaying row
     private readonly HStack _displayingRow;
     private readonly Label _zoomLabel;
+    private readonly Label _displayModeSeparator;
+    private readonly Label _displayModePrefix;
     private readonly Label _displayModeLabel;
     private readonly Label _viewLockedLabel;
     private readonly Label _samplingModeLabel;
@@ -72,7 +76,7 @@ public sealed class InfoSection : IUISection
         _imageRow = BuildRow().Children(
             DimPrefix("[Image]       "),
             _formatLabel = ForegroundLabel(),
-            Separator(),
+            _dimensionsSeparator = Separator(),
             _dimensionsLabel = ForegroundLabel(),
             _rotationSeparator = Separator(),
             _rotationPrefix = DimPrefix("Rotated:"),
@@ -89,8 +93,8 @@ public sealed class InfoSection : IUISection
             DimPrefix("[Displaying]  "),
             DimPrefix("Zoom:"),
             _zoomLabel = ForegroundLabel(),
-            Separator(),
-            DimPrefix("Display Mode:"),
+            _displayModeSeparator = Separator(),
+            _displayModePrefix = DimPrefix("Display Mode:"),
             _displayModeLabel = ForegroundLabel(),
             _viewLockedLabel = new Label("[keep]").Color(Palette.Danger).Transient(),
             Separator(),
@@ -170,7 +174,12 @@ public sealed class InfoSection : IUISection
 
         // Image row
         _formatLabel.Text = composite.ImageFormatType.Description();
-        _dimensionsLabel.Text = $"{composite.LogicalWidth}x{composite.LogicalHeight}";
+
+        // Unknown until the decoder has read the header.
+        var sized = composite.LogicalWidth > 0 && composite.LogicalHeight > 0;
+        _dimensionsSeparator.Present = sized;
+        _dimensionsLabel.Present = sized;
+        _dimensionsLabel.Text = sized ? $"{composite.LogicalWidth}x{composite.LogicalHeight}" : string.Empty;
         
         var rotation = composite.AppliedOrientation;
         var rotated = rotation is not (ExifOrientation.Normal or ExifOrientation.Unknown);
@@ -184,7 +193,11 @@ public sealed class InfoSection : IUISection
 
         // Displaying row
         _zoomLabel.Text = Formatters.ZoomToStr(app.Zoom);
-        _displayModeLabel.Text = app.DisplayMode.Description();
+        var hasDisplayMode = app.DisplayMode != DisplayMode.Undefined;
+        _displayModeSeparator.Present = hasDisplayMode;
+        _displayModePrefix.Present = hasDisplayMode;
+        _displayModeLabel.Present = hasDisplayMode;
+        _displayModeLabel.Text = hasDisplayMode ? app.DisplayMode.Description() : string.Empty;
         _viewLockedLabel.Present = app.ViewLocked;
         _samplingModeLabel.Text = app.SamplingMode;
 

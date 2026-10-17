@@ -115,7 +115,9 @@ public sealed class FormatSection : IUISection
                 new Label(item.Value)
                 {
                     Color = Palette.Foreground,
-                    HorizontalAlign = HAlign.Left
+                    HorizontalAlign = HAlign.Left,
+                    HorizontalSize = SizeMode.Expand,
+                    Ellipsize = true
                 });
     }
 }

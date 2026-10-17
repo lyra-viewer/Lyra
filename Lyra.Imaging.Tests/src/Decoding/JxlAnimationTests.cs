@@ -64,7 +64,7 @@ public class JxlAnimationTests
             Assert.False(facts.ContainsKey("Truncated"));
 
             // Whether pixels are gray is a frame's answer, not the file's.
-            Assert.False(facts.ContainsKey("GrayScale"));
+            Assert.False(facts.ContainsKey("Grayscale"));
 
             AssertSrgb(Red, set.Active, 0, 0);
         });
@@ -212,7 +212,7 @@ public class JxlAnimationTests
 
             var facts = Facts(composite);
             Assert.Equal("No", facts["Animated"]);
-            Assert.Equal("No", facts["GrayScale"]);
+            Assert.Equal("No", facts["Grayscale"]);
             Assert.False(facts.ContainsKey("Frames"));
         });
     }

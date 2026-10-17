@@ -22,6 +22,10 @@ internal static class RawNative
 
     public const int DemosaicAhd = 3;
 
+    public const int StageIdle = 0;
+    public const int StageEarly = 1;
+    public const int StageFinishing = 2;
+
     /// <summary>LibRaw's own limit on how many previews it lists.</summary>
     private const int MaxPreviews = 8;
 
@@ -46,6 +50,12 @@ internal static class RawNative
         public fixed byte Make[64];
         public fixed byte Model[64];
         public int PreviewColorSpace;
+        public float IsoSpeed;
+        public float Shutter;
+        public float Aperture;
+        public float FocalLength;
+        public long Timestamp;
+        public fixed byte Lens[64];
 
         public string CfaPatternText
         {
@@ -70,6 +80,15 @@ internal static class RawNative
             get
             {
                 fixed (byte* p = Model)
+                    return Text(p, 64);
+            }
+        }
+
+        public string LensText
+        {
+            get
+            {
+                fixed (byte* p = Lens)
                     return Text(p, 64);
             }
         }
@@ -128,6 +147,15 @@ internal static class RawNative
     {
         public override bool IsInvalid => handle == IntPtr.Zero;
 
+        /// <summary>Opens the same file afresh, on the same terms; a cancelled develop leaves this handle spent.</summary>
+        public Func<ImageHandle?> Reopen { get; private set; } = static () => null;
+
+        internal ImageHandle WithReopen(Func<ImageHandle?> reopen)
+        {
+            Reopen = reopen;
+            return this;
+        }
+
         protected override bool ReleaseHandle()
         {
             raw_close(handle);
@@ -172,15 +200,24 @@ internal static class RawNative
     public static extern void raw_cancel(ImageHandle image);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int raw_develop_stage(ImageHandle image);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
     private static extern void raw_close(IntPtr image);
 
     public static string LibRawVersion => NativeErrors.GetUtf8ZOrAnsiZ(raw_libraw_version());
 
+    public static string LibRawShortVersion => ShortVersion(LibRawVersion);
+
+    internal static string ShortVersion(string version) => version.Split('-', 2)[0].Trim();
+
     /// <summary>Opens a file held in memory, which must outlive the handle; null on failure.</summary>
-    public static ImageHandle? OpenMemory(IntPtr data, ulong size, out RawInfo info) => Valid(raw_open_memory(data, (nuint)size, out info));
+    public static ImageHandle? OpenMemory(IntPtr data, ulong size, out RawInfo info) =>
+        Valid(raw_open_memory(data, (nuint)size, out info))?.WithReopen(() => OpenMemory(data, size, out _));
 
     /// <summary>Opens a file by path, reading only what later calls need; null on failure.</summary>
-    public static ImageHandle? OpenFile(string path, out RawInfo info) => Valid(raw_open_file(path, out info));
+    public static ImageHandle? OpenFile(string path, out RawInfo info) =>
+        Valid(raw_open_file(path, out info))?.WithReopen(() => OpenFile(path, out _));
 
     public static PreviewEntry[] ListPreviews(ImageHandle image)
     {

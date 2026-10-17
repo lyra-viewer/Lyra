@@ -6,6 +6,10 @@ namespace Lyra.Imaging.Loading;
 internal sealed class PreloadTaskScheduler : TaskScheduler, IDisposable
 {
     private readonly BlockingCollection<Task> _tasks = new();
+
+    /// <summary>Queued and not yet taken, by a worker or by <see cref="Promote"/>.</summary>
+    private readonly ConcurrentDictionary<Task, byte> _waiting = new();
+
     private readonly List<Thread> _threads;
     private bool _disposed;
 
@@ -30,11 +34,44 @@ internal sealed class PreloadTaskScheduler : TaskScheduler, IDisposable
     private void WorkerLoop()
     {
         foreach (var task in _tasks.GetConsumingEnumerable())
-            TryExecuteTask(task);
+        {
+            if (_waiting.TryRemove(task, out _))
+                TryExecuteTask(task);
+        }
     }
 
-    protected override IEnumerable<Task> GetScheduledTasks() => _tasks.ToArray();
-    protected override void QueueTask(Task task) => _tasks.Add(task);
+    /// <summary>
+    /// Runs a task still waiting here on the thread pool at once, ahead of the queue. False when
+    /// it is not waiting here: already started, or never queued here.
+    /// </summary>
+    public bool Promote(Task? task)
+    {
+        if (task is null || !_waiting.TryRemove(task, out _))
+            return false;
+
+        ThreadPool.UnsafeQueueUserWorkItem(static state => state.Scheduler.TryExecuteTask(state.Task), new Promotion(this, task), preferLocal: false);
+        return true;
+    }
+
+    private sealed record Promotion(PreloadTaskScheduler Scheduler, Task Task);
+
+    protected override IEnumerable<Task> GetScheduledTasks() => _waiting.Keys.ToArray();
+
+    protected override void QueueTask(Task task)
+    {
+        _waiting.TryAdd(task, 0);
+
+        try
+        {
+            _tasks.Add(task);
+        }
+        catch
+        {
+            _waiting.TryRemove(task, out _);
+            throw;
+        }
+    }
+
     protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) => false;
 
     private static readonly TimeSpan ShutdownJoinTimeout = TimeSpan.FromSeconds(2);

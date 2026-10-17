@@ -24,6 +24,7 @@ struct raw_image {
     LibRaw processor;
     std::atomic<bool> cancelled{false};
     std::atomic<int> damage{RAW_DAMAGE_NONE};
+    std::atomic<int32_t> stage{RAW_STAGE_IDLE};
     bool developed = false;
 };
 
@@ -38,8 +39,26 @@ static void set_error(const char *fmt, ...) {
 
 static void clear_error() { error_message[0] = '\0'; }
 
-static int on_progress(void *data, enum LibRaw_progress, int, int) {
-    return static_cast<raw_image *>(data)->cancelled.load(std::memory_order_relaxed) ? 1 : 0;
+// Whether a cancel at this point would land only about when the develop ends anyway.
+static bool is_finishing(const LibRaw &processor, LibRaw_progress stage, int iter, int expect) {
+    if (stage >= LIBRAW_PROGRESS_THUMB_LOAD)
+        return false;
+
+    if (stage > LIBRAW_PROGRESS_INTERPOLATE)
+        return true;
+
+    // pre_interpolate's last callback; next is the demosaic, and xtrans_interpolate never calls back.
+    const auto &p = processor.imgdata;
+    return stage == LIBRAW_PROGRESS_PRE_INTERPOLATE && iter == expect - 1 && p.idata.filters == 9 &&
+           (p.params.user_qual < 0 || p.params.user_qual >= 2);
+}
+
+static int on_progress(void *data, enum LibRaw_progress stage, int iter, int expect) {
+    auto *image = static_cast<raw_image *>(data);
+    if (is_finishing(image->processor, stage, iter, expect))
+        image->stage.store(RAW_STAGE_FINISHING, std::memory_order_relaxed);
+
+    return image->cancelled.load(std::memory_order_relaxed) ? 1 : 0;
 }
 
 static void on_data_error(void *data, const char *, const INT64 offset) {
@@ -149,6 +168,13 @@ static void fill_info(LibRaw &processor, raw_info *info) {
 
     copy_string(info->make, sizeof(info->make), d.idata.normalized_make[0] ? d.idata.normalized_make : d.idata.make);
     copy_string(info->model, sizeof(info->model), d.idata.normalized_model[0] ? d.idata.normalized_model : d.idata.model);
+
+    info->iso_speed = d.other.iso_speed;
+    info->shutter = d.other.shutter;
+    info->aperture = d.other.aperture;
+    info->focal_length = d.other.focal_len;
+    info->timestamp = static_cast<int64_t>(d.other.timestamp);
+    copy_string(info->lens, sizeof(info->lens), d.lens.Lens);
 }
 
 // Unpacks preview index into out; false with the LibRaw code in last when it cannot be had.
@@ -406,6 +432,7 @@ RAW_NATIVE_API bool raw_develop(raw_image *image, const raw_develop_options *opt
         return false;
     }
     image->developed = true;
+    image->stage.store(RAW_STAGE_EARLY, std::memory_order_relaxed);
 
     try {
         auto &processor = image->processor;
@@ -456,6 +483,7 @@ RAW_NATIVE_API bool raw_develop(raw_image *image, const raw_develop_options *opt
             set_error("Could not develop the raw data: %s", libraw_strerror(result));
             return false;
         }
+        image->stage.store(RAW_STAGE_FINISHING, std::memory_order_relaxed);
 
         int error = 0;
         libraw_processed_image_t *developed = processor.dcraw_make_mem_image(&error);
@@ -499,8 +527,16 @@ RAW_NATIVE_API void free_raw_pixels(void *owner) {
 }
 
 RAW_NATIVE_API void raw_cancel(raw_image *image) {
-    if (image)
-        image->cancelled.store(true, std::memory_order_relaxed);
+    if (!image)
+        return;
+
+    image->cancelled.store(true, std::memory_order_relaxed);
+    // The progress callback only runs between stages; decoders check this flag row by row.
+    image->processor.setCancelFlag();
+}
+
+RAW_NATIVE_API int32_t raw_develop_stage(raw_image *image) {
+    return image ? image->stage.load(std::memory_order_relaxed) : RAW_STAGE_IDLE;
 }
 
 RAW_NATIVE_API void raw_close(raw_image *image) {

@@ -71,10 +71,10 @@ internal static class RasterContentBuilder
             throw;
         }
 
-        Logger.Info($"[RasterContentBuilder] {width}x{height} is {ImageBytes.Of(bitmap) / 1024 / 1024} MB as " +
-                    $"{bitmap.ColorType}, over the {DecodePolicy.SingleTextureCeilingBytes / 1024 / 1024} MB " +
-                    "single-texture budget; publishing a preview plus tiles so the GPU only holds " +
-                    "what is on screen.");
+        Logger.Debug($"[RasterContentBuilder] {width}x{height} is {ImageBytes.Of(bitmap) / 1024 / 1024} MB as " +
+                     $"{bitmap.ColorType}, over the {DecodePolicy.SingleTextureCeilingBytes / 1024 / 1024} MB " +
+                     "single-texture budget; publishing a preview plus tiles so the GPU only holds " +
+                     "what is on screen.");
 
         return content;
     }

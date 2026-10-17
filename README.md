@@ -276,13 +276,13 @@ A handful of formats are decoded through native libraries (libheif, OpenJPEG, li
 Basis Universal transcoder). How those libraries are delivered depends on the platform:
 
 - **macOS** - expected from the package manager (Homebrew).
-- **Linux** - resolved as APT dependencies of the `.deb`, except for **libjxl**, which is vendored inside the
-  package for now. This is a temporary measure until JPEG XL support is more widely available across Ubuntu releases; it
-  will be dropped in favor of the system package once that lands.
+- **Linux** - resolved as APT dependencies of the `.deb`, with two exceptions shipped inside the package: **libjxl**,
+  vendored until JPEG XL support is more widely available across Ubuntu releases, and **LibRaw**, built by Lyra at one
+  pinned version, because distributions ship different LibRaw versions that one build cannot load.
 - **Linux (Flatpak)** - self-contained: the libraries come from the Freedesktop runtime or are built into the Flatpak,
   so nothing needs to be installed on the host.
 - **Windows** - bundled with the application. The wrapper DLLs are self-contained and ship inside the distribution, so no
-  separate installation is required.
+  separate installation is required. LibRaw ships beside them as its own DLL.
 
 ---
 

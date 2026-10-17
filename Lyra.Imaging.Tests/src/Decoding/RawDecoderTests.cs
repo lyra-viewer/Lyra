@@ -3,6 +3,7 @@ using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Decoding.Decoders.Raw;
 using Lyra.Imaging.Interop;
+using Lyra.Imaging.Loading;
 using Lyra.Imaging.Tests.Support;
 using SkiaSharp;
 using Xunit;
@@ -75,6 +76,10 @@ public class RawDecoderTests
         Assert.Equal("None", facts["Embedded Preview"]);
         Assert.Equal("AHD", facts["Demosaic"]);
         Assert.StartsWith("LibRaw ", facts["Decoder"]);
+        Assert.DoesNotContain("-", facts["Decoder"]);
+
+        // IFD0's compression is the thumbnail's or the mosaic's, never what the panel shows.
+        Assert.Equal(string.Empty, composite.ExifInfo?.Compression);
     }
 
     [Fact]
@@ -267,6 +272,59 @@ public class RawDecoderTests
     }
 
     [Fact]
+    public async Task ADevelopWaitingItsTurn_LeavesThePreloadThreadFree()
+    {
+        RequireNative();
+
+        using var file = new TempFile(DngBuilder.Build(new DngBuilder.Spec(PreviewWidth: 40, PreviewHeight: 30)));
+        using var composite = new Composite(new FileInfo(file.Path));
+        using var preloads = new PreloadTaskScheduler(1);
+        using var started = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+
+        // The image on screen holds the develop thread.
+        var onScreen = Task.Run(() => RawDevelopQueue.Shared.Run(() =>
+        {
+            started.Set();
+            return release.Wait(TimeSpan.FromSeconds(30));
+        }, foreground: () => true, CancellationToken.None));
+
+        try
+        {
+            Assert.True(started.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
+            await DecodeOn(preloads, composite, TestContext.Current.CancellationToken);
+
+            // Queued behind the background develop on the only preload thread.
+            var next = Task.Factory.StartNew(() => true, CancellationToken.None, TaskCreationOptions.None, preloads);
+            Assert.True(await next.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+            Assert.False(composite.BackgroundDecodeTask.IsCompleted);
+        }
+        finally
+        {
+            release.Set();
+            await onScreen;
+        }
+
+        await composite.BackgroundDecodeTask.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.IsType<HdrRasterContent>(Renditions(composite).Active);
+    }
+
+    [Fact]
+    public async Task TheDevelopBehindThePreview_NeverResumesOnThePreloadScheduler()
+    {
+        RequireNative();
+
+        using var file = new TempFile(DngBuilder.Build(new DngBuilder.Spec(PreviewWidth: 40, PreviewHeight: 30)));
+        using var composite = new Composite(new FileInfo(file.Path));
+
+        // The decode and the develop's start run; anything posted back to it never would.
+        await DecodeOn(new FirstTasksScheduler(2), composite, TestContext.Current.CancellationToken);
+
+        await composite.BackgroundDecodeTask.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.IsType<HdrRasterContent>(Renditions(composite).Active);
+    }
+
+    [Fact]
     public async Task CancellingBehindThePreview_LeavesItUnfinishedAndUnwarned()
     {
         RequireNative();
@@ -435,8 +493,24 @@ public class RawDecoderTests
     }
 
     /// <summary>Decodes on <paramref name="gate"/>, which holds the development queued behind the preview.</summary>
-    private static Task DecodeOn(HoldingScheduler gate, Composite composite, CancellationToken ct) =>
+    private static Task DecodeOn(TaskScheduler gate, Composite composite, CancellationToken ct) =>
         Task.Factory.StartNew(() => new RawDecoder().DecodeAsync(composite, ct), CancellationToken.None, TaskCreationOptions.None, gate).Unwrap();
+
+    /// <summary>Runs the first tasks it is given and drops every later one.</summary>
+    private sealed class FirstTasksScheduler(int count) : TaskScheduler
+    {
+        private int _queued;
+
+        protected override void QueueTask(Task task)
+        {
+            if (Interlocked.Increment(ref _queued) <= count)
+                ThreadPool.QueueUserWorkItem(_ => TryExecuteTask(task));
+        }
+
+        protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) => false;
+
+        protected override IEnumerable<Task> GetScheduledTasks() => [];
+    }
 
     /// <summary>Runs the first task it is given and holds every later one until <see cref="Release"/>.</summary>
     private sealed class HoldingScheduler : TaskScheduler

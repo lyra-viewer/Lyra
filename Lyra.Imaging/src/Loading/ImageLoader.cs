@@ -4,6 +4,7 @@ using Lyra.Common.Estimation;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Tiling;
+using Lyra.Imaging.Decoding.Decoders.Raw;
 
 namespace Lyra.Imaging.Loading;
 
@@ -16,6 +17,9 @@ internal class ImageLoader : IDisposable
         public required Composite Composite { get; init; }
         public required Task Task { get; init; }
         public required CancellationTokenSource Cts { get; init; }
+
+        /// <summary>A preload's start on the preload workers; null for a load started in the foreground.</summary>
+        public Task? PreloadStart { get; init; }
     }
 
     private sealed class DisposeContinuationState
@@ -58,12 +62,19 @@ internal class ImageLoader : IDisposable
     /// the decodes it triggers land afterward, so the peak falls between two checks.
     /// </summary>
     private volatile string[] _lastKeepWindow = [];
-    private readonly PreloadTaskScheduler _preloadScheduler = new(2);
+    private readonly PreloadTaskScheduler _preloadScheduler;
     private readonly TaskFactory _preloadTaskFactory;
     private volatile Composite? _currentImage;
+    private readonly Lock _currentGate = new();
 
-    public ImageLoader()
+    public ImageLoader() : this(new PreloadTaskScheduler(2))
     {
+    }
+
+    /// <summary>Takes ownership of <paramref name="preloadScheduler"/>.</summary>
+    internal ImageLoader(PreloadTaskScheduler preloadScheduler)
+    {
+        _preloadScheduler = preloadScheduler;
         _preloadTaskFactory = new TaskFactory(_preloadScheduler);
 
         Logger.Info(typeof(ImageLoader),
@@ -80,7 +91,7 @@ internal class ImageLoader : IDisposable
     public Composite GetImage(string path)
     {
         // Cleared first so the load started below never yields to the outgoing image.
-        _currentImage = null;
+        SetCurrent(null);
 
         if (FailedTransiently(path))
             RemoveMatching(key => key == path, "Retrying:");
@@ -99,8 +110,41 @@ internal class ImageLoader : IDisposable
             throw;
         }
 
-        _currentImage = job.Composite;
+        SetCurrent(job.Composite);
+        Promote(job);
+
         return job.Composite;
+    }
+
+    private void SetCurrent(Composite? composite)
+    {
+        lock (_currentGate)
+        {
+            var previous = _currentImage;
+            if (ReferenceEquals(previous, composite))
+                return;
+
+            if (previous is not null)
+                previous.IsCurrent = false;
+
+            if (composite is not null)
+                composite.IsCurrent = true;
+
+            _currentImage = composite;
+        }
+
+        RawDevelopQueue.Shared.Reprioritize();
+    }
+
+    /// <summary>A preload opened before its workers got to it runs now, background decode included.</summary>
+    private void Promote(ImageJob job)
+    {
+        if (_preloadScheduler.Promote(job.PreloadStart))
+            Logger.Debug(typeof(ImageLoader), $"Promoted the queued preload of {job.Composite.FileInfo.Name}.");
+
+        // Pairs with the barrier in LoadImageAsync: either this sees the background task, or that sees IsCurrent.
+        Interlocked.MemoryBarrier();
+        _preloadScheduler.Promote(job.Composite.BackgroundDecodeStart);
     }
 
     private bool FailedTransiently(string path) =>
@@ -264,15 +308,24 @@ internal class ImageLoader : IDisposable
         var composite = new Composite(new FileInfo(path));
         var cts = new CancellationTokenSource();
 
-        var task = isPreload
-            ? _preloadTaskFactory.StartNew(() => LoadImageAsync(composite, cts.Token), CancellationToken.None).Unwrap()
-            : Task.Run(() => LoadImageAsync(composite, cts.Token)); // no token overload
+        if (!isPreload)
+        {
+            return new ImageJob
+            {
+                Composite = composite,
+                Task = Task.Run(() => LoadImageAsync(composite, cts.Token)), // no token overload
+                Cts = cts
+            };
+        }
+
+        var start = _preloadTaskFactory.StartNew(() => LoadImageAsync(composite, cts.Token), CancellationToken.None);
 
         return new ImageJob
         {
             Composite = composite,
-            Task = task,
-            Cts = cts
+            Task = start.Unwrap(),
+            Cts = cts,
+            PreloadStart = start
         };
     }
 
@@ -400,6 +453,10 @@ internal class ImageLoader : IDisposable
             ct.ThrowIfCancellationRequested();
 
             await decoder.DecodeAsync(composite, ct).ConfigureAwait(false);
+
+            Interlocked.MemoryBarrier();
+            if (composite.IsCurrent)
+                _preloadScheduler.Promote(composite.BackgroundDecodeStart);
 
             ct.ThrowIfCancellationRequested();
 

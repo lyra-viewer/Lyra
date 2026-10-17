@@ -78,7 +78,7 @@ internal class J2KDecoder : DecoderBase
                         throw;
                     }
 
-                    composite.AddFormatSpecific("GrayScale", isGrayscale);
+                    composite.AddFormatSpecific("Grayscale", isGrayscale);
 
                     composite.Content = RasterContentBuilder.Build(bitmap, composite);
                 }
