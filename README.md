@@ -261,7 +261,6 @@ See [Camera Raw](docs/technical.md#camera-raw) for the details.
 | Basis Universal   | KTX2 ETC1S / UASTC transcoding (native wrapper)                                            | Apache-2.0           | [github](https://github.com/BinomialLLC/basis_universal)          |
 | ZstdSharp.Port    | Zstandard decompression for KTX2 supercompression                                          | MIT                  | [github](https://github.com/oleg-st/ZstdSharp)                    |
 | Unicolour         | Color space conversions & perceptual color math (transitive, via the in-house PSD decoder) | MIT                  | [github](https://github.com/waacton/Unicolour)                    |
-| MetadataExtractor | EXIF metadata extraction                                                                   | Apache-2.0           | [github](https://github.com/drewnoakes/metadata-extractor-dotnet) |
 | Tomlyn            | TOML parsing for configuration files                                                       | BSD-2-Clause         | [github](https://github.com/xoofx/Tomlyn)                         |
 | System.IO.Hashing | Fast non-cryptographic hashing (duplicate detection)                                       | MIT                  | [github](https://github.com/dotnet/runtime)                       |
 

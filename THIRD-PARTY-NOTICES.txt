@@ -11,7 +11,7 @@ too long to inline are kept verbatim in licenses/.
 Not listed: libraries Lyra loads from the system rather than shipping -
 OpenEXR, OpenJPEG, libtiff, Zstandard (libzstd), libheif and libde265 come
 from Homebrew on macOS and from APT on Linux. LibRaw comes from Homebrew on
-macOS; elsewhere Lyra ships it (19).
+macOS; elsewhere Lyra ships it (17).
 
 CONTENTS
 
@@ -22,18 +22,16 @@ CONTENTS
    5. Svg.Skia, Svg.Model, Svg.SceneGraph, Svg.Animation, ShimSkiaSharp
    6. Svg.Custom (derived from SVG.NET)
    7. ExCSS
-   8. MetadataExtractor
-   9. XmpCore (.NET port of Adobe's XMP Core)
-  10. Tomlyn
-  11. ZstdSharp.Port (port of Zstandard)
-  12. Wacton.Unicolour
-  13. JetBrains Mono (embedded font)
-  14. Basis Universal transcoder (compiled into libbasis_native)
-  15. libjxl (libjxl, libjxl_cms, libjxl_threads)
-  16. Highway (libhwy)
-  17. Brotli
-  18. Little CMS (liblcms2)
-  19. LibRaw (libraw_r)
+   8. Tomlyn
+   9. ZstdSharp.Port (port of Zstandard)
+  10. Wacton.Unicolour
+  11. JetBrains Mono (embedded font)
+  12. Basis Universal transcoder (compiled into libbasis_native)
+  13. libjxl (libjxl, libjxl_cms, libjxl_threads)
+  14. Highway (libhwy)
+  15. Brotli
+  16. Little CMS (liblcms2)
+  17. LibRaw (libraw_r)
 
 
 ================================================================================
@@ -291,59 +289,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ================================================================================
-8. MetadataExtractor
-================================================================================
-
-Source:    https://github.com/drewnoakes/metadata-extractor-dotnet
-Copyright: Copyright 2002-2026 Drew Noakes
-License:   Apache-2.0
-Ships in:  macOS app, Linux .deb
-
-Licensed under the Apache License, Version 2.0; the full text is at the end of this file.
-
-================================================================================
-9. XmpCore (.NET port of Adobe's XMP Core)
-================================================================================
-
-Source:    https://github.com/drewnoakes/xmp-core-dotnet
-Copyright: Copyright 2015-2021 Drew Noakes (port); Adobe (original)
-License:   BSD-3-Clause
-Ships in:  macOS app, Linux .deb
-
-The port carries the BSD license of Adobe's XMP SDK, from which it is derived:
-
-BSD 3-Clause License
-
-Copyright (c) 2020, Adobe
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-
-3. Neither the name of the copyright holder nor the names of its
-   contributors may be used to endorse or promote products derived from
-   this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-================================================================================
-10. Tomlyn
+8. Tomlyn
 ================================================================================
 
 Source:    https://github.com/xoofx/Tomlyn
@@ -376,7 +322,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-11. ZstdSharp.Port (port of Zstandard)
+9. ZstdSharp.Port (port of Zstandard)
 ================================================================================
 
 Source:    https://github.com/oleg-st/ZstdSharp
@@ -440,7 +386,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-12. Wacton.Unicolour
+10. Wacton.Unicolour
 ================================================================================
 
 Source:    https://github.com/waacton/Unicolour
@@ -471,7 +417,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ================================================================================
-13. JetBrains Mono (embedded font)
+11. JetBrains Mono (embedded font)
 ================================================================================
 
 Source:    https://github.com/JetBrains/JetBrainsMono
@@ -574,7 +520,7 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 
 ================================================================================
-14. Basis Universal transcoder (compiled into libbasis_native)
+12. Basis Universal transcoder (compiled into libbasis_native)
 ================================================================================
 
 Source:    https://github.com/BinomialLLC/basis_universal
@@ -585,7 +531,7 @@ Ships in:  macOS app, Linux .deb
 Licensed under the Apache License, Version 2.0; the full text is at the end of this file.
 
 ================================================================================
-15. libjxl (libjxl, libjxl_cms, libjxl_threads)
+13. libjxl (libjxl, libjxl_cms, libjxl_threads)
 ================================================================================
 
 Source:    https://github.com/libjxl/libjxl
@@ -622,7 +568,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-16. Highway (libhwy)
+14. Highway (libhwy)
 ================================================================================
 
 Source:    https://github.com/google/highway
@@ -661,7 +607,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-17. Brotli
+15. Brotli
 ================================================================================
 
 Source:    https://github.com/google/brotli
@@ -690,7 +636,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ================================================================================
-18. Little CMS (liblcms2)
+16. Little CMS (liblcms2)
 ================================================================================
 
 Source:    https://github.com/mm2/Little-CMS
@@ -722,7 +668,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ================================================================================
-19. LibRaw (libraw_r)
+17. LibRaw (libraw_r)
 ================================================================================
 
 Source:    https://www.libraw.org/
@@ -751,7 +697,7 @@ are in licenses/LibRaw-LICENSE.txt.
 Apache License, Version 2.0
 ================================================================================
 
-Applies to: MetadataExtractor, Basis Universal transcoder.
+Applies to: Basis Universal transcoder.
 
                                  Apache License
                            Version 2.0, January 2004

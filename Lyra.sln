@@ -1,5 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
+# 
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.Core", "Lyra.Core\Lyra.Core.csproj", "{291BAAEC-CBE6-4D0F-B8D8-8A2306A36672}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.Imaging", "Lyra.Imaging\Lyra.Imaging.csproj", "{E1BE3B56-8332-4AB0-8CDF-A1C003B34FDF}"
@@ -17,6 +18,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.Imaging.Tests", "Lyra.Imaging.Tests\Lyra.Imaging.Tests.csproj", "{F88307BC-2576-4226-8DB6-23ACAC27E517}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.UI.Tests", "Lyra.UI.Tests\Lyra.UI.Tests.csproj", "{C18391CB-AC2F-48CB-B6F8-608FB7415217}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.Metadata", "Lyra.Metadata\Lyra.Metadata.csproj", "{EA796A77-B967-4EFB-AD2B-253D9B49E121}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lyra.Metadata.Tests", "Lyra.Metadata.Tests\Lyra.Metadata.Tests.csproj", "{EEFEA135-9536-4981-A301-84EEA23DD45A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -136,6 +141,30 @@ Global
 		{C18391CB-AC2F-48CB-B6F8-608FB7415217}.Release|x64.Build.0 = Release|Any CPU
 		{C18391CB-AC2F-48CB-B6F8-608FB7415217}.Release|x86.ActiveCfg = Release|Any CPU
 		{C18391CB-AC2F-48CB-B6F8-608FB7415217}.Release|x86.Build.0 = Release|Any CPU
+		{EA796A77-B967-4EFB-AD2B-253D9B49E121}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EA796A77-B967-4EFB-AD2B-253D9B49E121}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EA796A77-B967-4EFB-AD2B-253D9B49E121}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{EA796A77-B967-4EFB-AD2B-253D9B49E121}.Debug|x64.Build.0 = Debug|Any CPU
+		{EA796A77-B967-4EFB-AD2B-253D9B49E121}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{EA796A77-B967-4EFB-AD2B-253D9B49E121}.Debug|x86.Build.0 = Debug|Any CPU
+		{EA796A77-B967-4EFB-AD2B-253D9B49E121}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EA796A77-B967-4EFB-AD2B-253D9B49E121}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EA796A77-B967-4EFB-AD2B-253D9B49E121}.Release|x64.ActiveCfg = Release|Any CPU
+		{EA796A77-B967-4EFB-AD2B-253D9B49E121}.Release|x64.Build.0 = Release|Any CPU
+		{EA796A77-B967-4EFB-AD2B-253D9B49E121}.Release|x86.ActiveCfg = Release|Any CPU
+		{EA796A77-B967-4EFB-AD2B-253D9B49E121}.Release|x86.Build.0 = Release|Any CPU
+		{EEFEA135-9536-4981-A301-84EEA23DD45A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EEFEA135-9536-4981-A301-84EEA23DD45A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EEFEA135-9536-4981-A301-84EEA23DD45A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{EEFEA135-9536-4981-A301-84EEA23DD45A}.Debug|x64.Build.0 = Debug|Any CPU
+		{EEFEA135-9536-4981-A301-84EEA23DD45A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{EEFEA135-9536-4981-A301-84EEA23DD45A}.Debug|x86.Build.0 = Debug|Any CPU
+		{EEFEA135-9536-4981-A301-84EEA23DD45A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EEFEA135-9536-4981-A301-84EEA23DD45A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EEFEA135-9536-4981-A301-84EEA23DD45A}.Release|x64.ActiveCfg = Release|Any CPU
+		{EEFEA135-9536-4981-A301-84EEA23DD45A}.Release|x64.Build.0 = Release|Any CPU
+		{EEFEA135-9536-4981-A301-84EEA23DD45A}.Release|x86.ActiveCfg = Release|Any CPU
+		{EEFEA135-9536-4981-A301-84EEA23DD45A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
