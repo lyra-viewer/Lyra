@@ -8,7 +8,7 @@ namespace Lyra.Metadata.Tests.Tiff;
 
 /// <summary>
 /// BigTIFF differs from TIFF in three places: version 43 rather than 42, 8-byte offsets, and
-/// 20-byte entries with a 64-bit count. These were MetadataExtractor's blind spot.
+/// 20-byte entries with a 64-bit count.
 /// </summary>
 public class BigTiffTests
 {
