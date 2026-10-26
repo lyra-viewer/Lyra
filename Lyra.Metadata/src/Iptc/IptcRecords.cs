@@ -28,7 +28,6 @@ public sealed class IptcRecords : IMetadataBlock<IptcRecords>
     private const byte TagMarker = 0x1C;
     private const int MaxEntries = 10_000;
 
-
     public IReadOnlyList<IptcEntry> Entries { get; }
 
     private IptcRecords(IReadOnlyList<IptcEntry> entries) => Entries = entries;

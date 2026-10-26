@@ -92,18 +92,32 @@ public sealed class HeifContainer : IStreamedContainer
         List<ItemLocation>? locations = null;
         var unreadable = false;
 
-        foreach (var (type, body) in IsoBoxes.Children(meta[4..]))
+        foreach (var box in IsoBoxes.Children(meta[4..]))
         {
-            if (type.SequenceEqual("pitm"u8) && primary is null)
-                unreadable |= (primary = ReadPrimary(body)) is null;
-            else if (type.SequenceEqual("iinf"u8) && infos is null)
-                unreadable |= (infos = ReadInfos(body)) is null;
-            else if (type.SequenceEqual("iref"u8) && references is null)
-                unreadable |= (references = ReadReferences(body)) is null;
-            else if (type.SequenceEqual("iprp"u8) && properties is null)
-                unreadable |= !ReadProperties(body, out properties, out associations);
-            else if (type.SequenceEqual("iloc"u8) && locations is null)
-                unreadable |= (locations = ReadLocations(body)) is null;
+            if (box.Is("pitm"u8) && primary is null)
+            {
+                primary = ReadPrimary(box.Body);
+                unreadable |= primary is null;
+            }
+            else if (box.Is("iinf"u8) && infos is null)
+            {
+                infos = ReadInfos(box.Body);
+                unreadable |= infos is null;
+            }
+            else if (box.Is("iref"u8) && references is null)
+            {
+                references = ReadReferences(box.Body);
+                unreadable |= references is null;
+            }
+            else if (box.Is("iprp"u8) && properties is null)
+            {
+                unreadable |= !ReadProperties(box.Body, out properties, out associations);
+            }
+            else if (box.Is("iloc"u8) && locations is null)
+            {
+                locations = ReadLocations(box.Body);
+                unreadable |= locations is null;
+            }
         }
 
         container.Damaged = unreadable || !IsoBoxes.IsWhole(meta[4..]);
@@ -226,9 +240,10 @@ public sealed class HeifContainer : IStreamedContainer
             return null;
 
         var infos = new List<ItemInfo>();
-        foreach (var (type, infe) in IsoBoxes.Children(iinf[start..]))
+        foreach (var box in IsoBoxes.Children(iinf[start..]))
         {
-            if (!type.SequenceEqual("infe"u8) || infe.Length < 4)
+            var infe = box.Body;
+            if (!box.Is("infe"u8) || infe.Length < 4)
                 continue;
 
             switch (infe[0])
@@ -259,8 +274,9 @@ public sealed class HeifContainer : IStreamedContainer
         var idSize = wide ? 4 : 2;
         var references = new List<Reference>();
 
-        foreach (var (type, body) in IsoBoxes.Children(iref[4..]))
+        foreach (var box in IsoBoxes.Children(iref[4..]))
         {
+            var body = box.Body;
             if (body.Length < idSize + 2)
                 continue;
 
@@ -272,7 +288,7 @@ public sealed class HeifContainer : IStreamedContainer
             for (var i = 0; i < count; i++)
                 to[i] = Id(body[(idSize + 2 + i * idSize)..], wide);
 
-            references.Add(new Reference(Encoding.ASCII.GetString(type), Id(body, wide), to));
+            references.Add(new Reference(Encoding.ASCII.GetString(box.Type), Id(body, wide), to));
         }
 
         return references;
@@ -289,22 +305,23 @@ public sealed class HeifContainer : IStreamedContainer
         associations = null;
         var readable = true;
 
-        foreach (var (type, body) in IsoBoxes.Children(iprp))
+        foreach (var box in IsoBoxes.Children(iprp))
         {
-            if (type.SequenceEqual("ipco"u8) && properties is null)
+            if (box.Is("ipco"u8) && properties is null)
             {
                 properties = [];
-                foreach (var (propertyType, property) in IsoBoxes.Children(body))
+                foreach (var property in IsoBoxes.Children(box.Body))
                 {
-                    var name = Encoding.ASCII.GetString(propertyType);
-                    properties.Add(new Property(name, KeptProperties.Contains(name) ? property.ToArray() : []));
+                    var name = Encoding.ASCII.GetString(property.Type);
+                    properties.Add(new Property(name, KeptProperties.Contains(name) ? property.Body.ToArray() : []));
                 }
 
-                readable &= IsoBoxes.IsWhole(body);
+                readable &= IsoBoxes.IsWhole(box.Body);
             }
-            else if (type.SequenceEqual("ipma"u8) && associations is null)
+            else if (box.Is("ipma"u8) && associations is null)
             {
-                readable &= (associations = ReadAssociations(body)) is not null;
+                associations = ReadAssociations(box.Body);
+                readable &= associations is not null;
             }
         }
 

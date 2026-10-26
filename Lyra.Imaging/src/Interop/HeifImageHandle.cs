@@ -1,6 +1,6 @@
-using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using Lyra.Imaging.Decoding.Support;
+using Lyra.Metadata.Exif;
 using SkiaSharp;
 using static Lyra.Imaging.Interop.HeifNative;
 
@@ -50,8 +50,7 @@ internal sealed class HeifImageHandle(IntPtr handle, HeifFile file) : IDisposabl
         if (heif_image_handle_get_metadata(_handle, ids[0], block).Failed)
             return null;
 
-        var tiff = 4L + BinaryPrimitives.ReadUInt32BigEndian(block);
-        return tiff < block.Length ? block[(int)tiff..] : null;
+        return ExifPayload.FromHeifItem(block) is { Length: > 0 } tiff ? tiff : null;
     }
 
     public byte[]? IccProfile()

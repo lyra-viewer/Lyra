@@ -89,9 +89,9 @@ cannot be parallelised, so performance over a NAS or remote share will always be
 - EDR output on macOS - highlights drawn above SDR white on a display with headroom
 - PSD / PSB streaming and tiled decoding
 - TIFF in depth - BigTIFF, multi-page documents, 1 to 64-bit samples, signed, unsigned or float
-- EXIF metadata
+- Metadata - EXIF and GPS, XMP, IPTC and the ICC profile
 - PSD layer hierarchy
-- File structure inspector (PSD / PSB, TIFF, DDS / KTX / KTX2)
+- File structure inspector (PSD / PSB, TIFF, camera raw, DDS / KTX / KTX2)
 - Variant picker for files carrying several renditions - the sizes inside an `.icns` / `.ico`, the pages of a TIFF, the frames of an animated GIF, PNG, WebP, JPEG XL, AVIF or HEIF
 
 ---

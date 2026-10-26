@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using Lyra.Metadata.Exif;
 using Lyra.Metadata.Layout;
@@ -13,7 +14,7 @@ public sealed record PngFacts(int BitDepth, int ColorType, int CompressionMethod
 /// allows once is taken the first time; CRCs are not checked; a file cut short keeps the chunks
 /// that are whole.
 /// </summary>
-public sealed class PngContainer : IBufferedContainer
+public sealed class PngContainer : IStreamedContainer
 {
     private static ReadOnlySpan<byte> Signature => PngChunks.Signature;
 
@@ -22,70 +23,87 @@ public sealed class PngContainer : IBufferedContainer
 
     public static bool Recognizes(ReadOnlySpan<byte> head) => head.StartsWith(Signature) && head.Length >= 16 && head[12..16].SequenceEqual("IHDR"u8);
 
-    public static ContainerContents? Read(ReadOnlySpan<byte> data)
+    public static ContainerContents? Read(Stream stream)
     {
-        if (!Recognizes(data))
+        if (!stream.CanSeek)
+            return null;
+
+        using var _ = stream.KeepPosition();
+
+        Span<byte> header = stackalloc byte[16];
+        if (!stream.ReadAt(0, header) || !Recognizes(header))
             return null;
 
         var result = new ContainerContents { DamageWithNothingFails = true };
-        var seen = new HashSet<string>();
         var inflater = new Inflater();
-        PngFacts? header = null;
+        PngFacts? facts = null;
         string? iccName = null;
+        bool seenHeader = false, seenExif = false, seenIcc = false;
 
-        var end = Signature.Length;
+        var length = stream.Length;
+        var end = (long)Signature.Length;
         var stopped = false;
         var chunks = 0;
 
-        foreach (var chunk in PngChunks.Children(data))
+        // Chunk headers only; the bodies of image data and other chunks are seeked over.
+        while (end <= length - 8 && stream.ReadAt(end, header[..8]))
         {
-            if (!IsChunkType(chunk.Type))
+            var size = BinaryPrimitives.ReadUInt32BigEndian(header);
+            var type = header[4..8];
+            if (size + 4L > length - end - 8)
+                break;
+
+            if (!IsChunkType(type))
             {
                 result.Damaged = stopped = true;
                 break;
             }
 
-            end = chunk.Offset + chunk.TotalBytes;
-            if (chunk.Is("IEND"u8) || ++chunks > MaxChunks)
+            var bodyOffset = end + 8;
+            end = bodyOffset + size + 4;
+            if (type.SequenceEqual("IEND"u8) || ++chunks > MaxChunks)
             {
                 stopped = true;
                 break;
             }
 
-            var type = Encoding.ASCII.GetString(chunk.Type);
-            var body = chunk.Body;
-            switch (type)
+            if (type.SequenceEqual("IHDR"u8) && !seenHeader)
             {
-                case "IHDR" when seen.Add(type) && body.Length >= 13:
-                    header = new PngFacts(body[8], body[9], body[10], IccName: null);
-                    break;
-
-                case "eXIf" when seen.Add(type):
-                    result.Add(MetadataBlockKind.Exif, body.ToArray());
-                    break;
-
-                case "iCCP" when seen.Add(type):
+                seenHeader = true;
+                if (Body(stream, bodyOffset, size) is { Length: >= 13 } body)
+                    facts = new PngFacts(body[8], body[9], body[10], IccName: null);
+            }
+            else if (type.SequenceEqual("eXIf"u8) && !seenExif)
+            {
+                seenExif = true;
+                result.AddIfPresent(MetadataBlockKind.Exif, Body(stream, bodyOffset, size));
+            }
+            else if (type.SequenceEqual("iCCP"u8) && !seenIcc)
+            {
+                seenIcc = true;
+                if (Body(stream, bodyOffset, size) is { } body)
                     ReadIccp(body, inflater, result, out iccName);
-                    break;
-
-                case "iTXt" when ReadITxt(body, inflater) is { } text:
-                    AddText(text, result);
-                    break;
-
-                case "zTXt" when ReadZTxt(body, inflater) is { } text:
-                    AddText(text, result);
-                    break;
+            }
+            else if (type.SequenceEqual("iTXt"u8) && Body(stream, bodyOffset, size) is { } itxt && ReadITxt(itxt, inflater) is { } international)
+            {
+                AddText(international, result);
+            }
+            else if (type.SequenceEqual("zTXt"u8) && Body(stream, bodyOffset, size) is { } ztxt && ReadZTxt(ztxt, inflater) is { } compressed)
+            {
+                AddText(compressed, result);
             }
         }
 
         if (!stopped)
-            result.Damaged = end < data.Length;
+            result.Damaged = end < length;
 
-        if (header is not null)
-            result.AddFacts(header with { IccName = iccName });
+        if (facts is not null)
+            result.AddFacts(facts with { IccName = iccName });
 
         return result;
     }
+
+    private static byte[]? Body(Stream stream, long offset, uint size) => stream.ReadBytesAt(offset, size, Limits.BlockBytes);
 
     /// <summary>A compressed or international text chunk's keyword and text.</summary>
     private sealed record TextChunk(string Keyword, byte[] Text);

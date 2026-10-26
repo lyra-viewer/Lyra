@@ -14,6 +14,8 @@ public class ChunkContainerTests
     private static readonly byte[] Profile = IccFixture.Profile("RGB ", 2, IccFixture.Desc("A profile"));
     private const string Packet = "<x:xmpmeta xmlns:x='adobe:ns:meta/'/>";
 
+    private static MemoryStream Streamed(byte[] data) => new(data, writable: false);
+
     private static string Text(MetadataBlock block) => Encoding.UTF8.GetString(block.Data);
 
     [Fact]
@@ -21,7 +23,7 @@ public class ChunkContainerTests
     {
         var png = Png(Ihdr(16, 6), ITxt("XML:com.adobe.xmp", Packet), Chunk("eXIf", Tiff), Iccp("My Profile", Profile));
 
-        var container = PngContainer.Read(png)!;
+        var container = PngContainer.Read(Streamed(png))!;
 
         Assert.Equal([MetadataBlockKind.Xmp, MetadataBlockKind.Exif, MetadataBlockKind.Icc], container.Blocks.Select(block => block.Kind));
         Assert.Equal(Packet, Text(container.Blocks[0]));
@@ -34,7 +36,7 @@ public class ChunkContainerTests
     {
         var png = Png(Ihdr(), TExt("XML:com.adobe.xmp", "plain"), ITxt("XML:com.adobe.xmp", "zipped", compressed: true), ZTxt("XML:com.adobe.xmp", "ztxt"), ITxt("Comment", "not xmp"));
 
-        var container = PngContainer.Read(png)!;
+        var container = PngContainer.Read(Streamed(png))!;
 
         Assert.Equal(["zipped", "ztxt"], container.Blocks.Select(Text));
     }
@@ -49,7 +51,7 @@ public class ChunkContainerTests
             ZTxt("Raw profile type icc", RawProfile("icc", Profile)),
             ZTxt("Raw profile type 8bim", RawProfile("8bim", [1, 2, 3])));
 
-        var container = PngContainer.Read(png)!;
+        var container = PngContainer.Read(Streamed(png))!;
 
         Assert.Equal([MetadataBlockKind.Exif, MetadataBlockKind.Iptc, MetadataBlockKind.Icc], container.Blocks.Select(block => block.Kind));
         Assert.Equal(Tiff, container.Blocks[0].Data);
@@ -61,7 +63,7 @@ public class ChunkContainerTests
     {
         var png = Png(Ihdr(), ZTxt("Raw profile type APP1", "\nAPP1\n       4\n0102030405060708\n"));
 
-        Assert.Equal([1, 2, 3, 4], PngContainer.Read(png)!.Blocks.Single().Data);
+        Assert.Equal([1, 2, 3, 4], PngContainer.Read(Streamed(png))!.Blocks.Single().Data);
     }
 
     [Fact]
@@ -69,7 +71,7 @@ public class ChunkContainerTests
     {
         var png = Png(Ihdr(8, 2), Ihdr(16, 0), Chunk("eXIf", Tiff), Chunk("eXIf", [1, 2]), Iccp("First", Profile), Iccp("Second", Profile));
 
-        var container = PngContainer.Read(png)!;
+        var container = PngContainer.Read(Streamed(png))!;
 
         Assert.Equal(new PngFacts(8, 2, 0, "First"), container.Fact<PngFacts>());
         Assert.Equal(Tiff, container.Blocks.Single(block => block.Kind == MetadataBlockKind.Exif).Data);
@@ -81,7 +83,7 @@ public class ChunkContainerTests
     {
         var png = Png(Ihdr(), Chunk("eXIf", Tiff), ITxt("XML:com.adobe.xmp", Packet));
 
-        var container = PngContainer.Read(png[..^20])!;
+        var container = PngContainer.Read(Streamed(png[..^20]))!;
 
         Assert.True(container.Damaged);
         Assert.Equal([MetadataBlockKind.Exif], container.Blocks.Select(block => block.Kind));
@@ -91,7 +93,7 @@ public class ChunkContainerTests
     public void APngIsOneWhoseFirstChunkIsIhdr()
     {
         Assert.False(PngContainer.Recognizes(Png(Chunk("eXIf", Tiff), Ihdr())));
-        Assert.Null(PngContainer.Read([0x89, 0x50, 0x4E, 0x47]));
+        Assert.Null(PngContainer.Read(Streamed([0x89, 0x50, 0x4E, 0x47])));
     }
 
     [Fact]
@@ -99,7 +101,7 @@ public class ChunkContainerTests
     {
         var webp = Webp(RiffChunk("XMP ", Encoding.UTF8.GetBytes(Packet)), Vp8L, RiffChunk("EXIF", [.. "Exif\0\0"u8, .. Tiff]), RiffChunk("ICCP", Profile), RiffChunk("EXIF", Tiff));
 
-        var container = WebpContainer.Read(webp)!;
+        var container = WebpContainer.Read(Streamed(webp))!;
 
         Assert.Equal([MetadataBlockKind.Xmp, MetadataBlockKind.Exif, MetadataBlockKind.Icc, MetadataBlockKind.Exif], container.Blocks.Select(block => block.Kind));
         Assert.Equal(Tiff, container.Blocks[1].Data);
@@ -111,7 +113,7 @@ public class ChunkContainerTests
     {
         var webp = Webp(Vp8L, RiffChunk("EXIF", Tiff), RiffChunk("XMP ", Encoding.UTF8.GetBytes(Packet)));
 
-        var container = WebpContainer.Read(webp[..^10])!;
+        var container = WebpContainer.Read(Streamed(webp[..^10]))!;
 
         Assert.True(container.Damaged);
         Assert.Equal([MetadataBlockKind.Exif], container.Blocks.Select(block => block.Kind));
@@ -160,8 +162,8 @@ public class ChunkContainerTests
                 for (var i = 0; i < 1 + variant % 6; i++)
                     damaged[random.Next(damaged.Length)] ^= (byte)(1 << random.Next(8));
 
-            _ = PngContainer.Read(damaged)?.Blocks.Count;
-            _ = WebpContainer.Read(damaged)?.Blocks.Count;
+            _ = PngContainer.Read(Streamed(damaged))?.Blocks.Count;
+            _ = WebpContainer.Read(Streamed(damaged))?.Blocks.Count;
             _ = GifContainer.Read(damaged)?.Blocks.Count;
         }
     }

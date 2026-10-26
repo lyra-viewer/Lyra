@@ -83,29 +83,11 @@ public static class TiffDirectoryReader
     private const int MaxDepth = 4;
     private const int MaxSubIfdsPerDirectory = 16;
 
-    public static bool IsTiff(ReadOnlySpan<byte> header) =>
-        header.Length >= 4 && TryByteOrder(header, out var little)
-        && UInt16(header[2..], little) is ClassicVersion or BigTiffVersion or OlympusRawVersion or OlympusRawVersionAlt or PanasonicRawVersion;
-    
-    public static bool IsTiff(Stream stream)
-    {
-        if (!stream.CanSeek || stream.Length < 8)
-            return false;
+    public static bool IsTiff(ReadOnlySpan<byte> header) => IsKnown(Version(header));
 
-        using var _ = stream.KeepPosition();
-        Span<byte> header = stackalloc byte[4];
-        return stream.ReadAt(0, header) && IsTiff(header);
-    }
-    
-    public static bool IsBigTiff(Stream stream)
-    {
-        if (!stream.CanSeek || stream.Length < 8)
-            return false;
+    public static bool IsTiff(Stream stream) => IsKnown(Version(stream));
 
-        using var _ = stream.KeepPosition();
-        Span<byte> header = stackalloc byte[4];
-        return stream.ReadAt(0, header) && TryByteOrder(header, out var little) && UInt16(header[2..], little) == BigTiffVersion;
-    }
+    public static bool IsBigTiff(Stream stream) => Version(stream) == BigTiffVersion;
 
     public static bool IsBigTiff(string path)
     {
@@ -127,6 +109,7 @@ public static class TiffDirectoryReader
         if (!stream.CanSeek || stream.Length < 8)
             return null;
 
+        using var _ = stream.KeepPosition();
         Span<byte> header = stackalloc byte[16];
         stream.Position = 0;
         var read = stream.ReadAtLeast(header, 16, throwOnEndOfStream: false);
@@ -179,6 +162,7 @@ public static class TiffDirectoryReader
     /// </summary>
     public static TiffDirectory? ReadDirectoryAt(Stream stream, long offset, bool littleEndian, out long next, long baseOffset = 0)
     {
+        using var _ = stream.KeepPosition();
         var cursor = new Cursor(stream, littleEndian, big: false);
         return ReadDirectory(cursor, offset, TiffDirectoryKind.Image, [], MaxDepth, out next, baseOffset);
     }
@@ -260,7 +244,14 @@ public static class TiffDirectoryReader
         return ByteText.Utf8OrLatin1(ByteText.UntilNul(bytes)).Trim();
     }
 
-    public static byte[]? ReadBytes(Stream stream, TiffEntry entry, int maxBytes) => entry.ValueSize > 0 ? stream.ReadBytesAt(entry.ValueOffset, entry.ValueSize, maxBytes) : null;
+    public static byte[]? ReadBytes(Stream stream, TiffEntry entry, int maxBytes)
+    {
+        if (entry.ValueSize <= 0)
+            return null;
+
+        using var _ = stream.KeepPosition();
+        return stream.ReadBytesAt(entry.ValueOffset, entry.ValueSize, maxBytes);
+    }
 
     private static TiffDirectory? ReadDirectory(Cursor cursor, long offset, TiffDirectoryKind kind, HashSet<long> visited, int depth, out long next, long baseOffset = 0)
     {
@@ -410,6 +401,20 @@ public static class TiffDirectoryReader
         TiffFieldType.Long8 or TiffFieldType.SLong8 or TiffFieldType.Ifd8 => 8,
         _ => 0
     };
+
+    private static bool IsKnown(ushort? version) => version is ClassicVersion or BigTiffVersion or OlympusRawVersion or OlympusRawVersionAlt or PanasonicRawVersion;
+
+    private static ushort? Version(ReadOnlySpan<byte> header) => header.Length >= 4 && TryByteOrder(header, out var little) ? UInt16(header[2..], little) : null;
+
+    private static ushort? Version(Stream stream)
+    {
+        if (!stream.CanSeek || stream.Length < 8)
+            return null;
+
+        using var _ = stream.KeepPosition();
+        Span<byte> header = stackalloc byte[4];
+        return stream.ReadAt(0, header) ? Version(header) : null;
+    }
 
     private static bool TryByteOrder(ReadOnlySpan<byte> header, out bool little)
     {

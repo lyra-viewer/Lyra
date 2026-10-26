@@ -21,49 +21,19 @@ namespace Lyra.Imaging.Metadata;
 /// </summary>
 internal static class MetadataProcessor
 {
-    public static ExifInfo ParseMetadata(string path)
+    public static ExifInfo ParseMetadata(string path) => Parse(path, () =>
     {
-        try
-        {
-            using var stream = File.OpenRead(path);
-            return Process(Read(stream) ?? throw new InvalidDataException(UnknownFormat));
-        }
-        catch (Exception e)
-        {
-            Logger.Warning($"[MetadataProcessor] Could not read metadata from {path}: {e.Message}");
-            return ExifInfo.Failed();
-        }
-    }
+        using var stream = File.OpenRead(path);
+        return ImageMetadata.Read(stream);
+    });
 
-    public static ExifInfo ParseMetadata(Stream stream, string path)
-    {
-        try
-        {
-            return Process(Read(stream) ?? throw new InvalidDataException(UnknownFormat));
-        }
-        catch (Exception e)
-        {
-            Logger.Warning($"[MetadataProcessor] Could not read metadata from {path}: {e.Message}");
-            return ExifInfo.Failed();
-        }
-    }
+    public static ExifInfo ParseMetadata(Stream stream, string path) => Parse(path, () => ImageMetadata.Read(stream));
 
     /// <summary>
     /// Parses the blocks a decoder located itself, for containers it already holds in memory -
     /// JPEG XL and JPEG 2000.
     /// </summary>
-    public static ExifInfo ParseMetadata(ContainerContents container, string path)
-    {
-        try
-        {
-            return Process(Readable(ImageMetadata.From(container)));
-        }
-        catch (Exception e)
-        {
-            Logger.Warning($"[MetadataProcessor] Could not read embedded metadata from {path}: {e.Message}");
-            return ExifInfo.Failed();
-        }
-    }
+    public static ExifInfo ParseMetadata(ContainerContents container, string path) => Parse(path, () => ImageMetadata.From(container));
 
     /// <summary>A PSD's metadata resources, which PsdDecoder finds through Lyra.Psd, in file order.</summary>
     public static ExifInfo ParsePhotoshopResources(IEnumerable<PhotoshopResource> resources, string path) => ParseMetadata(ContainerContents.FromPhotoshop(resources), path);
@@ -74,38 +44,55 @@ internal static class MetadataProcessor
     /// </summary>
     public static ExifInfo ParseRawMetadata(Stream stream, string path, RawCapture capture)
     {
-        ImageMetadata? metadata = null;
-        try
+        var metadata = Guarded(path, () => ImageMetadata.Read(stream));
+        if (metadata is { Unreadable: true })
         {
-            metadata = Read(stream);
-        }
-        catch (Exception e)
-        {
-            Logger.Warning($"[MetadataProcessor] Could not read metadata from {path}: {e.Message}");
+            Warn(path, DamagedStructure);
+            metadata = null;
         }
 
-        try
+        return Guarded(path, () =>
         {
             var exifInfo = Process(metadata ?? ImageMetadata.Empty, info => RawMetadata.Apply(info, capture));
             return metadata is null or { IsEmpty: true } && !exifInfo.HasData() ? ExifInfo.Failed() : exifInfo;
-        }
-        catch (Exception e)
-        {
-            Logger.Warning($"[MetadataProcessor] Could not read metadata from {path}: {e.Message}");
-            return ExifInfo.Failed();
-        }
+        }) ?? ExifInfo.Failed();
     }
 
     private const string UnknownFormat = "The file is of no format whose metadata Lyra reads.";
+    private const string DamagedStructure = "The file's structure is damaged.";
 
-    /// <summary>The file's metadata, or null for a format Lyra.Metadata does not read; throws when its structure is unreadable.</summary>
-    private static ImageMetadata? Read(Stream stream) => ImageMetadata.Read(stream) is { } metadata ? Readable(metadata) : null;
+    private static ExifInfo Parse(string path, Func<ImageMetadata?> read) => Guarded(path, () => read() switch
+    {
+        null => Failed(path, UnknownFormat),
+        { Unreadable: true } => Failed(path, DamagedStructure),
+        var metadata => Process(metadata)
+    }) ?? ExifInfo.Failed();
 
-    private static ImageMetadata Readable(ImageMetadata metadata) => metadata.Unreadable ? throw new InvalidDataException("The file's structure is damaged.") : metadata;
+    /// <summary>What <paramref name="read"/> returns, or null when it throws.</summary>
+    private static T? Guarded<T>(string path, Func<T?> read) where T : class
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception e)
+        {
+            Warn(path, e.Message);
+            return null;
+        }
+    }
+
+    private static ExifInfo Failed(string path, string reason)
+    {
+        Warn(path, reason);
+        return ExifInfo.Failed();
+    }
+
+    private static void Warn(string path, string reason) => Logger.Warning($"[MetadataProcessor] Could not read metadata from {path}: {reason}");
 
     private static ExifInfo Process(ImageMetadata metadata, Action<ExifInfo>? adjust = null)
     {
-        var exifInfo = ExifReader.Read(metadata.Exif, IccFacts.From(metadata.Icc));
+        var exifInfo = ExifReader.Read(metadata.Exif, metadata.Icc);
         ExifReader.ApplyXmp(metadata.Xmp, exifInfo);
         FormatHeaderReader.Apply(metadata.Facts, exifInfo);
         DescriptiveReader.Apply(metadata.Xmp, metadata.Iptc, exifInfo);

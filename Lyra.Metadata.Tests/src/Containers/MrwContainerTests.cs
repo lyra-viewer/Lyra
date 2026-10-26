@@ -9,6 +9,8 @@ public class MrwContainerTests
 {
     private static readonly byte[] Tiff = TiffFixture.Build([TiffFixture.Ascii(ExifTags.Make, "MINOLTA")]);
 
+    private static byte[]? TtwOf(Stream stream) => MrwContainer.Read(stream)?.Blocks.SingleOrDefault()?.Data;
+
     [Fact]
     public void TheBlocksAndWhereTheRawDataStartsAreRead()
     {
@@ -28,7 +30,7 @@ public class MrwContainerTests
     {
         var stream = new MemoryStream(MrwFixture.Build(Tiff, leading: [MrwFixture.Block("PRD", new byte[24])])) { Position = 3 };
 
-        Assert.Equal(Tiff, MrwContainer.Tiff(stream));
+        Assert.Equal(Tiff, TtwOf(stream));
         Assert.Equal(3, stream.Position);
     }
 
@@ -37,14 +39,14 @@ public class MrwContainerTests
     {
         var file = MrwFixture.Build(Tiff);
 
-        Assert.Null(MrwContainer.Tiff(new MemoryStream(file[..^(64 + 4)])));
+        Assert.Null(TtwOf(new MemoryStream(file[..^(64 + 4)])));
     }
 
     [Fact]
     public void ATiffIsNotAnMrw()
     {
         Assert.Null(MrwContainer.ReadLayout(new MemoryStream(Tiff)));
-        Assert.Null(MrwContainer.Tiff(new MemoryStream(Tiff)));
+        Assert.Null(TtwOf(new MemoryStream(Tiff)));
     }
 
     [Fact]
@@ -60,7 +62,7 @@ public class MrwContainerTests
                 for (var i = 0; i < 1 + variant % 5; i++)
                     damaged[random.Next(damaged.Length)] ^= (byte)(1 << random.Next(8));
 
-            _ = MrwContainer.Tiff(new MemoryStream(damaged));
+            _ = TtwOf(new MemoryStream(damaged));
         }
     }
 }

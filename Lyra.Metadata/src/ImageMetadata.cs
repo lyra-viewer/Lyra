@@ -36,10 +36,11 @@ public sealed class ImageMetadata
         if (TiffDirectoryReader.IsTiff(stream))
         {
             using var _ = stream.KeepPosition();
-            if (ExifMetadata.Read(stream) is not { } exif)
+            if (TiffDirectoryReader.Read(stream) is not { } layout)
                 return UnreadableFile;
 
-            if (Rw2Container.CameraExif(stream) is { } cameraTiff)
+            var exif = ExifMetadata.From(stream, layout);
+            if (Rw2Container.CameraExif(stream, layout) is { } cameraTiff)
                 using (var tiff = new MemoryStream(cameraTiff, writable: false))
                     if (ExifMetadata.Read(tiff) is { } camera)
                         exif = exif.WithCameraValues(camera);

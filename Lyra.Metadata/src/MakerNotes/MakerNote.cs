@@ -73,6 +73,7 @@ public static class MakerNote
     
     public static bool LooksLikeDirectory(Stream stream, long offset, bool littleEndian)
     {
+        using var _ = stream.KeepPosition();
         Span<byte> countBytes = stackalloc byte[2];
         if (!stream.ReadAt(offset, countBytes))
             return false;

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Lyra.Metadata.Containers;
 using Lyra.Metadata.Exif;
 using Lyra.Metadata.MakerNotes;
 using Lyra.Metadata.Tiff;
@@ -16,13 +17,13 @@ internal static partial class RawStructure
 
         private static readonly Dictionary<ushort, string> ExtraNames = new()
         {
-            [330]   = "SubIFDs",
-            [513]   = "JPEG Offset",
-            [514]   = "JPEG Length",
-            [34665] = "EXIF Offset",
-            [34853] = "GPS Offset",
-            [40965] = "Interoperability Offset",
-            [37500] = "Maker Note"
+            [TiffDirectoryReader.TagSubIfds]    = "SubIFDs",
+            [ExifTags.ThumbnailOffset]          = "JPEG Offset",
+            [ExifTags.ThumbnailLength]          = "JPEG Length",
+            [TiffDirectoryReader.TagExifIfd]    = "EXIF Offset",
+            [TiffDirectoryReader.TagGpsIfd]     = "GPS Offset",
+            [TiffDirectoryReader.TagInteropIfd] = "Interoperability Offset",
+            [ExifTags.MakerNote]                = "Maker Note"
         };
 
         private readonly Stream _stream;
@@ -74,14 +75,13 @@ internal static partial class RawStructure
                 var directory = layout.Directories[index];
 
                 // Names the maker notes, which IFD0's EXIF leads to.
-                if (index == 0 && directory.Find(271) is { } make && TiffDirectoryReader.ReadBytes(stream, make, 64) is { } text
-                    && Encoding.ASCII.GetString(text).Split('\0')[0].Trim() is { Length: > 0 } maker)
+                if (index == 0 && directory.Find(ExifTags.Make) is { } make && TiffDirectoryReader.ReadText(stream, make, 64) is { Length: > 0 } maker)
                     parts._make = maker;
 
                 var name = index switch
                 {
                     0 => "Image (IFD0)",
-                    1 when directory.Find(513) is not null => "Thumbnail (IFD1)",
+                    1 when directory.Find(ExifTags.ThumbnailOffset) is not null => "Thumbnail (IFD1)",
                     _ => $"IFD{index}"
                 };
 
@@ -108,7 +108,7 @@ internal static partial class RawStructure
             if (TiffDirectoryReader.ReadDirectoryAt(stream, start + first, little, out _, start) is not { } directory)
                 return;
 
-            var kind = box switch { "CMT1" => TiffDirectoryKind.Image, "CMT2" => TiffDirectoryKind.Exif, "CMT4" => TiffDirectoryKind.Gps, _ => (TiffDirectoryKind?)null };
+            var kind = QuickTimeContainer.CanonTiffKind(box);
             var layout = new TiffParts(stream, little, []);
 
             foreach (var entry in directory.Entries)
@@ -146,7 +146,7 @@ internal static partial class RawStructure
                 node.Children.Add(DirectoryNode(child, childName, $"{path} / {childName}", depth + 1));
             }
 
-            if (directory.Kind is TiffDirectoryKind.Exif && directory.Find(37500) is { } makerNote && MakerNoteNode(makerNote) is { } notes)
+            if (directory.Kind is TiffDirectoryKind.Exif && directory.Find(ExifTags.MakerNote) is { } makerNote && MakerNoteNode(makerNote) is { } notes)
                 node.Children.Add(notes);
 
             if (image)
@@ -159,7 +159,7 @@ internal static partial class RawStructure
         private void AddData(TiffDirectory directory, string owner)
         {
             // An EXIF-style thumbnail.
-            if (directory.Find(513) is { } jpegAt && directory.Find(514) is { } jpegLength
+            if (directory.Find(ExifTags.ThumbnailOffset) is { } jpegAt && directory.Find(ExifTags.ThumbnailLength) is { } jpegLength
                                                   && Single(jpegAt) is { } at and > 0 && Single(jpegLength) is { } length and > 0
                                                   && at + length <= _stream.Length)
             {
@@ -167,8 +167,8 @@ internal static partial class RawStructure
             }
 
             // Strips or tiles; Panasonic gives only where its raw data starts, which runs to the end.
-            var offsets = (_panasonic ? directory.Find(PanasonicRawDataOffset) : null) ?? directory.Find(273) ?? directory.Find(324);
-            var counts = directory.Find(279) ?? directory.Find(325);
+            var offsets = (_panasonic ? directory.Find(PanasonicRawDataOffset) : null) ?? directory.Find(ExifTags.StripOffsets) ?? directory.Find(ExifTags.TileOffsets);
+            var counts = directory.Find(ExifTags.StripByteCounts) ?? directory.Find(ExifTags.TileByteCounts);
             if (offsets is { } o && TiffDirectoryReader.ReadIntegers(_stream, o, _little, MaxStrips) is { Length: > 0 } starts)
             {
                 var sizes = counts is { } c ? TiffDirectoryReader.ReadIntegers(_stream, c, _little, MaxStrips) : null;
@@ -178,13 +178,13 @@ internal static partial class RawStructure
                     total = _stream.Length - start;
 
                 if (start > 0 && total > 0 && start < _stream.Length && start + total <= _stream.Length + total / 2)
-                    _top.Add(ImageDataNode(directory, owner, start, Math.Min(total, _stream.Length - start), starts.Length, directory.Find(324) is not null));
+                    _top.Add(ImageDataNode(directory, owner, start, Math.Min(total, _stream.Length - start), starts.Length, directory.Find(ExifTags.TileOffsets) is not null));
             }
 
             // A JPEG kept whole in a tag, as RW2 (JpgFromRaw) and some others do.
             foreach (var entry in directory.Entries)
             {
-                if (entry.Type is not (TiffFieldType.Byte or TiffFieldType.Undefined) || entry.ValueSize < 1024 || entry.Tag is 37500)
+                if (entry.Type is not (TiffFieldType.Byte or TiffFieldType.Undefined) || entry.ValueSize < 1024 || entry.Tag is ExifTags.MakerNote)
                     continue;
 
                 if (ReadAt(_stream, entry.ValueOffset, 2) is [0xFF, 0xD8])
@@ -196,10 +196,10 @@ internal static partial class RawStructure
         {
             var width = Single(directory.Find(256)) ?? (_panasonic ? Single(directory.Find(2)) : null);
             var height = Single(directory.Find(257)) ?? (_panasonic ? Single(directory.Find(3)) : null);
-            var compression = Single(directory.Find(259)) ?? (_panasonic ? Single(directory.Find(0x0B)) : null);
+            var compression = Single(directory.Find(ExifTags.Compression)) ?? (_panasonic ? Single(directory.Find(0x0B)) : null);
             var photometric = Single(directory.Find(262));
             var samples = Single(directory.Find(277));
-            var bits = directory.Find(258) is { } b && TiffDirectoryReader.ReadIntegers(_stream, b, _little, 8) is [var first, ..]
+            var bits = directory.Find(ExifTags.BitsPerSample) is { } b && TiffDirectoryReader.ReadIntegers(_stream, b, _little, 8) is [var first, ..]
                 ? first
                 : _panasonic
                     ? Single(directory.Find(10))

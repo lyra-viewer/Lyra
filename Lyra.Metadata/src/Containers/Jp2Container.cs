@@ -91,9 +91,9 @@ public sealed class Jp2Container : IBufferedContainer
 
     private static Jp2Size? ReadImageHeader(ReadOnlySpan<byte> header)
     {
-        foreach (var (type, payload) in IsoBoxes.Children(header))
+        foreach (var box in IsoBoxes.Children(header))
         {
-            if (type.SequenceEqual("ihdr"u8) && payload.Length >= 10)
+            if (box.Is("ihdr"u8) && box.Body is { Length: >= 10 } payload)
                 return new Jp2Size(
                     Width: BinaryPrimitives.ReadUInt32BigEndian(payload[4..]),
                     Height: BinaryPrimitives.ReadUInt32BigEndian(payload),

@@ -13,7 +13,6 @@ public sealed class JxlContainer : IBufferedContainer
 {
     private static ReadOnlySpan<byte> Signature => [0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A];
 
-
     public static bool Recognizes(ReadOnlySpan<byte> head) => head.StartsWith(Signature);
 
     public static ContainerContents? Read(ReadOnlySpan<byte> data)

@@ -55,6 +55,7 @@ public static class IsoTrackReader
     /// </summary>
     public static IsoMovie? ReadMovie(Stream stream)
     {
+        using var _ = stream.KeepPosition();
         var offset = 0L;
 
         for (var i = 0; i < MaxTopLevelBoxes; i++)
@@ -80,9 +81,9 @@ public static class IsoTrackReader
 
         var tracks = new List<IsoTrack>();
 
-        foreach (var (type, body) in IsoBoxes.Children(moov))
+        foreach (var box in IsoBoxes.Children(moov))
         {
-            if (type.SequenceEqual("trak"u8) && ReadTrack(body) is { } track)
+            if (box.Is("trak"u8) && ReadTrack(box.Body) is { } track)
                 tracks.Add(track);
         }
 

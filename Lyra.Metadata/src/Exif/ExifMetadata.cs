@@ -14,9 +14,14 @@ public sealed class ExifMetadata
     private const int MaxValueCount = 4096;
 
     /// <summary>Tags whose values are per strip, tile or sub-image, not facts about the image.</summary>
-    private static readonly HashSet<ushort> BulkTags = [273, 279, 288, 289, 320, 324, 325, 330, ExifTags.MakerNote, ExifTags.Xmp, ExifTags.Iptc, ExifTags.Photoshop, ExifTags.IccProfile];
+    private static readonly HashSet<ushort> BulkTags =
+    [
+        ExifTags.StripOffsets, ExifTags.StripByteCounts, ExifTags.FreeOffsets, ExifTags.FreeByteCounts, ExifTags.ColorMap,
+        ExifTags.TileOffsets, ExifTags.TileByteCounts, TiffDirectoryReader.TagSubIfds,
+        ExifTags.MakerNote, ExifTags.Xmp, ExifTags.Iptc, ExifTags.Photoshop, ExifTags.IccProfile
+    ];
 
-    public static readonly TiffDirectoryKind[] Kinds = [TiffDirectoryKind.Image, TiffDirectoryKind.Exif, TiffDirectoryKind.Gps, TiffDirectoryKind.Interop];
+    internal static readonly TiffDirectoryKind[] Kinds = [TiffDirectoryKind.Image, TiffDirectoryKind.Exif, TiffDirectoryKind.Gps, TiffDirectoryKind.Interop];
 
     private readonly Dictionary<TiffDirectoryKind, IReadOnlyDictionary<ushort, ExifValue>> _directories;
 
@@ -36,13 +41,18 @@ public sealed class ExifMetadata
 
     /// <summary>
     /// The EXIF of a TIFF, a BigTIFF, a TIFF-based raw or a bare EXIF block; null when the stream
-    /// is none of those. IFD0 is the first directory, the others the first of their kind.
+    /// is none of those. IFD0 is the first directory; the EXIF and GPS directories are the ones it
+    /// points at, else the first of their kind anywhere, and Interop the one that EXIF points at.
     /// </summary>
     public static ExifMetadata? Read(Stream stream)
     {
-        if (TiffDirectoryReader.Read(stream) is not { } layout)
-            return null;
+        using var _ = stream.KeepPosition();
+        return TiffDirectoryReader.Read(stream) is { } layout ? From(stream, layout) : null;
+    }
 
+    /// <summary>The EXIF of a directory tree already read from <paramref name="stream"/>.</summary>
+    internal static ExifMetadata From(Stream stream, TiffLayout layout)
+    {
         var all = layout.AllDirectories().ToList();
         var ifd0 = layout.Directories[0];
 
@@ -51,9 +61,12 @@ public sealed class ExifMetadata
             [TiffDirectoryKind.Image] = Values(stream, ifd0, layout.LittleEndian)
         };
 
-        foreach (var kind in Kinds.Skip(1))
-            if (all.FirstOrDefault(directory => directory.Kind == kind) is { } directory)
-                directories[kind] = Values(stream, directory, layout.LittleEndian);
+        var exif = OwnOrFirst(ifd0, TiffDirectoryKind.Exif, all);
+        TiffDirectory?[] pointedAt = [exif, OwnOrFirst(ifd0, TiffDirectoryKind.Gps, all), OwnOrFirst(exif ?? ifd0, TiffDirectoryKind.Interop, all)];
+
+        foreach (var directory in pointedAt)
+            if (directory is not null)
+                directories[directory.Kind] = Values(stream, directory, layout.LittleEndian);
 
         return new ExifMetadata(
             directories,
@@ -63,6 +76,10 @@ public sealed class ExifMetadata
             Block(stream, ifd0, ExifTags.IccProfile)
         );
     }
+
+    /// <summary>The directory of a kind <paramref name="owner"/> points at, else the first of that kind in the tree.</summary>
+    private static TiffDirectory? OwnOrFirst(TiffDirectory owner, TiffDirectoryKind kind, List<TiffDirectory> all) =>
+        owner.Children.FirstOrDefault(child => child.Kind == kind) ?? all.FirstOrDefault(directory => directory.Kind == kind);
 
     /// <summary>
     /// A TIFF whose first directory is not IFD0 but of the <paramref name="first"/> kind, as CR3
@@ -74,6 +91,7 @@ public sealed class ExifMetadata
         if (first == TiffDirectoryKind.Image)
             return Read(stream);
 
+        using var _ = stream.KeepPosition();
         if (TiffDirectoryReader.Read(stream, first) is not { Directories: [var root, ..] } layout)
             return null;
 

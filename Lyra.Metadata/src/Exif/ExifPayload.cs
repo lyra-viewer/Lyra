@@ -3,7 +3,7 @@ using System.Buffers.Binary;
 namespace Lyra.Metadata.Exif;
 
 /// <summary>The ways containers wrap the TIFF that holds EXIF.</summary>
-internal static class ExifPayload
+public static class ExifPayload
 {
     public static ReadOnlySpan<byte> Preamble => "Exif\0\0"u8;
 

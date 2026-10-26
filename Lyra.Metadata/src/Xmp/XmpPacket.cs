@@ -52,7 +52,7 @@ public sealed class XmpPacket : IMetadataBlock<XmpPacket>
     /// <summary>
     /// The packet, or null when the bytes are not XML that can be read safely. XMP is UTF-8, but
     /// writers slip Windows-1252 bytes in; a packet that fails on them is read again with each
-    /// stray byte taken as that character, as XmpCore meant to.
+    /// stray byte taken as that character.
     /// </summary>
     public static XmpPacket? Parse(ReadOnlySpan<byte> data)
     {

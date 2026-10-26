@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using Lyra.Metadata.Support;
 
 namespace Lyra.Metadata.Iso;
 
@@ -12,12 +13,6 @@ public readonly ref struct IsoBox(ReadOnlySpan<byte> type, ReadOnlySpan<byte> bo
     public bool CutShort { get; } = cutShort;
 
     public bool Is(ReadOnlySpan<byte> fourCc) => Type.SequenceEqual(fourCc);
-
-    public void Deconstruct(out ReadOnlySpan<byte> type, out ReadOnlySpan<byte> body)
-    {
-        type = Type;
-        body = Body;
-    }
 }
 
 public ref struct IsoBoxEnumerator(ReadOnlySpan<byte> data, bool keepCutShort = false)
@@ -120,6 +115,7 @@ public static class IsoBoxes
         if (offset < 0 || end - offset < 8)
             return null;
 
+        using var _ = stream.KeepPosition();
         Span<byte> header = stackalloc byte[16];
         stream.Position = offset;
         var read = stream.ReadAtLeast(header[..(int)Math.Min(16, end - offset)], 8, throwOnEndOfStream: false);

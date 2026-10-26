@@ -1,4 +1,3 @@
-using System.Text;
 using Lyra.Common;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders.Animation;
@@ -200,7 +199,6 @@ internal sealed class HeifDecoder : DecoderBase, IThumbnailDecoder
 
     private static ExifInfo ParseMetadata(HeifImageHandle? image, Stream stream, string path)
     {
-        stream.Position = 0;
         var fromFile = MetadataProcessor.ParseMetadata(stream, path);
 
         if (fromFile.IsValid() && fromFile.HasData())
@@ -289,21 +287,18 @@ internal sealed class HeifDecoder : DecoderBase, IThumbnailDecoder
 
     private static string DetectHeifBrand(Stream stream)
     {
-        // ftyp: box size, "ftyp", then the major brand.
-        Span<byte> bytes = stackalloc byte[12];
+        Span<byte> head = stackalloc byte[12];
         stream.Position = 0;
+        var read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
 
-        if (stream.ReadAtLeast(bytes, bytes.Length, throwOnEndOfStream: false) < bytes.Length)
-            return "Unknown";
-
-        var brand = Encoding.ASCII.GetString(bytes.Slice(8, 4));
-        return brand switch
+        return IsoBoxes.MajorBrand(head[..read]) switch
         {
             "heic" or "heix" or "heim" or "heis" or "hevc" or "hevx" => "HEVC",
             "avif" or "avis" => "AV1",
             "jpeg" or "jpgs" => "JPEG",
             "mif1" or "msf1" => "HEIF (generic)",
-            _ => brand
+            { } brand => brand,
+            null => "Unknown"
         };
     }
 }

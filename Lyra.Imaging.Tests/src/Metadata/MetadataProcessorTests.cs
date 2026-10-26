@@ -276,8 +276,8 @@ public class MetadataProcessorTests
     [Fact]
     public void ParseMetadata_ReadsTheExifIfdOfARawWhoseImageSubIfdComesFirst()
     {
-        // A DNG's raw data is a SubIFD (330) listed before the EXIF pointer (34665), and
-        // MetadataExtractor types both the same, so the first one is the wrong one.
+        // A DNG's raw data is a SubIFD (330) listed before the EXIF pointer (34665), so the
+        // first directory found is the wrong one.
         var dng = DngBuilder.Build(new DngBuilder.Spec(PreviewWidth: 16, PreviewHeight: 12, Exif:
         [
             TiffWriter.Rational(33434, 1, 250),                // ExposureTime

@@ -1,3 +1,4 @@
+using System.Text;
 using Lyra.Metadata.Iso;
 using Lyra.Metadata.Support;
 using Lyra.Metadata.Tiff;
@@ -35,7 +36,7 @@ public sealed class QuickTimeContainer : IStreamedContainer
 
             if (box.Type == "moov" && Body(stream, box, Limits.MovieBytes) is { } moov)
                 ReadMovie(moov, container);
-            else if (box.Type == "uuid" && box.BodySize >= 16 && Body(stream, box, Limits.BlockBytes + 16) is { } uuid && uuid.AsSpan(0, 16).SequenceEqual(IsoBoxes.XmpUuid) && Packet(uuid.AsSpan(16), box.CutShort) is { } xmp)
+            else if (box.Type == "uuid" && IsXmp(stream, box) && stream.ReadBytesAt(box.BodyOffset + 16, box.BodySize - 16, Limits.BlockBytes) is { } packet && Packet(packet, box.CutShort) is { } xmp)
                 container.Add(MetadataBlockKind.Xmp, xmp);
 
             container.Damaged |= box.CutShort;
@@ -47,30 +48,40 @@ public sealed class QuickTimeContainer : IStreamedContainer
 
     private static byte[]? Body(Stream stream, IsoBoxHeader box, int maxBytes) => stream.ReadBytesAt(box.BodyOffset, box.BodySize, maxBytes);
 
+    /// <summary>A uuid box holding XMP, told by its first 16 bytes without reading the rest.</summary>
+    private static bool IsXmp(Stream stream, IsoBoxHeader box)
+    {
+        Span<byte> uuid = stackalloc byte[16];
+        return box.BodySize >= 16 && stream.ReadAt(box.BodyOffset, uuid) && uuid.SequenceEqual(IsoBoxes.XmpUuid);
+    }
+
     private static void ReadMovie(ReadOnlySpan<byte> moov, ContainerContents container)
     {
-        foreach (var (type, body) in IsoBoxes.Children(moov, keepCutShort: true))
+        foreach (var box in IsoBoxes.Children(moov, keepCutShort: true))
         {
-            if (type.SequenceEqual("uuid"u8) && body.StartsWith(CanonUuid))
-                ReadCanon(body[16..], container);
-            else if (type.SequenceEqual("udta"u8))
-                ReadUserData(body, container);
+            if (box.Is("uuid"u8) && box.Body.StartsWith(CanonUuid))
+                ReadCanon(box.Body[16..], container);
+            else if (box.Is("udta"u8))
+                ReadUserData(box.Body, container);
         }
 
         container.Damaged |= !IsoBoxes.IsWhole(moov);
     }
 
+    /// <summary>The first directory of the TIFF in a CR3's CMT box; null for CMT3, the maker notes.</summary>
+    public static TiffDirectoryKind? CanonTiffKind(string box) => box switch
+    {
+        "CMT1" => TiffDirectoryKind.Image,
+        "CMT2" => TiffDirectoryKind.Exif,
+        "CMT4" => TiffDirectoryKind.Gps,
+        _ => null
+    };
+
     private static void ReadCanon(ReadOnlySpan<byte> canon, ContainerContents container)
     {
         foreach (var box in IsoBoxes.Children(canon, keepCutShort: true))
-        {
-            if (box.Is("CMT1"u8))
-                container.AddExif(box.Body.ToArray(), TiffDirectoryKind.Image);
-            else if (box.Is("CMT2"u8))
-                container.AddExif(box.Body.ToArray(), TiffDirectoryKind.Exif);
-            else if (box.Is("CMT4"u8))
-                container.AddExif(box.Body.ToArray(), TiffDirectoryKind.Gps);
-        }
+            if (CanonTiffKind(Encoding.ASCII.GetString(box.Type)) is { } kind)
+                container.AddExif(box.Body.ToArray(), kind);
     }
 
     private static void ReadUserData(ReadOnlySpan<byte> udta, ContainerContents container)

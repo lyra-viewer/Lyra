@@ -1,6 +1,7 @@
 using System.Globalization;
 using Lyra.Imaging.Content;
 using Lyra.Metadata.Exif;
+using Lyra.Metadata.Icc;
 using Lyra.Metadata.Tiff;
 using Lyra.Metadata.Xmp;
 using static Lyra.Imaging.Metadata.MetadataValues;
@@ -31,7 +32,7 @@ internal static class ExifReader
         exifInfo.Lens = FirstNonEmpty(exifInfo.Lens, Clean(xmp.First(XmpNamespaces.ExifEx, "LensModel")), Clean(xmp.First(XmpNamespaces.Aux, "Lens")));
     }
 
-    public static ExifInfo Read(ExifMetadata? exif, IccFacts icc)
+    public static ExifInfo Read(ExifMetadata? exif, IccProfile? icc)
     {
         var exifInfo = new ExifInfo();
 
@@ -56,8 +57,8 @@ internal static class ExifReader
         exifInfo.Orientation = DescribeOrientation(exifInfo.OrientationValue);
 
         var colorSpaceExif = Describe(exif, Exif, ExifTags.ColorSpace);
-        exifInfo.ColorSpace = AssignValue(colorSpaceExif, Clean(icc.ColorSpace), Priority.Low);
-        exifInfo.IccProfile = Clean(icc.ProfileName);
+        exifInfo.ColorSpace = AssignValue(colorSpaceExif, Clean(icc?.ColorSpace), Priority.Low);
+        exifInfo.IccProfile = Clean(icc?.Description);
 
         // Formatted as a pair so the two rows line up in the panel's monospace column.
         (exifInfo.GpsLatitude, exifInfo.GpsLongitude) = GpsCoordinateFormat.Align(

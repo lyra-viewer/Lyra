@@ -73,6 +73,19 @@ public class TiffDirectoryReaderTests
     }
 
     [Fact]
+    public void IfdZerosOwnExifWinsOverASubIfdsAndASubIfdsStandsInWithoutIt()
+    {
+        var subIfdExif = Pointer(TiffDirectoryReader.TagExifIfd, Rational(ExifTags.ExposureTime, R(1, 8)));
+        var ownExif = Pointer(TiffDirectoryReader.TagExifIfd, Rational(ExifTags.ExposureTime, R(1, 250)));
+
+        var both = ExifMetadata.Read(new MemoryStream(Build([SubIfds([Long(254, 0), subIfdExif]), ownExif])));
+        var onlySubIfd = ExifMetadata.Read(new MemoryStream(Build([SubIfds([Long(254, 0), subIfdExif])])));
+
+        Assert.Equal("1/250 sec", both?.Describe(TiffDirectoryKind.Exif, ExifTags.ExposureTime));
+        Assert.Equal("1/8 sec", onlySubIfd?.Describe(TiffDirectoryKind.Exif, ExifTags.ExposureTime));
+    }
+
+    [Fact]
     public void ABigTiffExifPointerMayBeAnEightByteOffset()
     {
         var file = Build(little: true, big: true,

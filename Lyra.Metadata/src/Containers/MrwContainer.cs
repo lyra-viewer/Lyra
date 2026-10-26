@@ -25,11 +25,11 @@ public sealed class MrwContainer : IStreamedContainer
 
     public static ContainerContents? Read(Stream stream)
     {
-        if (ReadLayout(stream) is null)
+        if (ReadLayout(stream) is not { } layout)
             return null;
 
         var container = new ContainerContents();
-        container.AddIfPresent(MetadataBlockKind.Exif, Tiff(stream));
+        container.AddIfPresent(MetadataBlockKind.Exif, Tiff(stream, layout));
         return container;
     }
 
@@ -62,9 +62,9 @@ public sealed class MrwContainer : IStreamedContainer
         return new MrwLayout(dataOffset, blocks);
     }
 
-    public static byte[]? Tiff(Stream stream)
+    private static byte[]? Tiff(Stream stream, MrwLayout layout)
     {
-        if (ReadLayout(stream)?.Blocks.FirstOrDefault(block => block.Tag == "TTW") is not { } ttw || ttw.DataLength == 0)
+        if (layout.Blocks.FirstOrDefault(block => block.Tag == "TTW") is not { DataLength: > 0 } ttw)
             return null;
 
         using var _ = stream.KeepPosition();

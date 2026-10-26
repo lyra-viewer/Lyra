@@ -82,11 +82,14 @@ internal static partial class ExifDescriber
 
     private static string DegreesMinutesSeconds(double value)
     {
-        var degrees = (int)value;
-        var minutes = Math.Abs(value % 1 * 60);
+        // The sign is written apart: under a degree, the whole degrees are 0 and cannot carry it.
+        var sign = value < 0 ? "-" : "";
+        var magnitude = Math.Abs(value);
+        var degrees = (int)magnitude;
+        var minutes = magnitude % 1 * 60;
         var seconds = minutes % 1 * 60;
 
-        return $"{degrees.ToString("0.##", Invariant)}° {((int)minutes).ToString("0.##", Invariant)}' {seconds.ToString("0.##", Invariant)}\"";
+        return $"{sign}{degrees.ToString(Invariant)}° {((int)minutes).ToString(Invariant)}' {seconds.ToString("0.##", Invariant)}\"";
     }
 
     private static string? Indexed(ExifValue value, IReadOnlyDictionary<int, string> names)

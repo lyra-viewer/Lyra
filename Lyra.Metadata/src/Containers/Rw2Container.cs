@@ -1,4 +1,3 @@
-using Lyra.Metadata.Support;
 using Lyra.Metadata.Tiff;
 
 namespace Lyra.Metadata.Containers;
@@ -10,11 +9,9 @@ internal static class Rw2Container
 
     private const int JpegHeaderBytes = 256 * 1024;
 
-    public static byte[]? CameraExif(Stream stream)
+    public static byte[]? CameraExif(Stream stream, TiffLayout layout)
     {
-        using var _ = stream.KeepPosition();
-        if (TiffDirectoryReader.Read(stream) is not { Version: TiffDirectoryReader.PanasonicRawVersion, Directories: [var ifd0, ..] }
-            || ifd0.Find(JpgFromRaw) is not { } entry)
+        if (layout is not { Version: TiffDirectoryReader.PanasonicRawVersion, Directories: [var ifd0, ..] } || ifd0.Find(JpgFromRaw) is not { } entry)
             return null;
 
         var head = entry with { ValueSize = Math.Min(entry.ValueSize, JpegHeaderBytes) };
