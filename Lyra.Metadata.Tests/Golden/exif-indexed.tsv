@@ -1,0 +1,313 @@
+0	Unknown	0	Unknown (0)	Unknown	Auto white balance	Unknown (0)	Unknown (0)	Flash did not fire
+1	1 mm	1	Manual control	Average	Manual white balance	sRGB	Uncompressed	Flash fired
+2	2 mm	2	Program normal	Center weighted average	Unknown (2)	Unknown (2)	CCITT 1D	Flash did not fire
+3	3 mm	3	Aperture priority	Spot	Unknown (3)	Unknown (3)	T4/Group 3 Fax	Flash fired
+4	4 mm	4	Shutter priority	Multi-spot	Unknown (4)	Unknown (4)	T6/Group 4 Fax	Flash did not fire, return not detected
+5	5 mm	5	Program creative (slow program)	Multi-segment	Unknown (5)	Unknown (5)	LZW	Flash fired, return not detected
+6	6 mm	6	Program action (high-speed program)	Partial	Unknown (6)	Unknown (6)	JPEG (old-style)	Flash did not fire, return detected
+7	7 mm	7	Portrait mode	Unknown (7)	Unknown (7)	Unknown (7)	JPEG	Flash fired, return detected
+8	8 mm	8	Landscape mode	Unknown (8)	Unknown (8)	Unknown (8)	Adobe Deflate	Flash did not fire
+9	9 mm	9	Unknown (9)	Unknown (9)	Unknown (9)	Unknown (9)	JBIG B&W	Flash fired
+10	10 mm	10	Unknown (10)	Unknown (10)	Unknown (10)	Unknown (10)	JBIG Color	Flash did not fire
+11	11 mm	11	Unknown (11)	Unknown (11)	Unknown (11)	Unknown (11)	Unknown (11)	Flash fired
+12	12 mm	12	Unknown (12)	Unknown (12)	Unknown (12)	Unknown (12)	Unknown (12)	Flash did not fire, return not detected
+13	13 mm	13	Unknown (13)	Unknown (13)	Unknown (13)	Unknown (13)	Unknown (13)	Flash fired, return not detected
+14	14 mm	14	Unknown (14)	Unknown (14)	Unknown (14)	Unknown (14)	Unknown (14)	Flash did not fire, return detected
+15	15 mm	15	Unknown (15)	Unknown (15)	Unknown (15)	Unknown (15)	Unknown (15)	Flash fired, return detected
+16	16 mm	16	Unknown (16)	Unknown (16)	Unknown (16)	Unknown (16)	Unknown (16)	Flash did not fire
+17	17 mm	17	Unknown (17)	Unknown (17)	Unknown (17)	Unknown (17)	Unknown (17)	Flash fired, auto
+18	18 mm	18	Unknown (18)	Unknown (18)	Unknown (18)	Unknown (18)	Unknown (18)	Flash did not fire, auto
+19	19 mm	19	Unknown (19)	Unknown (19)	Unknown (19)	Unknown (19)	Unknown (19)	Flash fired, auto
+20	20 mm	20	Unknown (20)	Unknown (20)	Unknown (20)	Unknown (20)	Unknown (20)	Flash did not fire, return not detected, auto
+21	21 mm	21	Unknown (21)	Unknown (21)	Unknown (21)	Unknown (21)	Unknown (21)	Flash fired, return not detected, auto
+22	22 mm	22	Unknown (22)	Unknown (22)	Unknown (22)	Unknown (22)	Unknown (22)	Flash did not fire, return detected, auto
+23	23 mm	23	Unknown (23)	Unknown (23)	Unknown (23)	Unknown (23)	Unknown (23)	Flash fired, return detected, auto
+24	24 mm	24	Unknown (24)	Unknown (24)	Unknown (24)	Unknown (24)	Unknown (24)	Flash did not fire, auto
+25	25 mm	25	Unknown (25)	Unknown (25)	Unknown (25)	Unknown (25)	Unknown (25)	Flash fired, auto
+26	26 mm	26	Unknown (26)	Unknown (26)	Unknown (26)	Unknown (26)	Unknown (26)	Flash did not fire, auto
+27	27 mm	27	Unknown (27)	Unknown (27)	Unknown (27)	Unknown (27)	Unknown (27)	Flash fired, auto
+28	28 mm	28	Unknown (28)	Unknown (28)	Unknown (28)	Unknown (28)	Unknown (28)	Flash did not fire, return not detected, auto
+29	29 mm	29	Unknown (29)	Unknown (29)	Unknown (29)	Unknown (29)	Unknown (29)	Flash fired, return not detected, auto
+30	30 mm	30	Unknown (30)	Unknown (30)	Unknown (30)	Unknown (30)	Unknown (30)	Flash did not fire, return detected, auto
+31	31 mm	31	Unknown (31)	Unknown (31)	Unknown (31)	Unknown (31)	Unknown (31)	Flash fired, return detected, auto
+32	32 mm	32	Unknown (32)	Unknown (32)	Unknown (32)	Unknown (32)	Unknown (32)	Flash did not fire
+33	33 mm	33	Unknown (33)	Unknown (33)	Unknown (33)	Unknown (33)	Unknown (33)	Flash fired
+34	34 mm	34	Unknown (34)	Unknown (34)	Unknown (34)	Unknown (34)	Unknown (34)	Flash did not fire
+35	35 mm	35	Unknown (35)	Unknown (35)	Unknown (35)	Unknown (35)	Unknown (35)	Flash fired
+36	36 mm	36	Unknown (36)	Unknown (36)	Unknown (36)	Unknown (36)	Unknown (36)	Flash did not fire, return not detected
+37	37 mm	37	Unknown (37)	Unknown (37)	Unknown (37)	Unknown (37)	Unknown (37)	Flash fired, return not detected
+38	38 mm	38	Unknown (38)	Unknown (38)	Unknown (38)	Unknown (38)	Unknown (38)	Flash did not fire, return detected
+39	39 mm	39	Unknown (39)	Unknown (39)	Unknown (39)	Unknown (39)	Unknown (39)	Flash fired, return detected
+40	40 mm	40	Unknown (40)	Unknown (40)	Unknown (40)	Unknown (40)	Unknown (40)	Flash did not fire
+41	41 mm	41	Unknown (41)	Unknown (41)	Unknown (41)	Unknown (41)	Unknown (41)	Flash fired
+42	42 mm	42	Unknown (42)	Unknown (42)	Unknown (42)	Unknown (42)	Unknown (42)	Flash did not fire
+43	43 mm	43	Unknown (43)	Unknown (43)	Unknown (43)	Unknown (43)	Unknown (43)	Flash fired
+44	44 mm	44	Unknown (44)	Unknown (44)	Unknown (44)	Unknown (44)	Unknown (44)	Flash did not fire, return not detected
+45	45 mm	45	Unknown (45)	Unknown (45)	Unknown (45)	Unknown (45)	Unknown (45)	Flash fired, return not detected
+46	46 mm	46	Unknown (46)	Unknown (46)	Unknown (46)	Unknown (46)	Unknown (46)	Flash did not fire, return detected
+47	47 mm	47	Unknown (47)	Unknown (47)	Unknown (47)	Unknown (47)	Unknown (47)	Flash fired, return detected
+48	48 mm	48	Unknown (48)	Unknown (48)	Unknown (48)	Unknown (48)	Unknown (48)	Flash did not fire
+49	49 mm	49	Unknown (49)	Unknown (49)	Unknown (49)	Unknown (49)	Unknown (49)	Flash fired, auto
+50	50 mm	50	Unknown (50)	Unknown (50)	Unknown (50)	Unknown (50)	Unknown (50)	Flash did not fire, auto
+51	51 mm	51	Unknown (51)	Unknown (51)	Unknown (51)	Unknown (51)	Unknown (51)	Flash fired, auto
+52	52 mm	52	Unknown (52)	Unknown (52)	Unknown (52)	Unknown (52)	Unknown (52)	Flash did not fire, return not detected, auto
+53	53 mm	53	Unknown (53)	Unknown (53)	Unknown (53)	Unknown (53)	Unknown (53)	Flash fired, return not detected, auto
+54	54 mm	54	Unknown (54)	Unknown (54)	Unknown (54)	Unknown (54)	Unknown (54)	Flash did not fire, return detected, auto
+55	55 mm	55	Unknown (55)	Unknown (55)	Unknown (55)	Unknown (55)	Unknown (55)	Flash fired, return detected, auto
+56	56 mm	56	Unknown (56)	Unknown (56)	Unknown (56)	Unknown (56)	Unknown (56)	Flash did not fire, auto
+57	57 mm	57	Unknown (57)	Unknown (57)	Unknown (57)	Unknown (57)	Unknown (57)	Flash fired, auto
+58	58 mm	58	Unknown (58)	Unknown (58)	Unknown (58)	Unknown (58)	Unknown (58)	Flash did not fire, auto
+59	59 mm	59	Unknown (59)	Unknown (59)	Unknown (59)	Unknown (59)	Unknown (59)	Flash fired, auto
+60	60 mm	60	Unknown (60)	Unknown (60)	Unknown (60)	Unknown (60)	Unknown (60)	Flash did not fire, return not detected, auto
+61	61 mm	61	Unknown (61)	Unknown (61)	Unknown (61)	Unknown (61)	Unknown (61)	Flash fired, return not detected, auto
+62	62 mm	62	Unknown (62)	Unknown (62)	Unknown (62)	Unknown (62)	Unknown (62)	Flash did not fire, return detected, auto
+63	63 mm	63	Unknown (63)	Unknown (63)	Unknown (63)	Unknown (63)	Unknown (63)	Flash fired, return detected, auto
+64	64 mm	64	Unknown (64)	Unknown (64)	Unknown (64)	Unknown (64)	Unknown (64)	Flash did not fire, red-eye reduction
+65	65 mm	65	Unknown (65)	Unknown (65)	Unknown (65)	Unknown (65)	Unknown (65)	Flash fired, red-eye reduction
+66	66 mm	66	Unknown (66)	Unknown (66)	Unknown (66)	Unknown (66)	Unknown (66)	Flash did not fire, red-eye reduction
+67	67 mm	67	Unknown (67)	Unknown (67)	Unknown (67)	Unknown (67)	Unknown (67)	Flash fired, red-eye reduction
+68	68 mm	68	Unknown (68)	Unknown (68)	Unknown (68)	Unknown (68)	Unknown (68)	Flash did not fire, return not detected, red-eye reduction
+69	69 mm	69	Unknown (69)	Unknown (69)	Unknown (69)	Unknown (69)	Unknown (69)	Flash fired, return not detected, red-eye reduction
+70	70 mm	70	Unknown (70)	Unknown (70)	Unknown (70)	Unknown (70)	Unknown (70)	Flash did not fire, return detected, red-eye reduction
+71	71 mm	71	Unknown (71)	Unknown (71)	Unknown (71)	Unknown (71)	Unknown (71)	Flash fired, return detected, red-eye reduction
+72	72 mm	72	Unknown (72)	Unknown (72)	Unknown (72)	Unknown (72)	Unknown (72)	Flash did not fire, red-eye reduction
+73	73 mm	73	Unknown (73)	Unknown (73)	Unknown (73)	Unknown (73)	Unknown (73)	Flash fired, red-eye reduction
+74	74 mm	74	Unknown (74)	Unknown (74)	Unknown (74)	Unknown (74)	Unknown (74)	Flash did not fire, red-eye reduction
+75	75 mm	75	Unknown (75)	Unknown (75)	Unknown (75)	Unknown (75)	Unknown (75)	Flash fired, red-eye reduction
+76	76 mm	76	Unknown (76)	Unknown (76)	Unknown (76)	Unknown (76)	Unknown (76)	Flash did not fire, return not detected, red-eye reduction
+77	77 mm	77	Unknown (77)	Unknown (77)	Unknown (77)	Unknown (77)	Unknown (77)	Flash fired, return not detected, red-eye reduction
+78	78 mm	78	Unknown (78)	Unknown (78)	Unknown (78)	Unknown (78)	Unknown (78)	Flash did not fire, return detected, red-eye reduction
+79	79 mm	79	Unknown (79)	Unknown (79)	Unknown (79)	Unknown (79)	Unknown (79)	Flash fired, return detected, red-eye reduction
+80	80 mm	80	Unknown (80)	Unknown (80)	Unknown (80)	Unknown (80)	Unknown (80)	Flash did not fire, red-eye reduction
+81	81 mm	81	Unknown (81)	Unknown (81)	Unknown (81)	Unknown (81)	Unknown (81)	Flash fired, auto, red-eye reduction
+82	82 mm	82	Unknown (82)	Unknown (82)	Unknown (82)	Unknown (82)	Unknown (82)	Flash did not fire, auto, red-eye reduction
+83	83 mm	83	Unknown (83)	Unknown (83)	Unknown (83)	Unknown (83)	Unknown (83)	Flash fired, auto, red-eye reduction
+84	84 mm	84	Unknown (84)	Unknown (84)	Unknown (84)	Unknown (84)	Unknown (84)	Flash did not fire, return not detected, auto, red-eye reduction
+85	85 mm	85	Unknown (85)	Unknown (85)	Unknown (85)	Unknown (85)	Unknown (85)	Flash fired, return not detected, auto, red-eye reduction
+86	86 mm	86	Unknown (86)	Unknown (86)	Unknown (86)	Unknown (86)	Unknown (86)	Flash did not fire, return detected, auto, red-eye reduction
+87	87 mm	87	Unknown (87)	Unknown (87)	Unknown (87)	Unknown (87)	Unknown (87)	Flash fired, return detected, auto, red-eye reduction
+88	88 mm	88	Unknown (88)	Unknown (88)	Unknown (88)	Unknown (88)	Unknown (88)	Flash did not fire, auto, red-eye reduction
+89	89 mm	89	Unknown (89)	Unknown (89)	Unknown (89)	Unknown (89)	Unknown (89)	Flash fired, auto, red-eye reduction
+90	90 mm	90	Unknown (90)	Unknown (90)	Unknown (90)	Unknown (90)	Unknown (90)	Flash did not fire, auto, red-eye reduction
+91	91 mm	91	Unknown (91)	Unknown (91)	Unknown (91)	Unknown (91)	Unknown (91)	Flash fired, auto, red-eye reduction
+92	92 mm	92	Unknown (92)	Unknown (92)	Unknown (92)	Unknown (92)	Unknown (92)	Flash did not fire, return not detected, auto, red-eye reduction
+93	93 mm	93	Unknown (93)	Unknown (93)	Unknown (93)	Unknown (93)	Unknown (93)	Flash fired, return not detected, auto, red-eye reduction
+94	94 mm	94	Unknown (94)	Unknown (94)	Unknown (94)	Unknown (94)	Unknown (94)	Flash did not fire, return detected, auto, red-eye reduction
+95	95 mm	95	Unknown (95)	Unknown (95)	Unknown (95)	Unknown (95)	Unknown (95)	Flash fired, return detected, auto, red-eye reduction
+96	96 mm	96	Unknown (96)	Unknown (96)	Unknown (96)	Unknown (96)	Unknown (96)	Flash did not fire, red-eye reduction
+97	97 mm	97	Unknown (97)	Unknown (97)	Unknown (97)	Unknown (97)	Unknown (97)	Flash fired, red-eye reduction
+98	98 mm	98	Unknown (98)	Unknown (98)	Unknown (98)	Unknown (98)	Unknown (98)	Flash did not fire, red-eye reduction
+99	99 mm	99	Unknown (99)	Unknown (99)	Unknown (99)	Unknown (99)	JPEG	Flash fired, red-eye reduction
+100	100 mm	100	Unknown (100)	Unknown (100)	Unknown (100)	Unknown (100)	Unknown (100)	Flash did not fire, return not detected, red-eye reduction
+101	101 mm	101	Unknown (101)	Unknown (101)	Unknown (101)	Unknown (101)	Unknown (101)	Flash fired, return not detected, red-eye reduction
+102	102 mm	102	Unknown (102)	Unknown (102)	Unknown (102)	Unknown (102)	Unknown (102)	Flash did not fire, return detected, red-eye reduction
+103	103 mm	103	Unknown (103)	Unknown (103)	Unknown (103)	Unknown (103)	Unknown (103)	Flash fired, return detected, red-eye reduction
+104	104 mm	104	Unknown (104)	Unknown (104)	Unknown (104)	Unknown (104)	Unknown (104)	Flash did not fire, red-eye reduction
+105	105 mm	105	Unknown (105)	Unknown (105)	Unknown (105)	Unknown (105)	Unknown (105)	Flash fired, red-eye reduction
+106	106 mm	106	Unknown (106)	Unknown (106)	Unknown (106)	Unknown (106)	Unknown (106)	Flash did not fire, red-eye reduction
+107	107 mm	107	Unknown (107)	Unknown (107)	Unknown (107)	Unknown (107)	Unknown (107)	Flash fired, red-eye reduction
+108	108 mm	108	Unknown (108)	Unknown (108)	Unknown (108)	Unknown (108)	Unknown (108)	Flash did not fire, return not detected, red-eye reduction
+109	109 mm	109	Unknown (109)	Unknown (109)	Unknown (109)	Unknown (109)	Unknown (109)	Flash fired, return not detected, red-eye reduction
+110	110 mm	110	Unknown (110)	Unknown (110)	Unknown (110)	Unknown (110)	Unknown (110)	Flash did not fire, return detected, red-eye reduction
+111	111 mm	111	Unknown (111)	Unknown (111)	Unknown (111)	Unknown (111)	Unknown (111)	Flash fired, return detected, red-eye reduction
+112	112 mm	112	Unknown (112)	Unknown (112)	Unknown (112)	Unknown (112)	Unknown (112)	Flash did not fire, red-eye reduction
+113	113 mm	113	Unknown (113)	Unknown (113)	Unknown (113)	Unknown (113)	Unknown (113)	Flash fired, auto, red-eye reduction
+114	114 mm	114	Unknown (114)	Unknown (114)	Unknown (114)	Unknown (114)	Unknown (114)	Flash did not fire, auto, red-eye reduction
+115	115 mm	115	Unknown (115)	Unknown (115)	Unknown (115)	Unknown (115)	Unknown (115)	Flash fired, auto, red-eye reduction
+116	116 mm	116	Unknown (116)	Unknown (116)	Unknown (116)	Unknown (116)	Unknown (116)	Flash did not fire, return not detected, auto, red-eye reduction
+117	117 mm	117	Unknown (117)	Unknown (117)	Unknown (117)	Unknown (117)	Unknown (117)	Flash fired, return not detected, auto, red-eye reduction
+118	118 mm	118	Unknown (118)	Unknown (118)	Unknown (118)	Unknown (118)	Unknown (118)	Flash did not fire, return detected, auto, red-eye reduction
+119	119 mm	119	Unknown (119)	Unknown (119)	Unknown (119)	Unknown (119)	Unknown (119)	Flash fired, return detected, auto, red-eye reduction
+120	120 mm	120	Unknown (120)	Unknown (120)	Unknown (120)	Unknown (120)	Unknown (120)	Flash did not fire, auto, red-eye reduction
+121	121 mm	121	Unknown (121)	Unknown (121)	Unknown (121)	Unknown (121)	Unknown (121)	Flash fired, auto, red-eye reduction
+122	122 mm	122	Unknown (122)	Unknown (122)	Unknown (122)	Unknown (122)	Unknown (122)	Flash did not fire, auto, red-eye reduction
+123	123 mm	123	Unknown (123)	Unknown (123)	Unknown (123)	Unknown (123)	Unknown (123)	Flash fired, auto, red-eye reduction
+124	124 mm	124	Unknown (124)	Unknown (124)	Unknown (124)	Unknown (124)	Unknown (124)	Flash did not fire, return not detected, auto, red-eye reduction
+125	125 mm	125	Unknown (125)	Unknown (125)	Unknown (125)	Unknown (125)	Unknown (125)	Flash fired, return not detected, auto, red-eye reduction
+126	126 mm	126	Unknown (126)	Unknown (126)	Unknown (126)	Unknown (126)	Unknown (126)	Flash did not fire, return detected, auto, red-eye reduction
+127	127 mm	127	Unknown (127)	Unknown (127)	Unknown (127)	Unknown (127)	Unknown (127)	Flash fired, return detected, auto, red-eye reduction
+128	128 mm	128	Unknown (128)	Unknown (128)	Unknown (128)	Unknown (128)	Unknown (128)	Flash did not fire
+129	129 mm	129	Unknown (129)	Unknown (129)	Unknown (129)	Unknown (129)	Unknown (129)	Flash fired
+130	130 mm	130	Unknown (130)	Unknown (130)	Unknown (130)	Unknown (130)	Unknown (130)	Flash did not fire
+131	131 mm	131	Unknown (131)	Unknown (131)	Unknown (131)	Unknown (131)	Unknown (131)	Flash fired
+132	132 mm	132	Unknown (132)	Unknown (132)	Unknown (132)	Unknown (132)	Unknown (132)	Flash did not fire, return not detected
+133	133 mm	133	Unknown (133)	Unknown (133)	Unknown (133)	Unknown (133)	Unknown (133)	Flash fired, return not detected
+134	134 mm	134	Unknown (134)	Unknown (134)	Unknown (134)	Unknown (134)	Unknown (134)	Flash did not fire, return detected
+135	135 mm	135	Unknown (135)	Unknown (135)	Unknown (135)	Unknown (135)	Unknown (135)	Flash fired, return detected
+136	136 mm	136	Unknown (136)	Unknown (136)	Unknown (136)	Unknown (136)	Unknown (136)	Flash did not fire
+137	137 mm	137	Unknown (137)	Unknown (137)	Unknown (137)	Unknown (137)	Unknown (137)	Flash fired
+138	138 mm	138	Unknown (138)	Unknown (138)	Unknown (138)	Unknown (138)	Unknown (138)	Flash did not fire
+139	139 mm	139	Unknown (139)	Unknown (139)	Unknown (139)	Unknown (139)	Unknown (139)	Flash fired
+140	140 mm	140	Unknown (140)	Unknown (140)	Unknown (140)	Unknown (140)	Unknown (140)	Flash did not fire, return not detected
+141	141 mm	141	Unknown (141)	Unknown (141)	Unknown (141)	Unknown (141)	Unknown (141)	Flash fired, return not detected
+142	142 mm	142	Unknown (142)	Unknown (142)	Unknown (142)	Unknown (142)	Unknown (142)	Flash did not fire, return detected
+143	143 mm	143	Unknown (143)	Unknown (143)	Unknown (143)	Unknown (143)	Unknown (143)	Flash fired, return detected
+144	144 mm	144	Unknown (144)	Unknown (144)	Unknown (144)	Unknown (144)	Unknown (144)	Flash did not fire
+145	145 mm	145	Unknown (145)	Unknown (145)	Unknown (145)	Unknown (145)	Unknown (145)	Flash fired, auto
+146	146 mm	146	Unknown (146)	Unknown (146)	Unknown (146)	Unknown (146)	Unknown (146)	Flash did not fire, auto
+147	147 mm	147	Unknown (147)	Unknown (147)	Unknown (147)	Unknown (147)	Unknown (147)	Flash fired, auto
+148	148 mm	148	Unknown (148)	Unknown (148)	Unknown (148)	Unknown (148)	Unknown (148)	Flash did not fire, return not detected, auto
+149	149 mm	149	Unknown (149)	Unknown (149)	Unknown (149)	Unknown (149)	Unknown (149)	Flash fired, return not detected, auto
+150	150 mm	150	Unknown (150)	Unknown (150)	Unknown (150)	Unknown (150)	Unknown (150)	Flash did not fire, return detected, auto
+151	151 mm	151	Unknown (151)	Unknown (151)	Unknown (151)	Unknown (151)	Unknown (151)	Flash fired, return detected, auto
+152	152 mm	152	Unknown (152)	Unknown (152)	Unknown (152)	Unknown (152)	Unknown (152)	Flash did not fire, auto
+153	153 mm	153	Unknown (153)	Unknown (153)	Unknown (153)	Unknown (153)	Unknown (153)	Flash fired, auto
+154	154 mm	154	Unknown (154)	Unknown (154)	Unknown (154)	Unknown (154)	Unknown (154)	Flash did not fire, auto
+155	155 mm	155	Unknown (155)	Unknown (155)	Unknown (155)	Unknown (155)	Unknown (155)	Flash fired, auto
+156	156 mm	156	Unknown (156)	Unknown (156)	Unknown (156)	Unknown (156)	Unknown (156)	Flash did not fire, return not detected, auto
+157	157 mm	157	Unknown (157)	Unknown (157)	Unknown (157)	Unknown (157)	Unknown (157)	Flash fired, return not detected, auto
+158	158 mm	158	Unknown (158)	Unknown (158)	Unknown (158)	Unknown (158)	Unknown (158)	Flash did not fire, return detected, auto
+159	159 mm	159	Unknown (159)	Unknown (159)	Unknown (159)	Unknown (159)	Unknown (159)	Flash fired, return detected, auto
+160	160 mm	160	Unknown (160)	Unknown (160)	Unknown (160)	Unknown (160)	Unknown (160)	Flash did not fire
+161	161 mm	161	Unknown (161)	Unknown (161)	Unknown (161)	Unknown (161)	Unknown (161)	Flash fired
+162	162 mm	162	Unknown (162)	Unknown (162)	Unknown (162)	Unknown (162)	Unknown (162)	Flash did not fire
+163	163 mm	163	Unknown (163)	Unknown (163)	Unknown (163)	Unknown (163)	Unknown (163)	Flash fired
+164	164 mm	164	Unknown (164)	Unknown (164)	Unknown (164)	Unknown (164)	Unknown (164)	Flash did not fire, return not detected
+165	165 mm	165	Unknown (165)	Unknown (165)	Unknown (165)	Unknown (165)	Unknown (165)	Flash fired, return not detected
+166	166 mm	166	Unknown (166)	Unknown (166)	Unknown (166)	Unknown (166)	Unknown (166)	Flash did not fire, return detected
+167	167 mm	167	Unknown (167)	Unknown (167)	Unknown (167)	Unknown (167)	Unknown (167)	Flash fired, return detected
+168	168 mm	168	Unknown (168)	Unknown (168)	Unknown (168)	Unknown (168)	Unknown (168)	Flash did not fire
+169	169 mm	169	Unknown (169)	Unknown (169)	Unknown (169)	Unknown (169)	Unknown (169)	Flash fired
+170	170 mm	170	Unknown (170)	Unknown (170)	Unknown (170)	Unknown (170)	Unknown (170)	Flash did not fire
+171	171 mm	171	Unknown (171)	Unknown (171)	Unknown (171)	Unknown (171)	Unknown (171)	Flash fired
+172	172 mm	172	Unknown (172)	Unknown (172)	Unknown (172)	Unknown (172)	Unknown (172)	Flash did not fire, return not detected
+173	173 mm	173	Unknown (173)	Unknown (173)	Unknown (173)	Unknown (173)	Unknown (173)	Flash fired, return not detected
+174	174 mm	174	Unknown (174)	Unknown (174)	Unknown (174)	Unknown (174)	Unknown (174)	Flash did not fire, return detected
+175	175 mm	175	Unknown (175)	Unknown (175)	Unknown (175)	Unknown (175)	Unknown (175)	Flash fired, return detected
+176	176 mm	176	Unknown (176)	Unknown (176)	Unknown (176)	Unknown (176)	Unknown (176)	Flash did not fire
+177	177 mm	177	Unknown (177)	Unknown (177)	Unknown (177)	Unknown (177)	Unknown (177)	Flash fired, auto
+178	178 mm	178	Unknown (178)	Unknown (178)	Unknown (178)	Unknown (178)	Unknown (178)	Flash did not fire, auto
+179	179 mm	179	Unknown (179)	Unknown (179)	Unknown (179)	Unknown (179)	Unknown (179)	Flash fired, auto
+180	180 mm	180	Unknown (180)	Unknown (180)	Unknown (180)	Unknown (180)	Unknown (180)	Flash did not fire, return not detected, auto
+181	181 mm	181	Unknown (181)	Unknown (181)	Unknown (181)	Unknown (181)	Unknown (181)	Flash fired, return not detected, auto
+182	182 mm	182	Unknown (182)	Unknown (182)	Unknown (182)	Unknown (182)	Unknown (182)	Flash did not fire, return detected, auto
+183	183 mm	183	Unknown (183)	Unknown (183)	Unknown (183)	Unknown (183)	Unknown (183)	Flash fired, return detected, auto
+184	184 mm	184	Unknown (184)	Unknown (184)	Unknown (184)	Unknown (184)	Unknown (184)	Flash did not fire, auto
+185	185 mm	185	Unknown (185)	Unknown (185)	Unknown (185)	Unknown (185)	Unknown (185)	Flash fired, auto
+186	186 mm	186	Unknown (186)	Unknown (186)	Unknown (186)	Unknown (186)	Unknown (186)	Flash did not fire, auto
+187	187 mm	187	Unknown (187)	Unknown (187)	Unknown (187)	Unknown (187)	Unknown (187)	Flash fired, auto
+188	188 mm	188	Unknown (188)	Unknown (188)	Unknown (188)	Unknown (188)	Unknown (188)	Flash did not fire, return not detected, auto
+189	189 mm	189	Unknown (189)	Unknown (189)	Unknown (189)	Unknown (189)	Unknown (189)	Flash fired, return not detected, auto
+190	190 mm	190	Unknown (190)	Unknown (190)	Unknown (190)	Unknown (190)	Unknown (190)	Flash did not fire, return detected, auto
+191	191 mm	191	Unknown (191)	Unknown (191)	Unknown (191)	Unknown (191)	Unknown (191)	Flash fired, return detected, auto
+192	192 mm	192	Unknown (192)	Unknown (192)	Unknown (192)	Unknown (192)	Unknown (192)	Flash did not fire, red-eye reduction
+193	193 mm	193	Unknown (193)	Unknown (193)	Unknown (193)	Unknown (193)	Unknown (193)	Flash fired, red-eye reduction
+194	194 mm	194	Unknown (194)	Unknown (194)	Unknown (194)	Unknown (194)	Unknown (194)	Flash did not fire, red-eye reduction
+195	195 mm	195	Unknown (195)	Unknown (195)	Unknown (195)	Unknown (195)	Unknown (195)	Flash fired, red-eye reduction
+196	196 mm	196	Unknown (196)	Unknown (196)	Unknown (196)	Unknown (196)	Unknown (196)	Flash did not fire, return not detected, red-eye reduction
+197	197 mm	197	Unknown (197)	Unknown (197)	Unknown (197)	Unknown (197)	Unknown (197)	Flash fired, return not detected, red-eye reduction
+198	198 mm	198	Unknown (198)	Unknown (198)	Unknown (198)	Unknown (198)	Unknown (198)	Flash did not fire, return detected, red-eye reduction
+199	199 mm	199	Unknown (199)	Unknown (199)	Unknown (199)	Unknown (199)	Unknown (199)	Flash fired, return detected, red-eye reduction
+200	200 mm	200	Unknown (200)	Unknown (200)	Unknown (200)	Unknown (200)	Unknown (200)	Flash did not fire, red-eye reduction
+201	201 mm	201	Unknown (201)	Unknown (201)	Unknown (201)	Unknown (201)	Unknown (201)	Flash fired, red-eye reduction
+202	202 mm	202	Unknown (202)	Unknown (202)	Unknown (202)	Unknown (202)	Unknown (202)	Flash did not fire, red-eye reduction
+203	203 mm	203	Unknown (203)	Unknown (203)	Unknown (203)	Unknown (203)	Unknown (203)	Flash fired, red-eye reduction
+204	204 mm	204	Unknown (204)	Unknown (204)	Unknown (204)	Unknown (204)	Unknown (204)	Flash did not fire, return not detected, red-eye reduction
+205	205 mm	205	Unknown (205)	Unknown (205)	Unknown (205)	Unknown (205)	Unknown (205)	Flash fired, return not detected, red-eye reduction
+206	206 mm	206	Unknown (206)	Unknown (206)	Unknown (206)	Unknown (206)	Unknown (206)	Flash did not fire, return detected, red-eye reduction
+207	207 mm	207	Unknown (207)	Unknown (207)	Unknown (207)	Unknown (207)	Unknown (207)	Flash fired, return detected, red-eye reduction
+208	208 mm	208	Unknown (208)	Unknown (208)	Unknown (208)	Unknown (208)	Unknown (208)	Flash did not fire, red-eye reduction
+209	209 mm	209	Unknown (209)	Unknown (209)	Unknown (209)	Unknown (209)	Unknown (209)	Flash fired, auto, red-eye reduction
+210	210 mm	210	Unknown (210)	Unknown (210)	Unknown (210)	Unknown (210)	Unknown (210)	Flash did not fire, auto, red-eye reduction
+211	211 mm	211	Unknown (211)	Unknown (211)	Unknown (211)	Unknown (211)	Unknown (211)	Flash fired, auto, red-eye reduction
+212	212 mm	212	Unknown (212)	Unknown (212)	Unknown (212)	Unknown (212)	Unknown (212)	Flash did not fire, return not detected, auto, red-eye reduction
+213	213 mm	213	Unknown (213)	Unknown (213)	Unknown (213)	Unknown (213)	Unknown (213)	Flash fired, return not detected, auto, red-eye reduction
+214	214 mm	214	Unknown (214)	Unknown (214)	Unknown (214)	Unknown (214)	Unknown (214)	Flash did not fire, return detected, auto, red-eye reduction
+215	215 mm	215	Unknown (215)	Unknown (215)	Unknown (215)	Unknown (215)	Unknown (215)	Flash fired, return detected, auto, red-eye reduction
+216	216 mm	216	Unknown (216)	Unknown (216)	Unknown (216)	Unknown (216)	Unknown (216)	Flash did not fire, auto, red-eye reduction
+217	217 mm	217	Unknown (217)	Unknown (217)	Unknown (217)	Unknown (217)	Unknown (217)	Flash fired, auto, red-eye reduction
+218	218 mm	218	Unknown (218)	Unknown (218)	Unknown (218)	Unknown (218)	Unknown (218)	Flash did not fire, auto, red-eye reduction
+219	219 mm	219	Unknown (219)	Unknown (219)	Unknown (219)	Unknown (219)	Unknown (219)	Flash fired, auto, red-eye reduction
+220	220 mm	220	Unknown (220)	Unknown (220)	Unknown (220)	Unknown (220)	Unknown (220)	Flash did not fire, return not detected, auto, red-eye reduction
+221	221 mm	221	Unknown (221)	Unknown (221)	Unknown (221)	Unknown (221)	Unknown (221)	Flash fired, return not detected, auto, red-eye reduction
+222	222 mm	222	Unknown (222)	Unknown (222)	Unknown (222)	Unknown (222)	Unknown (222)	Flash did not fire, return detected, auto, red-eye reduction
+223	223 mm	223	Unknown (223)	Unknown (223)	Unknown (223)	Unknown (223)	Unknown (223)	Flash fired, return detected, auto, red-eye reduction
+224	224 mm	224	Unknown (224)	Unknown (224)	Unknown (224)	Unknown (224)	Unknown (224)	Flash did not fire, red-eye reduction
+225	225 mm	225	Unknown (225)	Unknown (225)	Unknown (225)	Unknown (225)	Unknown (225)	Flash fired, red-eye reduction
+226	226 mm	226	Unknown (226)	Unknown (226)	Unknown (226)	Unknown (226)	Unknown (226)	Flash did not fire, red-eye reduction
+227	227 mm	227	Unknown (227)	Unknown (227)	Unknown (227)	Unknown (227)	Unknown (227)	Flash fired, red-eye reduction
+228	228 mm	228	Unknown (228)	Unknown (228)	Unknown (228)	Unknown (228)	Unknown (228)	Flash did not fire, return not detected, red-eye reduction
+229	229 mm	229	Unknown (229)	Unknown (229)	Unknown (229)	Unknown (229)	Unknown (229)	Flash fired, return not detected, red-eye reduction
+230	230 mm	230	Unknown (230)	Unknown (230)	Unknown (230)	Unknown (230)	Unknown (230)	Flash did not fire, return detected, red-eye reduction
+231	231 mm	231	Unknown (231)	Unknown (231)	Unknown (231)	Unknown (231)	Unknown (231)	Flash fired, return detected, red-eye reduction
+232	232 mm	232	Unknown (232)	Unknown (232)	Unknown (232)	Unknown (232)	Unknown (232)	Flash did not fire, red-eye reduction
+233	233 mm	233	Unknown (233)	Unknown (233)	Unknown (233)	Unknown (233)	Unknown (233)	Flash fired, red-eye reduction
+234	234 mm	234	Unknown (234)	Unknown (234)	Unknown (234)	Unknown (234)	Unknown (234)	Flash did not fire, red-eye reduction
+235	235 mm	235	Unknown (235)	Unknown (235)	Unknown (235)	Unknown (235)	Unknown (235)	Flash fired, red-eye reduction
+236	236 mm	236	Unknown (236)	Unknown (236)	Unknown (236)	Unknown (236)	Unknown (236)	Flash did not fire, return not detected, red-eye reduction
+237	237 mm	237	Unknown (237)	Unknown (237)	Unknown (237)	Unknown (237)	Unknown (237)	Flash fired, return not detected, red-eye reduction
+238	238 mm	238	Unknown (238)	Unknown (238)	Unknown (238)	Unknown (238)	Unknown (238)	Flash did not fire, return detected, red-eye reduction
+239	239 mm	239	Unknown (239)	Unknown (239)	Unknown (239)	Unknown (239)	Unknown (239)	Flash fired, return detected, red-eye reduction
+240	240 mm	240	Unknown (240)	Unknown (240)	Unknown (240)	Unknown (240)	Unknown (240)	Flash did not fire, red-eye reduction
+241	241 mm	241	Unknown (241)	Unknown (241)	Unknown (241)	Unknown (241)	Unknown (241)	Flash fired, auto, red-eye reduction
+242	242 mm	242	Unknown (242)	Unknown (242)	Unknown (242)	Unknown (242)	Unknown (242)	Flash did not fire, auto, red-eye reduction
+243	243 mm	243	Unknown (243)	Unknown (243)	Unknown (243)	Unknown (243)	Unknown (243)	Flash fired, auto, red-eye reduction
+244	244 mm	244	Unknown (244)	Unknown (244)	Unknown (244)	Unknown (244)	Unknown (244)	Flash did not fire, return not detected, auto, red-eye reduction
+245	245 mm	245	Unknown (245)	Unknown (245)	Unknown (245)	Unknown (245)	Unknown (245)	Flash fired, return not detected, auto, red-eye reduction
+246	246 mm	246	Unknown (246)	Unknown (246)	Unknown (246)	Unknown (246)	Unknown (246)	Flash did not fire, return detected, auto, red-eye reduction
+247	247 mm	247	Unknown (247)	Unknown (247)	Unknown (247)	Unknown (247)	Unknown (247)	Flash fired, return detected, auto, red-eye reduction
+248	248 mm	248	Unknown (248)	Unknown (248)	Unknown (248)	Unknown (248)	Unknown (248)	Flash did not fire, auto, red-eye reduction
+249	249 mm	249	Unknown (249)	Unknown (249)	Unknown (249)	Unknown (249)	Unknown (249)	Flash fired, auto, red-eye reduction
+250	250 mm	250	Unknown (250)	Unknown (250)	Unknown (250)	Unknown (250)	Unknown (250)	Flash did not fire, auto, red-eye reduction
+251	251 mm	251	Unknown (251)	Unknown (251)	Unknown (251)	Unknown (251)	Unknown (251)	Flash fired, auto, red-eye reduction
+252	252 mm	252	Unknown (252)	Unknown (252)	Unknown (252)	Unknown (252)	Unknown (252)	Flash did not fire, return not detected, auto, red-eye reduction
+253	253 mm	253	Unknown (253)	Unknown (253)	Unknown (253)	Unknown (253)	Unknown (253)	Flash fired, return not detected, auto, red-eye reduction
+254	254 mm	254	Unknown (254)	Unknown (254)	Unknown (254)	Unknown (254)	Unknown (254)	Flash did not fire, return detected, auto, red-eye reduction
+255	255 mm	255	Unknown (255)	(Other)	Unknown (255)	Unknown (255)	Unknown (255)	Flash fired, return detected, auto, red-eye reduction
+256	256 mm	256	Unknown (256)	Unknown (256)	Unknown (256)	Unknown (256)	Unknown (256)	Flash did not fire
+257	257 mm	257	Unknown (257)	Unknown (257)	Unknown (257)	Unknown (257)	Unknown (257)	Flash fired
+258	258 mm	258	Unknown (258)	Unknown (258)	Unknown (258)	Unknown (258)	Unknown (258)	Flash did not fire
+259	259 mm	259	Unknown (259)	Unknown (259)	Unknown (259)	Unknown (259)	Unknown (259)	Flash fired
+260	260 mm	260	Unknown (260)	Unknown (260)	Unknown (260)	Unknown (260)	Unknown (260)	Flash did not fire, return not detected
+261	261 mm	261	Unknown (261)	Unknown (261)	Unknown (261)	Unknown (261)	Unknown (261)	Flash fired, return not detected
+262	262 mm	262	Unknown (262)	Unknown (262)	Unknown (262)	Unknown (262)	Kodak 262	Flash did not fire, return detected
+263	263 mm	263	Unknown (263)	Unknown (263)	Unknown (263)	Unknown (263)	Unknown (263)	Flash fired, return detected
+264	264 mm	264	Unknown (264)	Unknown (264)	Unknown (264)	Unknown (264)	Unknown (264)	Flash did not fire
+265	265 mm	265	Unknown (265)	Unknown (265)	Unknown (265)	Unknown (265)	Unknown (265)	Flash fired
+266	266 mm	266	Unknown (266)	Unknown (266)	Unknown (266)	Unknown (266)	Unknown (266)	Flash did not fire
+267	267 mm	267	Unknown (267)	Unknown (267)	Unknown (267)	Unknown (267)	Unknown (267)	Flash fired
+268	268 mm	268	Unknown (268)	Unknown (268)	Unknown (268)	Unknown (268)	Unknown (268)	Flash did not fire, return not detected
+269	269 mm	269	Unknown (269)	Unknown (269)	Unknown (269)	Unknown (269)	Unknown (269)	Flash fired, return not detected
+270	270 mm	270	Unknown (270)	Unknown (270)	Unknown (270)	Unknown (270)	Unknown (270)	Flash did not fire, return detected
+271	271 mm	271	Unknown (271)	Unknown (271)	Unknown (271)	Unknown (271)	Unknown (271)	Flash fired, return detected
+272	272 mm	272	Unknown (272)	Unknown (272)	Unknown (272)	Unknown (272)	Unknown (272)	Flash did not fire
+273	273 mm	273	Unknown (273)	Unknown (273)	Unknown (273)	Unknown (273)	Unknown (273)	Flash fired, auto
+274	274 mm	274	Unknown (274)	Unknown (274)	Unknown (274)	Unknown (274)	Unknown (274)	Flash did not fire, auto
+275	275 mm	275	Unknown (275)	Unknown (275)	Unknown (275)	Unknown (275)	Unknown (275)	Flash fired, auto
+276	276 mm	276	Unknown (276)	Unknown (276)	Unknown (276)	Unknown (276)	Unknown (276)	Flash did not fire, return not detected, auto
+277	277 mm	277	Unknown (277)	Unknown (277)	Unknown (277)	Unknown (277)	Unknown (277)	Flash fired, return not detected, auto
+278	278 mm	278	Unknown (278)	Unknown (278)	Unknown (278)	Unknown (278)	Unknown (278)	Flash did not fire, return detected, auto
+279	279 mm	279	Unknown (279)	Unknown (279)	Unknown (279)	Unknown (279)	Unknown (279)	Flash fired, return detected, auto
+280	280 mm	280	Unknown (280)	Unknown (280)	Unknown (280)	Unknown (280)	Unknown (280)	Flash did not fire, auto
+281	281 mm	281	Unknown (281)	Unknown (281)	Unknown (281)	Unknown (281)	Unknown (281)	Flash fired, auto
+282	282 mm	282	Unknown (282)	Unknown (282)	Unknown (282)	Unknown (282)	Unknown (282)	Flash did not fire, auto
+283	283 mm	283	Unknown (283)	Unknown (283)	Unknown (283)	Unknown (283)	Unknown (283)	Flash fired, auto
+284	284 mm	284	Unknown (284)	Unknown (284)	Unknown (284)	Unknown (284)	Unknown (284)	Flash did not fire, return not detected, auto
+285	285 mm	285	Unknown (285)	Unknown (285)	Unknown (285)	Unknown (285)	Unknown (285)	Flash fired, return not detected, auto
+286	286 mm	286	Unknown (286)	Unknown (286)	Unknown (286)	Unknown (286)	Unknown (286)	Flash did not fire, return detected, auto
+287	287 mm	287	Unknown (287)	Unknown (287)	Unknown (287)	Unknown (287)	Unknown (287)	Flash fired, return detected, auto
+288	288 mm	288	Unknown (288)	Unknown (288)	Unknown (288)	Unknown (288)	Unknown (288)	Flash did not fire
+289	289 mm	289	Unknown (289)	Unknown (289)	Unknown (289)	Unknown (289)	Unknown (289)	Flash fired
+290	290 mm	290	Unknown (290)	Unknown (290)	Unknown (290)	Unknown (290)	Unknown (290)	Flash did not fire
+291	291 mm	291	Unknown (291)	Unknown (291)	Unknown (291)	Unknown (291)	Unknown (291)	Flash fired
+292	292 mm	292	Unknown (292)	Unknown (292)	Unknown (292)	Unknown (292)	Unknown (292)	Flash did not fire, return not detected
+293	293 mm	293	Unknown (293)	Unknown (293)	Unknown (293)	Unknown (293)	Unknown (293)	Flash fired, return not detected
+294	294 mm	294	Unknown (294)	Unknown (294)	Unknown (294)	Unknown (294)	Unknown (294)	Flash did not fire, return detected
+295	295 mm	295	Unknown (295)	Unknown (295)	Unknown (295)	Unknown (295)	Unknown (295)	Flash fired, return detected
+296	296 mm	296	Unknown (296)	Unknown (296)	Unknown (296)	Unknown (296)	Unknown (296)	Flash did not fire
+297	297 mm	297	Unknown (297)	Unknown (297)	Unknown (297)	Unknown (297)	Unknown (297)	Flash fired
+298	298 mm	298	Unknown (298)	Unknown (298)	Unknown (298)	Unknown (298)	Unknown (298)	Flash did not fire
+299	299 mm	299	Unknown (299)	Unknown (299)	Unknown (299)	Unknown (299)	Unknown (299)	Flash fired
+300	300 mm	300	Unknown (300)	Unknown (300)	Unknown (300)	Unknown (300)	Unknown (300)	Flash did not fire, return not detected
+1000	1000 mm	1000	Unknown (1000)	Unknown (1000)	Unknown (1000)	Unknown (1000)	Unknown (1000)	Flash did not fire, red-eye reduction
+6400	6400 mm	6400	Unknown (6400)	Unknown (6400)	Unknown (6400)	Unknown (6400)	Unknown (6400)	Flash did not fire
+32766	32766 mm	32766	Unknown (32766)	Unknown (32766)	Unknown (32766)	Unknown (32766)	Next	Flash did not fire, return detected, auto, red-eye reduction
+32767	32767 mm	32767	Unknown (32767)	Unknown (32767)	Unknown (32767)	Unknown (32767)	Sony ARW Compressed	Flash fired, return detected, auto, red-eye reduction
+32769	32769 mm	32769	Unknown (32769)	Unknown (32769)	Unknown (32769)	Unknown (32769)	Packed RAW	Flash fired
+32773	32773 mm	32773	Unknown (32773)	Unknown (32773)	Unknown (32773)	Unknown (32773)	PackBits	Flash fired, return not detected
+34712	34712 mm	34712	Unknown (34712)	Unknown (34712)	Unknown (34712)	Unknown (34712)	JPEG 2000	Flash did not fire, auto
+34892	34892 mm	34892	Unknown (34892)	Unknown (34892)	Unknown (34892)	Unknown (34892)	Lossy JPEG	Flash did not fire, return not detected, red-eye reduction
+65000	65000 mm	65000	Unknown (65000)	Unknown (65000)	Unknown (65000)	Unknown (65000)	Kodak DCR Compressed	Flash did not fire, red-eye reduction
+65534	65534 mm	65534	Unknown (65534)	Unknown (65534)	Unknown (65534)	Unknown (65534)	Unknown (65534)	Flash did not fire, return detected, auto, red-eye reduction
+65535	65535 mm	65535	Unknown (65535)	Unknown (65535)	Unknown (65535)	Undefined	Pentax PEF Compressed	Flash fired, return detected, auto, red-eye reduction
+70000	70000 mm	70000	Unknown (70000)	Unknown (70000)	Unknown (70000)	Unknown (70000)	Unknown (70000)	Flash did not fire, red-eye reduction
