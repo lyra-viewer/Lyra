@@ -4,6 +4,7 @@ using Lyra.Imaging.Decoding.Decoders.Tiff;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Metadata;
+using Lyra.Metadata.Tiff;
 using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Decoders;
@@ -31,6 +32,8 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
         if (pages.Count > 0 && directories.Count > pages[0])
             composite.ReportPixelCount(directories[pages[0]].Width, directories[pages[0]].Height);
 
+        TiffPageSet.Describe(composite, directories, pages, TiffDirectoryReader.IsBigTiff(path));
+
         if (pages.Count > 1)
         {
             TiffDocument.Decode(path, composite, directories, encodedBytes, pages, ct);
@@ -39,8 +42,6 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
 
         var page = pages.Count > 0 ? pages[0] : 0;
         var info = directories.Count > page ? directories[page] : default;
-
-        TiffPageSet.Describe(composite, directories, pages, BigTiffMetadataReader.IsBigTiff(path));
 
         if (TiffRoute.For(info) is TiffReadPath.NativeLayout or TiffReadPath.RegionStreamed)
             composite.ExifInfo = MetadataProcessor.ParseMetadata(path);

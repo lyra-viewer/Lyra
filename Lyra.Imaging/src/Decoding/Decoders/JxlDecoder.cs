@@ -5,6 +5,7 @@ using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Metadata;
+using Lyra.Metadata.Containers;
 using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Decoders;
@@ -20,9 +21,8 @@ internal class JxlDecoder : DecoderBase
     {
         var data = composite.ReadAllBytes(ct);
 
-        var metadata = IsoBoxMetadata.ReadJxl(data);
-        if (!metadata.IsEmpty)
-            composite.ExifInfo = MetadataProcessor.ParseMetadata(metadata.Exif, metadata.Xmp, path);
+        if (JxlContainer.Read(data) is { IsEmpty: false } metadata)
+            composite.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
 
         ct.ThrowIfCancellationRequested();
 

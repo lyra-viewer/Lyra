@@ -1,10 +1,8 @@
-using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
-using Lyra.ManagedCodecs.Raster.Tiff;
-using MetadataExtractor.Formats.Exif;
-using MetadataExtractor.Formats.Exif.Makernotes;
-using Directory = MetadataExtractor.Directory;
+using Lyra.Metadata.Exif;
+using Lyra.Metadata.MakerNotes;
+using Lyra.Metadata.Tiff;
 
 namespace Lyra.Imaging.Decoding.Structure;
 
@@ -14,23 +12,7 @@ internal static partial class RawStructure
 
     private sealed class TiffParts
     {
-        private const int MaxDepth = 6;
         private const int MaxStrips = 100_000;
-
-        private enum Kind
-        {
-            Ifd,
-            Exif,
-            Gps,
-            Interop,
-            MakerNote
-        }
-
-        private static readonly Directory Ifd0Names = new ExifIfd0Directory();
-        private static readonly Directory ExifNames = new ExifSubIfdDirectory();
-        private static readonly Directory GpsNames = new GpsDirectory();
-        private static readonly Directory InteropNames = new ExifInteropDirectory();
-        private static readonly Directory[] FallbackNames = [new ExifSubIfdDirectory(), new ExifThumbnailDirectory(0), new ExifIfd0Directory()];
 
         private static readonly Dictionary<ushort, string> ExtraNames = new()
         {
@@ -45,12 +27,13 @@ internal static partial class RawStructure
 
         private readonly Stream _stream;
         private readonly bool _little;
-        private string _make = "Camera";
+        private string? _make;
         private readonly List<Node> _top;
-        private readonly HashSet<long> _visited = [];
         private bool _panasonic;
 
         private const ushort PanasonicRawDataOffset = 0x118;
+        
+        private const int MakerNoteHeadLength = 32;
 
         private TiffParts(Stream stream, bool little, List<Node> top)
         {
@@ -62,7 +45,7 @@ internal static partial class RawStructure
         public static List<Node> Describe(Stream stream, byte[] head)
         {
             var little = head[0] == 'I';
-            var magic = little ? BinaryPrimitives.ReadUInt16LittleEndian(head.AsSpan(2)) : BinaryPrimitives.ReadUInt16BigEndian(head.AsSpan(2));
+            var magic = U16(head.AsSpan(2), little);
             var variant = magic switch
             {
                 42 => "TIFF",
@@ -74,7 +57,7 @@ internal static partial class RawStructure
             if (variant is null)
                 return [];
 
-            var next = (long)(little ? BinaryPrimitives.ReadUInt32LittleEndian(head.AsSpan(4)) : BinaryPrimitives.ReadUInt32BigEndian(head.AsSpan(4)));
+            var next = (long)U32(head.AsSpan(4), little);
 
             var header = new Node($"{variant} header ({(little ? "Intel, little-endian" : "Motorola, big-endian")})", null, 0, 8);
             header.Fields.Add(new("Byte order", little ? "II (Intel, little-endian)" : "MM (Motorola, big-endian)"));
@@ -82,17 +65,18 @@ internal static partial class RawStructure
             header.Fields.Add(new("First IFD at", Hex(next)));
 
             var top = new List<Node> { header };
-            var layout = new TiffParts(stream, little, top) { _panasonic = magic == 0x55 };
+            var parts = new TiffParts(stream, little, top) { _panasonic = magic == 0x55 };
+            if (TiffDirectoryReader.Read(stream) is not { } layout)
+                return top;
 
-            for (var index = 0; next != 0 && index < 64; index++)
+            for (var index = 0; index < layout.Directories.Count; index++)
             {
-                if (!layout._visited.Add(next) || TiffDirectoryReader.ReadDirectoryAt(stream, next, little, out var following) is not { } directory)
-                    break;
+                var directory = layout.Directories[index];
 
                 // Names the maker notes, which IFD0's EXIF leads to.
                 if (index == 0 && directory.Find(271) is { } make && TiffDirectoryReader.ReadBytes(stream, make, 64) is { } text
                     && Encoding.ASCII.GetString(text).Split('\0')[0].Trim() is { Length: > 0 } maker)
-                    layout._make = maker;
+                    parts._make = maker;
 
                 var name = index switch
                 {
@@ -101,8 +85,7 @@ internal static partial class RawStructure
                     _ => $"IFD{index}"
                 };
 
-                top.Add(layout.DirectoryNode(directory, name, name, Kind.Ifd, 0, 0));
-                next = following;
+                top.Add(parts.DirectoryNode(directory, name, name, depth: 0));
             }
 
             return top;
@@ -114,89 +97,73 @@ internal static partial class RawStructure
         /// </summary>
         public static void DescribeEmbedded(Stream stream, long start, string box, Node node)
         {
-            if (ReadAt(stream, start, 8) is not { } head || !IsTiff(head))
+            if (ReadAt(stream, start, 8) is not { } head || !TiffDirectoryReader.IsTiff(head))
                 return;
 
             var little = head[0] == 'I';
-            var first = little ? BinaryPrimitives.ReadUInt32LittleEndian(head.AsSpan(4)) : BinaryPrimitives.ReadUInt32BigEndian(head.AsSpan(4));
+            var first = U32(head.AsSpan(4), little);
             node.Fields.Add(new("Byte order", little ? "II (Intel, little-endian)" : "MM (Motorola, big-endian)"));
             node.Fields.Add(new("Directory at", Hex(start + first)));
 
             if (TiffDirectoryReader.ReadDirectoryAt(stream, start + first, little, out _, start) is not { } directory)
                 return;
 
-            var names = box switch { "CMT1" => Ifd0Names, "CMT2" => ExifNames, "CMT3" => MakerTables.Canon, "CMT4" => GpsNames, _ => null };
+            var kind = box switch { "CMT1" => TiffDirectoryKind.Image, "CMT2" => TiffDirectoryKind.Exif, "CMT4" => TiffDirectoryKind.Gps, _ => (TiffDirectoryKind?)null };
             var layout = new TiffParts(stream, little, []);
 
             foreach (var entry in directory.Entries)
-                node.Fields.Add(new(box == "CMT3" ? MakerTagName(names, entry.Tag) : TagName(names, entry.Tag), layout.Value(entry)));
+                node.Fields.Add(new(box == "CMT3" ? MakerTagName(MakerNoteVendor.Canon, entry.Tag) : TagName(kind, entry.Tag), layout.Value(entry)));
         }
 
-        private static string MakerTagName(Directory? names, ushort tag) => names is not null && names.HasTagName(tag) ? names.GetTagName(tag) : $"0x{tag:X4}";
+        private static string MakerTagName(MakerNoteVendor? vendor, ushort tag) =>
+            vendor is { } known && MakerNoteTags.Name(known, tag) is { } name ? name : $"0x{tag:X4}";
 
-        private Node DirectoryNode(TiffDirectory directory, string name, string path, Kind kind, long baseOffset, int depth)
+        /// <summary>A directory, its entries, and the directories its pointers lead to as the engine read them.</summary>
+        private Node DirectoryNode(TiffDirectory directory, string name, string path, int depth)
         {
             var count = directory.Entries.Count;
             var node = new Node(name, $"{count} {(count == 1 ? "entry" : "entries")}", directory.Offset, 2 + 12L * count + 4);
-            var names = kind switch { Kind.Exif => ExifNames, Kind.Gps => GpsNames, Kind.Interop => InteropNames, Kind.Ifd => Ifd0Names, _ => null };
+            var image = directory.Kind is TiffDirectoryKind.Image or TiffDirectoryKind.SubImage;
+            var catalogKind = image ? TiffDirectoryKind.Image : directory.Kind;
 
             // RW2 puts its own tags in IFD0, some on numbers TIFF uses for other things.
-            var panasonic = _panasonic && depth == 0 && kind is Kind.Ifd;
+            var panasonic = _panasonic && depth == 0;
 
             foreach (var entry in directory.Entries)
-                node.Fields.Add(new(panasonic ? PanasonicTagName(entry.Tag) : TagName(names, entry.Tag), Value(entry)));
+                node.Fields.Add(new(panasonic ? PanasonicTagName(entry.Tag) : TagName(catalogKind, entry.Tag), Value(entry)));
 
-            if (depth >= MaxDepth)
-                return node;
-
-            if (kind is Kind.Ifd)
+            var subIfds = 0;
+            foreach (var child in directory.Children)
             {
-                if (directory.Find(TiffDirectoryReader.TagSubIfds) is { } subIfds && Pointers(subIfds) is { } pointers)
-                    for (var i = 0; i < pointers.Length; i++)
-                        AddDirectory(node, path, baseOffset + pointers[i], $"SubIFD {i + 1}", Kind.Ifd, baseOffset, depth);
+                var childName = child.Kind switch
+                {
+                    TiffDirectoryKind.SubImage => $"SubIFD {++subIfds}",
+                    TiffDirectoryKind.Exif => "EXIF",
+                    TiffDirectoryKind.Gps => "GPS",
+                    _ => "Interoperability"
+                };
 
-                if (directory.Find(34665) is { } exif && Pointers(exif) is [var exifAt, ..])
-                    AddDirectory(node, path, baseOffset + exifAt, "EXIF", Kind.Exif, baseOffset, depth);
-
-                if (directory.Find(34853) is { } gps && Pointers(gps) is [var gpsAt, ..])
-                    AddDirectory(node, path, baseOffset + gpsAt, "GPS", Kind.Gps, baseOffset, depth);
+                node.Children.Add(DirectoryNode(child, childName, $"{path} / {childName}", depth + 1));
             }
 
-            if (kind is Kind.Exif)
-            {
-                if (directory.Find(40965) is { } interop && Pointers(interop) is [var interopAt, ..])
-                    AddDirectory(node, path, baseOffset + interopAt, "Interoperability", Kind.Interop, baseOffset, depth);
+            if (directory.Kind is TiffDirectoryKind.Exif && directory.Find(37500) is { } makerNote && MakerNoteNode(makerNote) is { } notes)
+                node.Children.Add(notes);
 
-                if (directory.Find(37500) is { } makerNote && MakerNoteNode(makerNote) is { } notes)
-                    node.Children.Add(notes);
-            }
-
-            if (kind is Kind.Ifd)
-                AddData(directory, path, baseOffset);
+            if (image)
+                AddData(directory, path);
 
             return node;
         }
 
-        private void AddDirectory(Node parent, string parentPath, long offset, string name, Kind kind, long baseOffset, int depth)
-        {
-            if (!_visited.Add(offset) || TiffDirectoryReader.ReadDirectoryAt(_stream, offset, _little, out _, baseOffset) is not { } directory)
-                return;
-
-            parent.Children.Add(DirectoryNode(directory, name, $"{parentPath} / {name}", kind, baseOffset, depth + 1));
-        }
-
-        private long[]? Pointers(TiffEntry entry) =>
-            TiffDirectoryReader.ReadIntegers(_stream, entry, _little, 16) is { Length: > 0 } values && values.All(v => v > 0) ? values : null;
-
         /// <summary>What a directory's image data is: the raw data, a preview JPEG, or something else.</summary>
-        private void AddData(TiffDirectory directory, string owner, long baseOffset)
+        private void AddData(TiffDirectory directory, string owner)
         {
             // An EXIF-style thumbnail.
             if (directory.Find(513) is { } jpegAt && directory.Find(514) is { } jpegLength
                                                   && Single(jpegAt) is { } at and > 0 && Single(jpegLength) is { } length and > 0
-                                                  && baseOffset + at + length <= _stream.Length)
+                                                  && at + length <= _stream.Length)
             {
-                _top.Add(JpegNode(_stream, baseOffset + at, length, owner == "Thumbnail (IFD1)" ? "EXIF thumbnail" : $"{owner}, JPEG"));
+                _top.Add(JpegNode(_stream, at, length, owner == "Thumbnail (IFD1)" ? "EXIF thumbnail" : $"{owner}, JPEG"));
             }
 
             // Strips or tiles; Panasonic gives only where its raw data starts, which runs to the end.
@@ -205,7 +172,7 @@ internal static partial class RawStructure
             if (offsets is { } o && TiffDirectoryReader.ReadIntegers(_stream, o, _little, MaxStrips) is { Length: > 0 } starts)
             {
                 var sizes = counts is { } c ? TiffDirectoryReader.ReadIntegers(_stream, c, _little, MaxStrips) : null;
-                var start = baseOffset + starts.Min();
+                var start = starts.Min();
                 var total = sizes is not null && sizes.Length == starts.Length ? sizes.Sum() : 0;
                 if (total == 0 && starts.Length == 1 && _panasonic)
                     total = _stream.Length - start;
@@ -217,7 +184,7 @@ internal static partial class RawStructure
             // A JPEG kept whole in a tag, as RW2 (JpgFromRaw) and some others do.
             foreach (var entry in directory.Entries)
             {
-                if (entry.Type is not (1 or 7) || entry.ValueSize < 1024 || entry.Tag is 37500)
+                if (entry.Type is not (TiffFieldType.Byte or TiffFieldType.Undefined) || entry.ValueSize < 1024 || entry.Tag is 37500)
                     continue;
 
                 if (ReadAt(_stream, entry.ValueOffset, 2) is [0xFF, 0xD8])
@@ -275,89 +242,30 @@ internal static partial class RawStructure
 
         private long? Single(TiffEntry? entry) => entry is { } e && TiffDirectoryReader.ReadIntegers(_stream, e, _little, 1) is [var value] ? value : null;
         
-        /// <summary>
-        /// The camera's private directory. Most are a plain IFD; some put a header in front and
-        /// count offsets from the note itself, or carry a whole TIFF of their own.
-        /// </summary>
+        /// <summary>The camera's private directory, where <see cref="MakerNote"/> finds it; described as unread when it does not look like one.</summary>
         private Node? MakerNoteNode(TiffEntry entry)
         {
-            if (entry.ValueSize <= 0 || ReadAt(_stream, entry.ValueOffset, (int)Math.Min(entry.ValueSize, 32)) is not { } head)
+            if (entry.ValueSize <= 0 || ReadAt(_stream, entry.ValueOffset, (int)Math.Min(entry.ValueSize, MakerNoteHeadLength)) is not { } head)
                 return null;
 
             var start = entry.ValueOffset;
-            var little = _little;
-            long ifd, baseOffset = 0;
+            var note = MakerNote.Locate(head, _make, _little);
+            var ifd = start + note.DirectoryOffset;
+            var baseOffset = note.BaseOffset is { } relative ? start + relative : 0;
+            var name = $"{_make ?? "Camera"} maker notes";
 
-            bool Starts(ReadOnlySpan<byte> prefix) => head.AsSpan().StartsWith(prefix);
-
-            if (Starts("Nikon\0"u8) && head.Length >= 18)
-            {
-                baseOffset = start + 10;
-                little = head[10] == 'I';
-                ifd = baseOffset + (little ? BinaryPrimitives.ReadUInt32LittleEndian(head.AsSpan(14)) : BinaryPrimitives.ReadUInt32BigEndian(head.AsSpan(14)));
-            }
-            else if (Starts("OLYMPUS\0"u8) && head.Length >= 12)
-            {
-                baseOffset = start;
-                little = head[8] == 'I';
-                ifd = start + 12;
-            }
-            else if (Starts("OM SYSTEM\0"u8) && head.Length >= 16)
-            {
-                baseOffset = start;
-                little = head[12] == 'I';
-                ifd = start + 16;
-            }
-            else if (Starts("Apple iOS\0"u8))
-            {
-                baseOffset = start;
-                little = false;
-                ifd = start + 14;
-            }
-            else if (Starts("FUJIFILM"u8) && head.Length >= 12)
-            {
-                baseOffset = start;
-                little = true;
-                ifd = start + BinaryPrimitives.ReadUInt32LittleEndian(head.AsSpan(8));
-            }
-            else if (Starts("PENTAX \0"u8) && head.Length >= 10)
-            {
-                baseOffset = start;
-                little = head[8] == 'I';
-                ifd = start + 10;
-            }
-            else if (Starts("AOC\0"u8) && head.Length >= 6)
-            {
-                little = head[4] == 'I' || (head[4] == ' ' && _little);
-                ifd = start + 6;
-            }
-            else if (Starts("Panasonic\0"u8) || Starts("SONY DSC \0"u8) || Starts("SONY CAM \0"u8))
-            {
-                ifd = start + 12;
-            }
-            else if (Starts("OLYMP\0"u8) || Starts("LEICA\0"u8) || Starts("SIGMA\0"u8))
-            {
-                ifd = start + 8;
-            }
-            else
-            {
-                ifd = start;
-            }
-
-            var name = $"{_make} maker notes";
-
-            if (LooksLikeDirectory(ifd, little) && TiffDirectoryReader.ReadDirectoryAt(_stream, ifd, little, out _, baseOffset) is { } directory)
+            if (MakerNote.LooksLikeDirectory(_stream, ifd, note.LittleEndian)
+                && TiffDirectoryReader.ReadDirectoryAt(_stream, ifd, note.LittleEndian, out _, baseOffset) is { } directory)
             {
                 var node = new Node(name, $"{directory.Entries.Count} entries", start, entry.ValueSize);
-                var names = MakerNames(head);
 
-                node.Fields.Add(new("Byte order", little ? "Intel, little-endian" : "Motorola, big-endian"));
+                node.Fields.Add(new("Byte order", note.LittleEndian ? "Intel, little-endian" : "Motorola, big-endian"));
                 node.Fields.Add(new("Directory at", Hex(ifd)));
                 if (baseOffset != 0)
                     node.Fields.Add(new("Offsets count from", Hex(baseOffset)));
 
                 foreach (var e in directory.Entries)
-                    node.Fields.Add(new(MakerTagName(names, e.Tag), Value(e, little)));
+                    node.Fields.Add(new(MakerTagName(note.Vendor, e.Tag), Value(e, note.LittleEndian)));
 
                 return node;
             }
@@ -365,125 +273,17 @@ internal static partial class RawStructure
             return new Node(name, $"{entry.ValueSize} bytes in a form Lyra does not read", start, entry.ValueSize);
         }
 
-        /// <summary>The camera maker's tag names, as MetadataExtractor knows them; null for a maker it does not.</summary>
-        private Directory? MakerNames(byte[] head)
+        private static string PanasonicTagName(ushort tag) => TagCatalog.PanasonicRawName(tag) ?? $"Tag 0x{tag:X4}";
+
+        private static string TagName(TiffDirectoryKind? kind, ushort tag)
         {
-            var span = head.AsSpan();
-            if (span.StartsWith("AOC\0"u8) || span.StartsWith("PENTAX \0"u8))
-                return MakerTables.Pentax;
-
-            var make = _make.ToUpperInvariant();
-            return make switch
-            {
-                _ when make.StartsWith("CANON") => MakerTables.Canon,
-                _ when make.StartsWith("NIKON") => MakerTables.Nikon,
-                _ when make.StartsWith("SONY") => MakerTables.Sony,
-                _ when make.StartsWith("OLYMPUS") || make.StartsWith("OM DIGITAL") => MakerTables.Olympus,
-                _ when make.StartsWith("PANASONIC") => MakerTables.Panasonic,
-                _ when make.StartsWith("FUJI") => MakerTables.Fujifilm,
-                _ when make.StartsWith("APPLE") => MakerTables.Apple,
-                _ when make.StartsWith("SAMSUNG") => MakerTables.Samsung,
-                _ when make.StartsWith("LEICA") => MakerTables.Leica,
-                _ when make.StartsWith("PENTAX") || make.StartsWith("RICOH") => MakerTables.Pentax,
-                _ when make.StartsWith("SIGMA") => MakerTables.Sigma,
-                _ => null
-            };
-        }
-
-        /// <summary>A directory's entry count is sane and its entries mostly carry real TIFF types.</summary>
-        private bool LooksLikeDirectory(long offset, bool little)
-        {
-            if (ReadAt(_stream, offset, 2) is not { } countBytes)
-                return false;
-
-            var count = little ? BinaryPrimitives.ReadUInt16LittleEndian(countBytes) : BinaryPrimitives.ReadUInt16BigEndian(countBytes);
-            if (count is 0 or > 1000 || ReadAt(_stream, offset + 2, Math.Min(count, (ushort)16) * 12) is not { } entries)
-                return false;
-
-            var known = 0;
-            for (var i = 0; i < entries.Length / 12; i++)
-            {
-                var type = little ? BinaryPrimitives.ReadUInt16LittleEndian(entries.AsSpan(i * 12 + 2)) : BinaryPrimitives.ReadUInt16BigEndian(entries.AsSpan(i * 12 + 2));
-                if (type is >= 1 and <= 13)
-                    known++;
-            }
-
-            return known * 5 >= entries.Length / 12 * 4;
-        }
-
-        private static class MakerTables
-        {
-            public static readonly Directory Canon = new CanonMakernoteDirectory();
-            public static readonly Directory Nikon = new NikonType2MakernoteDirectory();
-            public static readonly Directory Sony = new SonyType1MakernoteDirectory();
-            public static readonly Directory Olympus = new OlympusMakernoteDirectory();
-            public static readonly Directory Panasonic = new PanasonicMakernoteDirectory();
-            public static readonly Directory Fujifilm = new FujifilmMakernoteDirectory();
-            public static readonly Directory Apple = new AppleMakernoteDirectory();
-            public static readonly Directory Samsung = new SamsungType2MakernoteDirectory();
-            public static readonly Directory Leica = new LeicaMakernoteDirectory();
-            public static readonly Directory Pentax = new PentaxMakernoteDirectory();
-            public static readonly Directory Sigma = new SigmaMakernoteDirectory();
-        }
-
-        private static readonly Dictionary<ushort, string> PanasonicNames = new()
-        {
-            [0x01]   = "Panasonic Raw Version",
-            [0x02]   = "Sensor Width",
-            [0x03]   = "Sensor Height",
-            [0x04]   = "Sensor Top Border",
-            [0x05]   = "Sensor Left Border",
-            [0x06]   = "Sensor Bottom Border",
-            [0x07]   = "Sensor Right Border",
-            [0x09]   = "CFA Pattern",
-            [0x0A]   = "Bits Per Sample",
-            [0x0B]   = "Compression",
-            [0x0E]   = "Linearity Limit Red",
-            [0x0F]   = "Linearity Limit Green",
-            [0x10]   = "Linearity Limit Blue",
-            [0x17]   = "ISO",
-            [0x18]   = "High ISO Multiplier Red",
-            [0x19]   = "High ISO Multiplier Green",
-            [0x1A]   = "High ISO Multiplier Blue",
-            [0x1C]   = "Black Level Red",
-            [0x1D]   = "Black Level Green",
-            [0x1E]   = "Black Level Blue",
-            [0x24]   = "WB Red Level",
-            [0x25]   = "WB Green Level",
-            [0x26]   = "WB Blue Level",
-            [0x2E]   = "JpgFromRaw",
-            [0x2F]   = "Crop Top",
-            [0x30]   = "Crop Left",
-            [0x31]   = "Crop Bottom",
-            [0x32]   = "Crop Right",
-            [0x10F]  = "Make",
-            [0x110]  = "Model",
-            [0x111]  = "Strip Offsets",
-            [0x112]  = "Orientation",
-            [0x116]  = "Rows Per Strip",
-            [0x117]  = "Strip Byte Counts",
-            [0x118]  = "Raw Data Offset",
-            [0x119]  = "Distortion Info",
-            [0x11C]  = "Gamma",
-            [0x8769] = "EXIF Offset",
-            [0x8825] = "GPS Offset"
-        };
-
-        private static string PanasonicTagName(ushort tag) => PanasonicNames.GetValueOrDefault(tag, $"Tag 0x{tag:X4}");
-
-        private static string TagName(Directory? names, ushort tag)
-        {
-            if (names is not null && names.HasTagName(tag))
-                return names.GetTagName(tag);
+            if (kind is { } known && TagCatalog.Name(known, tag) is { } name)
+                return name;
 
             if (ExtraNames.TryGetValue(tag, out var extra))
                 return extra;
 
-            foreach (var fallback in FallbackNames)
-                if (fallback.HasTagName(tag))
-                    return fallback.GetTagName(tag);
-
-            return $"Tag 0x{tag:X4}";
+            return TagCatalog.Name(TiffDirectoryKind.Image, tag) ?? $"Tag 0x{tag:X4}";
         }
 
         private string Value(TiffEntry entry) => Value(entry, _little);
@@ -492,29 +292,30 @@ internal static partial class RawStructure
         {
             switch (entry.Type)
             {
-                case 2:
+                case TiffFieldType.Ascii:
                     return ReadAt(_stream, entry.ValueOffset, (int)Math.Min(entry.ValueSize, 128)) is { } text
                         ? Text(text, truncated: entry.ValueSize > 128)
                         : $"{entry.Count} characters";
 
                 // Versions and the like: a few printable characters.
-                case 7 when entry.ValueSize <= 16 && ReadAt(_stream, entry.ValueOffset, (int)entry.ValueSize) is { } bytes && bytes.All(b => b is >= 0x20 and < 0x7F):
+                case TiffFieldType.Undefined when entry.ValueSize <= 16 && ReadAt(_stream, entry.ValueOffset, (int)entry.ValueSize) is { } bytes && bytes.All(b => b is >= 0x20 and < 0x7F):
                     return Encoding.ASCII.GetString(bytes);
 
-                case 1 or 3 or 4 or 6 or 8 or 9 or 13 when entry.Count <= 8:
+                case TiffFieldType.Byte or TiffFieldType.Short or TiffFieldType.Long or TiffFieldType.SByte or TiffFieldType.SShort or TiffFieldType.SLong or TiffFieldType.Ifd
+                    when entry.Count <= 8:
                     return TiffDirectoryReader.ReadIntegers(_stream, entry, little, 8) is { } values
                         ? string.Join(" ", values.Select(v => v.ToString(CultureInfo.InvariantCulture)))
                         : "?";
 
-                case 5 or 10 when entry.Count <= 4:
+                case TiffFieldType.Rational or TiffFieldType.SRational when entry.Count <= 4:
                     return Rationals(entry, little);
 
-                case 11 when entry.Count <= 4:
+                case TiffFieldType.Float when entry.Count <= 4:
                     return TiffDirectoryReader.ReadFloats(_stream, entry, little, 4) is { } floats
                         ? string.Join(" ", floats.Select(f => f.ToString("0.####", CultureInfo.InvariantCulture)))
                         : "?";
 
-                case 1 or 7:
+                case TiffFieldType.Byte or TiffFieldType.Undefined:
                     return $"{entry.ValueSize} bytes";
 
                 default:
@@ -522,26 +323,10 @@ internal static partial class RawStructure
             }
         }
 
-        private string Rationals(TiffEntry entry, bool little)
-        {
-            if (ReadAt(_stream, entry.ValueOffset, (int)entry.ValueSize) is not { } bytes)
-                return "?";
-
-            var parts = new List<string>();
-            for (var i = 0; i + 8 <= bytes.Length; i += 8)
-            {
-                double numerator = entry.Type == 10
-                    ? (little ? BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(i)) : BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(i)))
-                    : (little ? BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(i)) : BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(i)));
-                double denominator = entry.Type == 10
-                    ? (little ? BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(i + 4)) : BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(i + 4)))
-                    : (little ? BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(i + 4)) : BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(i + 4)));
-
-                parts.Add(denominator == 0 ? "-" : (numerator / denominator).ToString("0.####", CultureInfo.InvariantCulture));
-            }
-
-            return string.Join(" ", parts);
-        }
+        private string Rationals(TiffEntry entry, bool little) =>
+            TiffDirectoryReader.ReadRationals(_stream, entry, little, 4) is { } rationals
+                ? string.Join(" ", rationals.Select(r => r.IsDefined ? ((double)r.Numerator / r.Denominator).ToString("0.####", CultureInfo.InvariantCulture) : "-"))
+                : "?";
 
         private static string Text(byte[] bytes, bool truncated)
         {

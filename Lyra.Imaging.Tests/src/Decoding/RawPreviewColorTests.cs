@@ -44,9 +44,7 @@ public class RawPreviewColorTests
     [Fact]
     public void SomethingThatIsNotAJpeg_IsTakenAsSrgb()
     {
-        using var stream = new MemoryStream(TempFile.Pattern(256));
-
-        Assert.True(RawPreviewColor.Of(stream, 0).IsSrgb);
+        Assert.True(RawPreviewColor.Of(TempFile.Pattern(256), 0).IsSrgb);
     }
 
     private static SKColorSpace Of(ushort colorSpace, string make, int dngPreviewColorSpace = 0)
@@ -55,8 +53,7 @@ public class RawPreviewColorTests
 
         try
         {
-            using var stream = File.OpenRead(path);
-            return RawPreviewColor.Of(stream, dngPreviewColorSpace);
+            return RawPreviewColor.Of(File.ReadAllBytes(path), dngPreviewColorSpace);
         }
         finally
         {

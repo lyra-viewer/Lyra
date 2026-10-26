@@ -4,6 +4,7 @@ using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Metadata;
+using Lyra.Metadata.Photoshop;
 using SkiaSharp;
 using Lyra.Psd.Core.Decode.Composite;
 using Lyra.Psd.Core.SectionData;
@@ -31,9 +32,6 @@ internal class PsdDecoder : DecoderBase
         try
         {
             using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), composite.ReportTransferred, composite.CompleteTransfer);
-            composite.ExifInfo = MetadataProcessor.ParseMetadata(stream, path);
-            stream.Position = 0;
-
             var header = PsdDocument.ReadHeader(stream);
 
             composite.FullWidth = header.Width;
@@ -56,6 +54,7 @@ internal class PsdDecoder : DecoderBase
     {
         using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(composite.FileInfo.FullName), composite.ReportTransferred, composite.CompleteTransfer);
         var psd = PsdDocument.ReadDocument(stream);
+        composite.ExifInfo = ReadMetadata(psd, stream, composite.FileInfo.FullName);
         composite.PsdLayers = psd.DecodeLayerRecords(stream);
         composite.Structure = PsdStructure.Describe(psd);
 
@@ -77,6 +76,7 @@ internal class PsdDecoder : DecoderBase
 
         using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), composite.ReportTransferred, composite.CompleteTransfer);
         var psd = PsdDocument.ReadDocument(stream);
+        composite.ExifInfo = ReadMetadata(psd, stream, path);
         composite.PsdLayers = psd.DecodeLayerRecords(stream);
         composite.Structure = PsdStructure.Describe(psd);
 
@@ -190,6 +190,39 @@ internal class PsdDecoder : DecoderBase
     #endregion
 
     #region Metadata
+
+    /// <summary>Above this a resource is not believed to be metadata.</summary>
+    private const int MaxResourceBytes = 64 * 1024 * 1024;
+
+    /// <summary>The EXIF, XMP, IPTC and ICC among the image resources Lyra.Psd located, read from where it found them.</summary>
+    private static ExifInfo ReadMetadata(PsdDocument psd, Stream stream, string path)
+    {
+        var resources = new List<PhotoshopResource>();
+        var position = stream.Position;
+        try
+        {
+            foreach (var block in psd.ImageResources.Blocks)
+            {
+                if (PhotoshopResources.BlockKind(block.Id) is null || block.DataSize > MaxResourceBytes || block.DataOffset + block.DataSize > stream.Length)
+                    continue;
+
+                var data = new byte[block.DataSize];
+                stream.Position = block.DataOffset;
+                stream.ReadExactly(data);
+                resources.Add(new PhotoshopResource(block.Id, block.Name, data));
+            }
+        }
+        catch (IOException e)
+        {
+            Logger.Warning($"[PsdDecoder] Image resources could not be read: {path}\n{e.Message}");
+        }
+        finally
+        {
+            stream.Position = position;
+        }
+
+        return MetadataProcessor.ParsePhotoshopResources(resources, path);
+    }
 
     private static void ProcessMetadata(PsdMetadata metadata, Composite composite)
     {

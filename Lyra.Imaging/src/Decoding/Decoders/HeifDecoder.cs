@@ -6,7 +6,7 @@ using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Metadata;
-using Lyra.ManagedCodecs.Raster.Heif;
+using Lyra.Metadata.Iso;
 using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Decoders;

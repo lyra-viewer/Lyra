@@ -3,6 +3,7 @@ using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders.J2K;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Metadata;
+using Lyra.Metadata.Containers;
 using SkiaSharp;
 using Lyra.Imaging.Decoding.Support;
 
@@ -19,9 +20,8 @@ internal class J2KDecoder : DecoderBase
         J2KHeader.RequireDeclaredSizeFits(data);
 
         // OpenJPEG hands back pixels only; JP2 keeps EXIF and XMP in top-level uuid boxes.
-        var metadata = IsoBoxMetadata.ReadJp2(data);
-        if (!metadata.IsEmpty)
-            composite.ExifInfo = MetadataProcessor.ParseMetadata(metadata.Exif, metadata.Xmp, path);
+        if (Jp2Container.Read(data) is { IsEmpty: false } metadata)
+            composite.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
 
         ct.ThrowIfCancellationRequested();
 

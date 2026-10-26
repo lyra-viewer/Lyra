@@ -1,138 +1,115 @@
 using System.Globalization;
 using Lyra.Imaging.Content;
-using MetadataExtractor;
-using MetadataExtractor.Formats.Exif;
-using MetadataExtractor.Formats.Icc;
-using Directory = MetadataExtractor.Directory;
+using Lyra.Metadata.Exif;
+using Lyra.Metadata.Tiff;
+using Lyra.Metadata.Xmp;
 using static Lyra.Imaging.Metadata.MetadataValues;
 
 namespace Lyra.Imaging.Metadata;
 
 /// <summary>
 /// The facts the camera recorded: body and lens, exposure, capture time, orientation, color,
-/// GPS, authorship - read from the standard EXIF directories.
+/// GPS, authorship - read from IFD0 and the EXIF and GPS directories.
 ///
 /// Gaps EXIF leaves are filled afterwards by <see cref="FormatHeaderReader"/> from the formats'
 /// own headers, which is a separate pass over different directories.
 /// </summary>
 internal static class ExifReader
 {
-    public static ExifInfo Read(IReadOnlyList<Directory> directories)
+    private const TiffDirectoryKind Ifd0 = TiffDirectoryKind.Image;
+    private const TiffDirectoryKind Exif = TiffDirectoryKind.Exif;
+    private const TiffDirectoryKind Gps = TiffDirectoryKind.Gps;
+
+    /// <summary>XMP's copy of the camera and lens, for a writer that kept them only there.</summary>
+    public static void ApplyXmp(XmpPacket? xmp, ExifInfo exifInfo)
+    {
+        if (xmp is null)
+            return;
+
+        exifInfo.Make = FirstNonEmpty(exifInfo.Make, Clean(xmp.First(XmpNamespaces.Tiff, "Make")));
+        exifInfo.Model = FirstNonEmpty(exifInfo.Model, Clean(xmp.First(XmpNamespaces.Tiff, "Model")));
+        exifInfo.Lens = FirstNonEmpty(exifInfo.Lens, Clean(xmp.First(XmpNamespaces.ExifEx, "LensModel")), Clean(xmp.First(XmpNamespaces.Aux, "Lens")));
+    }
+
+    public static ExifInfo Read(ExifMetadata? exif, IccFacts icc)
     {
         var exifInfo = new ExifInfo();
 
-        var ifd0 = directories.OfType<ExifIfd0Directory>().FirstOrDefault();
-        var subIfd = FindExifIfd(directories);
-        var gps = directories.OfType<GpsDirectory>().FirstOrDefault();
-        var icc = directories.OfType<IccDirectory>().FirstOrDefault();
+        exifInfo.Make = Describe(exif, Ifd0, ExifTags.Make);
+        exifInfo.Model = Describe(exif, Ifd0, ExifTags.Model);
+        exifInfo.Lens = Describe(exif, Exif, ExifTags.LensModel);
 
-        exifInfo.Make = Describe(ifd0, ExifDirectoryBase.TagMake);
-        exifInfo.Model = Describe(ifd0, ExifDirectoryBase.TagModel);
-        exifInfo.Lens = Describe(subIfd, ExifDirectoryBase.TagLensModel);
+        exifInfo.ExposureTime = Describe(exif, Exif, ExifTags.ExposureTime);
+        exifInfo.FNumber = Describe(exif, Exif, ExifTags.FNumber);
+        exifInfo.Iso = Describe(exif, Exif, ExifTags.IsoEquivalent);
+        exifInfo.FocalLength = Describe(exif, Exif, ExifTags.FocalLength);
+        exifInfo.FocalLength35 = Describe(exif, Exif, ExifTags.FocalLength35);
+        exifInfo.ExposureBias = ReadExposureBias(exif);
+        exifInfo.ExposureProgram = Describe(exif, Exif, ExifTags.ExposureProgram);
+        exifInfo.MeteringMode = Describe(exif, Exif, ExifTags.MeteringMode);
+        exifInfo.WhiteBalance = Describe(exif, Exif, ExifTags.WhiteBalanceMode);
+        exifInfo.Flash = Describe(exif, Exif, ExifTags.Flash);
 
-        exifInfo.ExposureTime = Describe(subIfd, ExifDirectoryBase.TagExposureTime);
-        exifInfo.FNumber = Describe(subIfd, ExifDirectoryBase.TagFNumber);
-        exifInfo.Iso = Describe(subIfd, ExifDirectoryBase.TagIsoEquivalent);
-        exifInfo.FocalLength = Describe(subIfd, ExifDirectoryBase.TagFocalLength);
-        exifInfo.FocalLength35 = Describe(subIfd, ExifDirectoryBase.Tag35MMFilmEquivFocalLength);
-        exifInfo.ExposureBias = ReadExposureBias(subIfd);
-        exifInfo.ExposureProgram = Describe(subIfd, ExifDirectoryBase.TagExposureProgram);
-        exifInfo.MeteringMode = Describe(subIfd, ExifDirectoryBase.TagMeteringMode);
-        exifInfo.WhiteBalance = Describe(subIfd, ExifDirectoryBase.TagWhiteBalanceMode);
-        exifInfo.Flash = Describe(subIfd, ExifDirectoryBase.TagFlash);
+        exifInfo.Taken = ReadTaken(exif);
 
-        exifInfo.Taken = ReadTaken(subIfd, ifd0);
-
-        exifInfo.OrientationValue = ReadOrientation(ifd0);
+        exifInfo.OrientationValue = ReadOrientation(exif);
         exifInfo.Orientation = DescribeOrientation(exifInfo.OrientationValue);
 
-        var colorSpaceExif = Describe(subIfd, ExifDirectoryBase.TagColorSpace);
-        var colorSpaceIcc = Describe(icc, IccDirectory.TagColorSpace);
-        exifInfo.ColorSpace = AssignValue(colorSpaceExif, colorSpaceIcc, Priority.Low);
-        exifInfo.IccProfile = ExtractIccProfileName(Describe(icc, IccDirectory.TagTagDesc));
+        var colorSpaceExif = Describe(exif, Exif, ExifTags.ColorSpace);
+        exifInfo.ColorSpace = AssignValue(colorSpaceExif, Clean(icc.ColorSpace), Priority.Low);
+        exifInfo.IccProfile = Clean(icc.ProfileName);
 
         // Formatted as a pair so the two rows line up in the panel's monospace column.
         (exifInfo.GpsLatitude, exifInfo.GpsLongitude) = GpsCoordinateFormat.Align(
-            Describe(gps, GpsDirectory.TagLatitude),
-            Describe(gps, GpsDirectory.TagLongitude)
+            Describe(exif, Gps, ExifTags.GpsLatitude),
+            Describe(exif, Gps, ExifTags.GpsLongitude)
         );
 
-        exifInfo.GpsAltitude = Describe(gps, GpsDirectory.TagAltitude);
+        exifInfo.GpsAltitude = Describe(exif, Gps, ExifTags.GpsAltitude);
 
-        exifInfo.Artist = Describe(ifd0, ExifDirectoryBase.TagArtist);
-        exifInfo.Copyright = Describe(ifd0, ExifDirectoryBase.TagCopyright);
+        exifInfo.Artist = Describe(exif, Ifd0, ExifTags.Artist);
+        exifInfo.Copyright = Describe(exif, Ifd0, ExifTags.Copyright);
 
-        // Compression (0x0103) is an IFD0 tag - that is where TIFF puts it, and reading only the
-        // SubIFD silently dropped the row for every TIFF. JPEG and PNG fill it in from their own
-        // directories later, so this is the TIFF path in practice.
+        // Compression (0x0103) is an IFD0 tag - that is where TIFF puts it. JPEG and PNG fill it
+        // in from their own directories later, so this is the TIFF path in practice.
         exifInfo.Compression = FirstNonEmpty(
-            Describe(ifd0, ExifDirectoryBase.TagCompression),
-            Describe(subIfd, ExifDirectoryBase.TagCompression)
+            Describe(exif, Ifd0, ExifTags.Compression),
+            Describe(exif, Exif, ExifTags.Compression)
         );
-        
-        exifInfo.Software = Describe(ifd0, ExifDirectoryBase.TagSoftware);
+
+        exifInfo.Software = Describe(exif, Ifd0, ExifTags.Software);
 
         return exifInfo;
     }
-    
-    /// <summary>
-    /// The EXIF IFD (0x8769). MetadataExtractor gives the image SubIFDs of tag 330 the same type,
-    /// and in a NEF, ARW or DNG they come first, so the first one is the raw data, not EXIF.
-    /// </summary>
-    private static ExifSubIfdDirectory? FindExifIfd(IReadOnlyList<Directory> directories)
-    {
-        var candidates = directories.OfType<ExifSubIfdDirectory>().ToList();
-        return candidates.FirstOrDefault(directory => !DescribesImage(directory)) ?? candidates.FirstOrDefault();
-    }
 
-    // A NEF's JPEG previews have no width or strips, only the JPEG offset.
-    private static bool DescribesImage(Directory directory) =>
-        directory.ContainsTag(ExifDirectoryBase.TagNewSubfileType)
-        || directory.ContainsTag(ExifDirectoryBase.TagImageWidth)
-        || directory.ContainsTag(ExifThumbnailDirectory.TagThumbnailOffset)
-        || directory.ContainsTag(ExifDirectoryBase.TagStripOffsets)
-        || directory.ContainsTag(ExifDirectoryBase.TagTileOffsets);
-
-    private static string ReadTaken(Directory? subIfd, Directory? ifd0)
+    private static string ReadTaken(ExifMetadata? exif)
     {
-        if (TryReadDateTime(subIfd, ExifDirectoryBase.TagDateTimeOriginal, out var taken)
-            || TryReadDateTime(subIfd, ExifDirectoryBase.TagDateTimeDigitized, out taken)
-            || TryReadDateTime(ifd0, ExifDirectoryBase.TagDateTime, out taken))
+        if (exif is not null
+            && (exif.TryGetDateTime(Exif, ExifTags.DateTimeOriginal, out var taken)
+                || exif.TryGetDateTime(Exif, ExifTags.DateTimeDigitized, out taken)
+                || exif.TryGetDateTime(Ifd0, ExifTags.DateTime, out taken)))
         {
             return taken.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         }
 
-        return Describe(subIfd, ExifDirectoryBase.TagDateTimeOriginal);
+        return Describe(exif, Exif, ExifTags.DateTimeOriginal);
     }
 
-    private static bool TryReadDateTime(Directory? directory, int tag, out DateTime value)
+    private static string ReadExposureBias(ExifMetadata? exif)
     {
-        if (directory is not null && directory.TryGetDateTime(tag, out value))
-            return true;
-
-        value = default;
-        return false;
-    }
-    
-    private static string ReadExposureBias(Directory? subIfd)
-    {
-        if (subIfd is null
-            || !subIfd.TryGetRational(ExifDirectoryBase.TagExposureBias, out var bias)
-            || bias.ToDouble() == 0)
-        {
+        if (exif is null || !exif.TryGetRational(Exif, ExifTags.ExposureBias, out var bias) || bias.Numerator == 0)
             return string.Empty;
-        }
 
-        return Describe(subIfd, ExifDirectoryBase.TagExposureBias);
+        return Describe(exif, Exif, ExifTags.ExposureBias);
     }
 
     /// <summary>
     /// Reads IFD0 tag 0x0112. Anything outside the 1-8 range defined by the spec is treated as
     /// absent rather than trusted - a wrong rotation is worse than none.
     /// </summary>
-    private static ExifOrientation ReadOrientation(Directory? ifd0)
+    private static ExifOrientation ReadOrientation(ExifMetadata? exif)
     {
-        if (ifd0 is null || !ifd0.TryGetInt32(ExifDirectoryBase.TagOrientation, out var raw))
+        if (exif is null || !exif.TryGetInt32(Ifd0, ExifTags.Orientation, out var raw))
             return ExifOrientation.Unknown;
 
         return raw is >= 1 and <= 8 ? (ExifOrientation)raw : ExifOrientation.Unknown;

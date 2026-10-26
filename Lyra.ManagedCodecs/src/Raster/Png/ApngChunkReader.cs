@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Lyra.Metadata.Layout;
 
 namespace Lyra.ManagedCodecs.Raster.Png;
 
@@ -60,7 +61,7 @@ public static class ApngChunkReader
     private const int ChunkOverhead = 12;
     private const int MaxHeaderChunks = 4096;
 
-    public static ReadOnlySpan<byte> Signature => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    public static ReadOnlySpan<byte> Signature => PngChunks.Signature;
 
     /// <summary>
     /// True when an acTL chunk comes before the image data. Seeks over chunk bodies, so a large
@@ -123,21 +124,20 @@ public static class ApngChunkReader
 
         FrameBuilder? frame = null;
 
-        var pos = 8 + ChunkOverhead + 13;
-        while (pos + 8 <= data.Length)
+        // Image data cut short still counts, as far as it goes; any other chunk cut short ends the walk.
+        foreach (var current in PngChunks.Children(data, start: 8 + ChunkOverhead + 13, keepCutShort: true))
         {
-            var length = BinaryPrimitives.ReadUInt32BigEndian(data[pos..]);
-            var type = data.Slice(pos + 4, 4);
-            var body = pos + 8;
-
+            var type = current.Type;
             var isData = type.SequenceEqual("IDAT"u8) || type.SequenceEqual("fdAT"u8);
-            var cut = length + 4L > data.Length - body;
+            var cut = current.CutShort;
 
             if (cut && !isData)
                 break;
 
-            var chunk = data.Slice(body, (int)Math.Min(length, data.Length - body));
-            var chunkBytes = cut ? data.Length - pos : ChunkOverhead + chunk.Length;
+            var pos = current.Offset;
+            var body = pos + 8;
+            var chunk = current.Body;
+            var chunkBytes = current.TotalBytes;
 
             if (type.SequenceEqual("IEND"u8))
             {
@@ -192,8 +192,6 @@ public static class ApngChunkReader
                 cutInData = true;
                 break;
             }
-
-            pos += chunkBytes;
         }
 
         if (frame is not null)

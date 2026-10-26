@@ -543,8 +543,7 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
 
         if (codec.Info.ColorSpace is null)
         {
-            using var stream = new UnmanagedMemoryStream((byte*)preview.Data, (long)preview.Size);
-            declared = RawPreviewColor.Of(stream, info.PreviewColorSpace);
+            declared = RawPreviewColor.Of(new ReadOnlySpan<byte>((byte*)preview.Data, (int)preview.Size), info.PreviewColorSpace);
         }
 
         var bitmap = new SKBitmap(new SKImageInfo(scaled.Width, scaled.Height, SKColorType.Rgba8888, SKAlphaType.Premul, codec.Info.ColorSpace ?? declared));

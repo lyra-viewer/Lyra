@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 using Lyra.Common;
+using Lyra.Metadata.Iso;
 
 namespace Lyra.Imaging.Decoding.Structure;
 
@@ -13,6 +14,7 @@ internal static partial class RawStructure
     {
         private const int MaxBoxes = 512;
         private const int MaxDepth = 6;
+        private const int MaxSampleDescriptionBytes = 64 * 1024;
 
         private static readonly Dictionary<string, string> Uuids = new()
         {
@@ -60,25 +62,12 @@ internal static partial class RawStructure
 
             while (offset + 8 <= to && count++ < MaxBoxes)
             {
-                if (ReadAt(stream, offset, 8) is not { } header)
+                if (IsoBoxes.ReadHeader(stream, offset, to) is not { } box)
                     return;
 
-                long size = BinaryPrimitives.ReadUInt32BigEndian(header);
-                var type = Encoding.ASCII.GetString(header, 4, 4);
-                var headerSize = 8;
-
-                if (size == 1 && ReadAt(stream, offset + 8, 8) is { } large)
-                {
-                    size = BinaryPrimitives.ReadInt64BigEndian(large);
-                    headerSize = 16;
-                }
-                else if (size == 0)
-                {
-                    size = to - offset;
-                }
-
-                if (size < headerSize || offset + size > to)
-                    return;
+                var type = box.Type;
+                var size = box.Size;
+                var headerSize = box.HeaderSize;
 
                 var name = Names.GetValueOrDefault(type, $"'{type}' box");
                 string? description = null;
@@ -263,33 +252,30 @@ internal static partial class RawStructure
 
             foreach (var box in stbl.Children)
             {
-                var payload = box.Offset + 8;
+                var body = box.Offset + 8;
                 switch (box.Description)
                 {
-                    case "'co64'" when ReadAt(stream, payload + 8, 8) is { } c64:
-                        chunk = BinaryPrimitives.ReadInt64BigEndian(c64);
+                    case "'co64'" when ReadAt(stream, body, 16) is { } co64:
+                        chunk = IsoSampleTables.FirstChunkOffset(co64, large: true) ?? chunk;
                         break;
-                    case "'stco'" when ReadAt(stream, payload + 8, 4) is { } c32:
-                        chunk = BinaryPrimitives.ReadUInt32BigEndian(c32);
+                    case "'stco'" when ReadAt(stream, body, 12) is { } stco:
+                        chunk = IsoSampleTables.FirstChunkOffset(stco, large: false) ?? chunk;
                         break;
-                    case "'stsz'" when ReadAt(stream, payload + 4, 12) is { } sz:
-                        var fixedSize = BinaryPrimitives.ReadUInt32BigEndian(sz);
-                        sample = fixedSize != 0 ? fixedSize : BinaryPrimitives.ReadUInt32BigEndian(sz.AsSpan(8));
+                    case "'stsz'" when ReadAt(stream, body, 16) is { } stsz:
+                        sample = IsoSampleTables.FirstSampleSize(stsz) ?? sample;
                         break;
-                    case "'stsd'" when ReadAt(stream, payload + 8, 36) is { } entry:
-                        format = Encoding.ASCII.GetString(entry, 4, 4);
-                        width = BinaryPrimitives.ReadUInt16BigEndian(entry.AsSpan(32));
-                        height = BinaryPrimitives.ReadUInt16BigEndian(entry.AsSpan(34));
+                    case "'stsd'" when ReadAt(stream, body, (int)Math.Min(box.Size - 8, MaxSampleDescriptionBytes)) is { } stsd && IsoSampleTables.SampleEntry(stsd) is { } entry:
+                        format = entry.Type;
+                        width = entry.Width;
+                        height = entry.Height;
                         break;
                 }
             }
 
-            if (Find(boxes, "tkhd") is { } tkhd && ReadAt(stream, tkhd.Offset + 8, 24) is { } header)
+            if (Find(boxes, "tkhd") is { } tkhd && ReadAt(stream, tkhd.Offset + 8, 24) is { } tkhdBody && IsoSampleTables.TrackHeader(tkhdBody) is { } header)
             {
-                var longForm = header[0] == 1;
-                var created = longForm ? (long)BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(4)) : BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(4));
-                track.Fields.Add(new("Track ID", BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(longForm ? 20 : 12)).ToString(CultureInfo.InvariantCulture)));
-                track.Fields.Add(new("Created", MediaTime(created)));
+                track.Fields.Add(new("Track ID", header.Id.ToString(CultureInfo.InvariantCulture)));
+                track.Fields.Add(new("Created", MediaTime(header.Created)));
             }
 
             if (format is not null)

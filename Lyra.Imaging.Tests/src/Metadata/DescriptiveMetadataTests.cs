@@ -118,6 +118,27 @@ public class DescriptiveMetadataTests
     }
 
     [Fact]
+    public void Camera_FallsBackToXmpWhenExifIsSilent()
+    {
+        var path = ExifJpegBuilder.Write(
+            make: "Canon",
+            xmp: new ExifJpegBuilder.XmpFields(Make: "Stale", Model: "EOS R5", LensModel: "RF24-70mm F2.8 L IS USM"));
+
+        try
+        {
+            var info = MetadataProcessor.ParseMetadata(path);
+
+            Assert.Equal("Canon", info.Make);
+            Assert.Equal("EOS R5", info.Model);
+            Assert.Equal("RF24-70mm F2.8 L IS USM", info.Lens);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Keywords_AreSummarizedRatherThanRunningOffTheRow()
     {
         // Stock photography routinely tags dozens; the panel renders one unwrapped line per row.

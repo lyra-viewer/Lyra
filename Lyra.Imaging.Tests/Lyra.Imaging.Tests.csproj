@@ -34,8 +34,12 @@
         <Compile Include="..\Lyra.ManagedCodecs.Tests\src\Gif\GifBuilder.cs" Link="src\Support\GifBuilder.cs" />
         <Compile Include="..\Lyra.ManagedCodecs.Tests\src\Webp\WebpBuilder.cs" Link="src\Support\WebpBuilder.cs" />
         <Compile Include="..\Lyra.ManagedCodecs.Tests\src\Png\ApngBuilder.cs" Link="src\Support\ApngBuilder.cs" />
-        <Compile Include="..\Lyra.ManagedCodecs.Tests\src\Heif\HeifSequenceFixtures.cs" Link="src\Support\HeifSequenceFixtures.cs" />
+        <Compile Include="..\Lyra.Metadata.Tests\src\Iso\HeifSequenceFixtures.cs" Link="src\Support\HeifSequenceFixtures.cs" />
         <Compile Include="..\Lyra.ManagedCodecs.Tests\src\Tga\TgaTestImage.cs" Link="src\Support\TgaTestImage.cs" />
+        <Compile Include="..\Lyra.Metadata.Tests\src\Support\TiffFixture.cs" Link="src\Support\TiffFixture.cs" />
+        <Compile Include="..\Lyra.Metadata.Tests\src\Support\IccFixture.cs" Link="src\Support\IccFixture.cs" />
+        <Compile Include="..\Lyra.Metadata.Tests\src\Support\BlockFixture.cs" Link="src\Support\BlockFixture.cs" />
+        <Compile Include="..\Lyra.Metadata.Tests\src\Support\MrwFixture.cs" Link="src\Support\MrwFixture.cs" />
     </ItemGroup>
 
     <ItemGroup>

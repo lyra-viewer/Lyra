@@ -19,7 +19,6 @@ internal static class TiffDocument
 
         composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
         composite.Structure = [TiffPageSet.Summarise(directories, pages)];
-        TiffPageSet.Describe(composite, directories, pages, BigTiffMetadataReader.IsBigTiff(path));
 
         ct.ThrowIfCancellationRequested();
 

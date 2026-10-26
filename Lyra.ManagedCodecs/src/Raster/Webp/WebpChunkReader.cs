@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Lyra.Metadata.Layout;
 
 namespace Lyra.ManagedCodecs.Raster.Webp;
 
@@ -40,36 +41,30 @@ public static class WebpChunkReader
             return null;
 
         var riffEnd = 8L + BinaryPrimitives.ReadUInt32LittleEndian(data[4..]);
-        var end = (int)Math.Min(data.Length, riffEnd);
+        var form = RiffChunks.Form(data);
+        var end = form.Length;
 
         var frames = new List<WebpFrameChunk>();
         int? loopCount = null;
         var truncated = riffEnd > data.Length;
         var cutFrame = false;
 
-        var pos = 12;
-        while (pos + ChunkHeader <= end)
+        var pos = 12L;
+        foreach (var chunk in RiffChunks.Children(form, start: 12, keepCutShort: true))
         {
-            var fourCc = data.Slice(pos, 4);
-            var size = BinaryPrimitives.ReadUInt32LittleEndian(data[(pos + 4)..]);
-            var payload = pos + ChunkHeader;
-
-            if (size > (uint)(end - payload))
+            if (chunk.CutShort)
             {
                 truncated = true;
-                cutFrame = fourCc.SequenceEqual("ANMF"u8);
+                cutFrame = chunk.Is("ANMF"u8);
                 break;
             }
 
-            var body = data.Slice(payload, (int)size);
-            var next = payload + (int)size + (int)(size & 1);
+            if (chunk.Is("ANIM"u8) && chunk.Body.Length >= 6)
+                loopCount = BinaryPrimitives.ReadUInt16LittleEndian(chunk.Body[4..]);
+            else if (chunk.Is("ANMF"u8) && chunk.Body.Length >= 16)
+                frames.Add(ReadFrame(chunk.Body, Math.Min(chunk.Next, end) - chunk.Offset));
 
-            if (fourCc.SequenceEqual("ANIM"u8) && body.Length >= 6)
-                loopCount = BinaryPrimitives.ReadUInt16LittleEndian(body[4..]);
-            else if (fourCc.SequenceEqual("ANMF"u8) && body.Length >= 16)
-                frames.Add(ReadFrame(body, Math.Min(next, end) - pos));
-
-            pos = next;
+            pos = chunk.Next;
         }
 
         if (pos < end && pos + ChunkHeader > end)
@@ -81,27 +76,16 @@ public static class WebpChunkReader
     /// <summary>The bitstream after ANMF's 16-byte frame header: an optional ALPH chunk, then VP8 or VP8L.</summary>
     private static WebpFrameChunk ReadFrame(ReadOnlySpan<byte> body, long encodedBytes)
     {
-        var encoding = WebpFrameEncoding.None;
-
-        var pos = 16;
-        while (pos + ChunkHeader <= body.Length && encoding == WebpFrameEncoding.None)
+        foreach (var chunk in RiffChunks.Children(body, start: 16))
         {
-            var fourCc = body.Slice(pos, 4);
-            var size = BinaryPrimitives.ReadUInt32LittleEndian(body[(pos + 4)..]);
-            var payload = pos + ChunkHeader;
+            if (chunk.Is("VP8 "u8))
+                return new WebpFrameChunk(WebpFrameEncoding.Lossy, encodedBytes);
 
-            if (size > (uint)(body.Length - payload))
-                break;
-
-            if (fourCc.SequenceEqual("VP8 "u8))
-                encoding = WebpFrameEncoding.Lossy;
-            else if (fourCc.SequenceEqual("VP8L"u8))
-                encoding = WebpFrameEncoding.Lossless;
-
-            pos = payload + (int)size + (int)(size & 1);
+            if (chunk.Is("VP8L"u8))
+                return new WebpFrameChunk(WebpFrameEncoding.Lossless, encodedBytes);
         }
 
-        return new WebpFrameChunk(encoding, encodedBytes);
+        return new WebpFrameChunk(WebpFrameEncoding.None, encodedBytes);
     }
 
     private static bool IsExtended(ReadOnlySpan<byte> data) =>

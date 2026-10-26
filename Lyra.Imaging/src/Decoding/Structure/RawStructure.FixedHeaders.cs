@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using System.Text;
+using Lyra.Metadata.Containers;
 
 namespace Lyra.Imaging.Decoding.Structure;
 
@@ -9,38 +9,31 @@ internal static partial class RawStructure
 
     private static class RafParts
     {
-        private readonly record struct Block(long At, long Length);
-
         public static List<Node> Describe(Stream stream)
         {
-            if (ReadAt(stream, 0, 108) is not { } head)
+            if (ReadAt(stream, 0, RafContainer.HeaderLength) is not { } head || RafContainer.ReadHeader(head) is not { } raf)
                 return [];
 
-            uint U32(int at) => BinaryPrimitives.ReadUInt32BigEndian(head.AsSpan(at));
-
-            var camera = Encoding.ASCII.GetString(head, 28, 32).Split('\0')[0].Trim();
-            var header = new Node("RAF header", $"Fujifilm {camera}".Trim(), 0, 84 + 24);
-            header.Fields.Add(new("Format version", Encoding.ASCII.GetString(head, 16, 4)));
-            header.Fields.Add(new("Camera", camera));
-            header.Fields.Add(new("Directory version", Encoding.ASCII.GetString(head, 60, 4)));
+            var header = new Node("RAF header", $"Fujifilm {raf.Camera}".Trim(), 0, RafContainer.HeaderLength);
+            header.Fields.Add(new("Format version", raf.FormatVersion));
+            header.Fields.Add(new("Camera", raf.Camera));
+            header.Fields.Add(new("Directory version", raf.DirectoryVersion));
 
             var nodes = new List<Node> { header };
 
-            Block jpeg = new(U32(84), U32(88)), meta = new(U32(92), U32(96)), cfa = new(U32(100), U32(104));
+            if (raf.Jpeg.FitsIn(stream.Length))
+                nodes.Add(JpegNode(stream, raf.Jpeg.Offset, raf.Jpeg.Length, "Camera preview"));
 
-            if (jpeg.At > 0 && jpeg.At + jpeg.Length <= stream.Length)
-                nodes.Add(JpegNode(stream, jpeg.At, jpeg.Length, "Camera preview"));
-
-            if (meta.At > 0 && meta.At + meta.Length <= stream.Length)
+            if (raf.Metadata.FitsIn(stream.Length))
             {
-                var records = ReadAt(stream, meta.At, 4) is { } r ? BinaryPrimitives.ReadUInt32BigEndian(r) : 0;
-                nodes.Add(new Node("Metadata records", $"{records} records", meta.At, meta.Length));
+                var records = ReadAt(stream, raf.Metadata.Offset, 4) is { } r ? BinaryPrimitives.ReadUInt32BigEndian(r) : 0;
+                nodes.Add(new Node("Metadata records", $"{records} records", raf.Metadata.Offset, raf.Metadata.Length));
             }
 
-            if (cfa.At > 0 && cfa.At + cfa.Length <= stream.Length)
+            if (raf.Cfa.FitsIn(stream.Length))
             {
-                var wrapped = ReadAt(stream, cfa.At, 2) is [(byte)'I', (byte)'I'] or [(byte)'M', (byte)'M'];
-                nodes.Add(new Node("Raw image data", wrapped ? "Sensor data, in a TIFF of its own" : "Sensor data", cfa.At, cfa.Length));
+                var wrapped = ReadAt(stream, raf.Cfa.Offset, 2) is [(byte)'I', (byte)'I'] or [(byte)'M', (byte)'M'];
+                nodes.Add(new Node("Raw image data", wrapped ? "Sensor data, in a TIFF of its own" : "Sensor data", raf.Cfa.Offset, raf.Cfa.Length));
             }
 
             return nodes;
@@ -62,27 +55,17 @@ internal static partial class RawStructure
 
         public static List<Node> Describe(Stream stream)
         {
-            if (ReadAt(stream, 4, 4) is not { } lengthBytes)
+            if (MrwContainer.ReadLayout(stream) is not { } mrw)
                 return [];
 
-            var dataAt = 8L + BinaryPrimitives.ReadUInt32BigEndian(lengthBytes);
-            var header = new Node("MRW header", "Minolta raw", 0, Math.Min(dataAt, stream.Length));
+            var header = new Node("MRW header", "Minolta raw", 0, Math.Min(mrw.DataOffset, stream.Length));
             var nodes = new List<Node> { header };
 
-            var offset = 8L;
-            for (var i = 0; offset + 8 <= dataAt && i < 64; i++)
-            {
-                if (ReadAt(stream, offset, 8) is not { } block)
-                    break;
+            foreach (var block in mrw.Blocks)
+                header.Children.Add(new Node(Blocks.GetValueOrDefault(block.Tag, $"'{block.Tag}' block"), $"'{block.Tag}'", block.Offset, 8L + block.DataLength));
 
-                var tag = Encoding.ASCII.GetString(block, 1, 3);
-                var length = BinaryPrimitives.ReadUInt32BigEndian(block.AsSpan(4));
-                header.Children.Add(new Node(Blocks.GetValueOrDefault(tag, $"'{tag}' block"), $"'{tag}'", offset, 8L + length));
-                offset += 8L + length;
-            }
-
-            if (dataAt < stream.Length)
-                nodes.Add(new Node("Raw image data", null, dataAt, stream.Length - dataAt));
+            if (mrw.DataOffset < stream.Length)
+                nodes.Add(new Node("Raw image data", null, mrw.DataOffset, stream.Length - mrw.DataOffset));
 
             return nodes;
         }
@@ -95,7 +78,7 @@ internal static partial class RawStructure
         public static List<Node> Describe(Stream stream, byte[] head)
         {
             var little = head[0] == 'I';
-            var headerLength = little ? BinaryPrimitives.ReadUInt32LittleEndian(head.AsSpan(2)) : BinaryPrimitives.ReadUInt32BigEndian(head.AsSpan(2));
+            var headerLength = U32(head.AsSpan(2), little);
 
             return
             [

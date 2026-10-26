@@ -1,5 +1,8 @@
 using System.Buffers.Binary;
 using Lyra.Imaging.Content;
+using Lyra.Metadata.Containers;
+using Lyra.Metadata.Iso;
+using Lyra.Metadata.Tiff;
 
 namespace Lyra.Imaging.Decoding.Structure;
 
@@ -28,13 +31,19 @@ internal static partial class RawStructure
             if (!stream.CanSeek || ReadAt(stream, 0, 16) is not { } head)
                 return null;
 
-            var nodes =
-                head.AsSpan(6, 8).SequenceEqual("HEAPCCDR"u8) ? CiffParts.Describe(stream, head) :
-                IsTiff(head) ? TiffParts.Describe(stream, head) :
-                IsIso(stream, head) ? IsoParts.Describe(stream) :
-                head.AsSpan().StartsWith("FUJIFILMCCD-RAW"u8) ? RafParts.Describe(stream) :
-                head.AsSpan(0, 4).SequenceEqual("\0MRM"u8) ? MrwParts.Describe(stream) :
-                null;
+            List<Node>? nodes;
+            if (head.AsSpan(6, 8).SequenceEqual("HEAPCCDR"u8))
+                nodes = CiffParts.Describe(stream, head);
+            else if (TiffDirectoryReader.IsTiff(head))
+                nodes = TiffParts.Describe(stream, head);
+            else if (IsIso(stream, head))
+                nodes = IsoParts.Describe(stream);
+            else if (RafContainer.Recognizes(head))
+                nodes = RafParts.Describe(stream);
+            else if (MrwContainer.Recognizes(head))
+                nodes = MrwParts.Describe(stream);
+            else
+                nodes = null;
 
             return nodes is { Count: > 0 } ? Flatten(nodes) : null;
         }
@@ -44,9 +53,7 @@ internal static partial class RawStructure
         }
     }
 
-    private static bool IsTiff(byte[] head) => (head[0] == 'I' && head[1] == 'I') || (head[0] == 'M' && head[1] == 'M');
-
-    private static bool IsIso(Stream stream, byte[] head) => stream.Length >= 16 && head.AsSpan(4, 4).SequenceEqual("ftyp"u8);
+    private static bool IsIso(Stream stream, byte[] head) => stream.Length >= 16 && IsoBoxes.MajorBrand(head) is not null;
 
     /// <summary>Top-level parts in file order, each followed by its own parts in file order.</summary>
     private static List<StructureGroup> Flatten(List<Node> nodes)
@@ -79,6 +86,10 @@ internal static partial class RawStructure
     //  Shared helpers
     // ------------------------------------------------------------------------------------------
 
+    private static ushort U16(ReadOnlySpan<byte> b, bool little) => little ? BinaryPrimitives.ReadUInt16LittleEndian(b) : BinaryPrimitives.ReadUInt16BigEndian(b);
+
+    private static uint U32(ReadOnlySpan<byte> b, bool little) => little ? BinaryPrimitives.ReadUInt32LittleEndian(b) : BinaryPrimitives.ReadUInt32BigEndian(b);
+
     private static byte[]? ReadAt(Stream stream, long offset, int count)
     {
         if (offset < 0 || count <= 0 || offset + count > stream.Length)
@@ -89,40 +100,9 @@ internal static partial class RawStructure
         return stream.ReadAtLeast(bytes, count, throwOnEndOfStream: false) == count ? bytes : null;
     }
 
-    private readonly record struct JpegFrameInfo(int Width, int Height, bool Lossless);
-
-    /// <summary>The frame size of a JPEG at <paramref name="offset"/>, and whether it is lossless (as raw data is).</summary>
-    private static JpegFrameInfo? JpegFrame(Stream stream, long offset, long size)
-    {
-        var bytes = ReadAt(stream, offset, (int)Math.Min(size, 256 * 1024));
-        if (bytes is null || bytes.Length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8)
-            return null;
-
-        var i = 2;
-        while (i + 4 <= bytes.Length)
-        {
-            if (bytes[i] != 0xFF)
-                return null;
-
-            var marker = bytes[i + 1];
-            if (marker == 0xFF)
-            {
-                i++;
-                continue;
-            }
-
-            if (marker is 0xD9 or 0xDA)
-                return null;
-
-            var length = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(i + 2));
-            if (marker is >= 0xC0 and <= 0xCF and not (0xC4 or 0xC8 or 0xCC) && i + 9 <= bytes.Length)
-                return new JpegFrameInfo(BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(i + 7)), BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(i + 5)), marker == 0xC3);
-
-            i += 2 + length;
-        }
-
-        return null;
-    }
+    /// <summary>The frame header of a JPEG at <paramref name="offset"/>, from as much of it as precedes the image data.</summary>
+    private static JpegFacts? JpegFrame(Stream stream, long offset, long size) =>
+        ReadAt(stream, offset, (int)Math.Min(size, 256 * 1024)) is { } bytes ? JpegContainer.Read(bytes)?.Fact<JpegFacts>() : null;
 
     private static Node JpegNode(Stream stream, long offset, long size, string owner)
     {

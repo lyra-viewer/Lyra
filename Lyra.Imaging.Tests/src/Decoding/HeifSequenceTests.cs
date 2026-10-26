@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Tests.Support;
-using Lyra.ManagedCodecs.Tests.Heif;
+using Lyra.Metadata.Tests.Iso;
 using SkiaSharp;
 using Xunit;
 

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders.J2K;
+using Lyra.Metadata.Containers;
 using Xunit;
 
 namespace Lyra.Imaging.Tests.Decoding;
@@ -54,22 +55,19 @@ public class J2KHeaderTests
     [Fact]
     public void TheBrokenCodestream_DeclaresItsImpossibleSize()
     {
-        Assert.True(J2KHeader.TryRead(BrokenJpc, out var size));
-        Assert.Equal(new J2KHeader.Size(203, 2097304, 3), size);
+        Assert.Equal(new Jp2Size(203, 2097304, 3), Jp2Container.ReadSize(BrokenJpc));
     }
 
     [Fact]
     public void TheCodestreamOrigin_IsNotPartOfTheSize()
     {
-        Assert.True(J2KHeader.TryRead(Codestream(640, 480, 3, xOrigin: 100, yOrigin: 50), out var size));
-        Assert.Equal(new J2KHeader.Size(640, 480, 3), size);
+        Assert.Equal(new Jp2Size(640, 480, 3), Jp2Container.ReadSize(Codestream(640, 480, 3, xOrigin: 100, yOrigin: 50)));
     }
 
     [Fact]
     public void AJp2_DeclaresItsSizeInTheImageHeaderBox()
     {
-        Assert.True(J2KHeader.TryRead(Jp2(4000, 3000, 4), out var size));
-        Assert.Equal(new J2KHeader.Size(4000, 3000, 4), size);
+        Assert.Equal(new Jp2Size(4000, 3000, 4), Jp2Container.ReadSize(Jp2(4000, 3000, 4)));
     }
 
     [Theory]
@@ -78,7 +76,7 @@ public class J2KHeaderTests
     [InlineData(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A })]
     public void AnUnreadableHeader_IsLeftToTheDecoder(byte[] data)
     {
-        Assert.False(J2KHeader.TryRead(data, out _));
+        Assert.Null(Jp2Container.ReadSize(data));
     }
 
     [Fact]

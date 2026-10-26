@@ -1,6 +1,7 @@
-using MetadataExtractor;
-using MetadataExtractor.Formats.Exif;
-using MetadataExtractor.Formats.Jpeg;
+using Lyra.Metadata;
+using Lyra.Metadata.Containers;
+using Lyra.Metadata.Exif;
+using Lyra.Metadata.Tiff;
 using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Decoders.Raw;
@@ -29,7 +30,7 @@ internal static class RawPreviewColor
     /// The DNG's own statement first; then the EXIF conventions: "uncalibrated" with the Adobe RGB
     /// interoperability index is Adobe RGB, and from Apple it is Display P3. sRGB otherwise.
     /// </summary>
-    public static SKColorSpace Of(Stream jpeg, int dngPreviewColorSpace)
+    public static SKColorSpace Of(ReadOnlySpan<byte> jpeg, int dngPreviewColorSpace)
     {
         switch (dngPreviewColorSpace)
         {
@@ -39,24 +40,21 @@ internal static class RawPreviewColor
                 return AdobeRgb;
         }
 
-        try
-        {
-            var directories = JpegMetadataReader.ReadMetadata(jpeg, [new ExifReader()]);
-            var colorSpace = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault() is { } exif && exif.TryGetUInt16(ExifDirectoryBase.TagColorSpace, out var value)
-                ? value
-                : (ushort)0;
+        if (Exif(jpeg) is not { } exif)
+            return Srgb;
 
-            if (colorSpace != ExifUncalibrated)
-                return Srgb;
+        var colorSpace = exif.TryGetInt32(TiffDirectoryKind.Exif, ExifTags.ColorSpace, out var value) ? value : 0;
+        if (colorSpace != ExifUncalibrated)
+            return Srgb;
 
-            if (directories.OfType<ExifInteropDirectory>().FirstOrDefault()?.GetString(ExifDirectoryBase.TagInteropIndex) == InteropAdobeRgb)
-                return AdobeRgb;
+        if (exif.Get(TiffDirectoryKind.Interop, ExifTags.InteropIndex)?.Text == InteropAdobeRgb)
+            return AdobeRgb;
 
-            if (directories.OfType<ExifIfd0Directory>().FirstOrDefault()?.GetString(ExifDirectoryBase.TagMake)?.Trim() == "Apple")
-                return DisplayP3;
-        }
-        catch (Exception e) when (e is JpegProcessingException or IOException or MetadataException) { }
+        if (exif.Get(TiffDirectoryKind.Image, ExifTags.Make)?.Text?.Trim() == "Apple")
+            return DisplayP3;
 
         return Srgb;
     }
+
+    private static ExifMetadata? Exif(ReadOnlySpan<byte> jpeg) => JpegContainer.Read(jpeg) is { } container ? ImageMetadata.From(container).Exif : null;
 }

@@ -1,8 +1,7 @@
 using System.Globalization;
 using Lyra.Imaging.Content;
-using MetadataExtractor.Formats.Iptc;
-using MetadataExtractor.Formats.Xmp;
-using Directory = MetadataExtractor.Directory;
+using Lyra.Metadata.Iptc;
+using Lyra.Metadata.Xmp;
 using static Lyra.Imaging.Metadata.MetadataValues;
 
 namespace Lyra.Imaging.Metadata;
@@ -23,44 +22,49 @@ internal static class DescriptiveReader
     private const int MaxDescriptionLength = 160;
     private const int MaxKeywords = 8;
 
-    public static void Apply(IReadOnlyList<Directory> directories, ExifInfo exifInfo)
+    public static void Apply(XmpPacket? xmp, IptcRecords? iptc, ExifInfo exifInfo)
     {
-        var xmp = directories.OfType<XmpDirectory>().FirstOrDefault()?.GetXmpProperties() ?? new Dictionary<string, string>();
-        var iptc = directories.OfType<IptcDirectory>().FirstOrDefault();
-
         exifInfo.Title = Truncate(FirstNonEmpty(
-            XmpProperties.First(xmp, "dc:title"),
-            Describe(iptc, IptcDirectory.TagObjectName),
-            Describe(iptc, IptcDirectory.TagHeadline)
+            First(xmp, XmpNamespaces.Dc, "title"),
+            Iptc(iptc, IptcRecords.ObjectName),
+            Iptc(iptc, IptcRecords.Headline)
         ), MaxTitleLength);
 
         exifInfo.Description = Truncate(FirstNonEmpty(
-            XmpProperties.First(xmp, "dc:description"),
-            Describe(iptc, IptcDirectory.TagCaption)
+            First(xmp, XmpNamespaces.Dc, "description"),
+            Iptc(iptc, IptcRecords.Caption)
         ), MaxDescriptionLength);
 
         exifInfo.Keywords = ReadKeywords(xmp, iptc);
-        exifInfo.Rating = DescribeRating(XmpProperties.First(xmp, "xmp:Rating"));
+        exifInfo.Rating = DescribeRating(First(xmp, XmpNamespaces.Xmp, "Rating"));
 
         exifInfo.Artist = FirstNonEmpty(
             exifInfo.Artist,
-            XmpProperties.First(xmp, "dc:creator"),
-            Describe(iptc, IptcDirectory.TagByLine)
+            First(xmp, XmpNamespaces.Dc, "creator"),
+            Iptc(iptc, IptcRecords.ByLine)
         );
 
         exifInfo.Copyright = FirstNonEmpty(
             exifInfo.Copyright,
-            XmpProperties.First(xmp, "dc:rights"),
-            Describe(iptc, IptcDirectory.TagCopyrightNotice)
+            First(xmp, XmpNamespaces.Dc, "rights"),
+            Iptc(iptc, IptcRecords.CopyrightNotice)
         );
     }
 
-    private static string ReadKeywords(IDictionary<string, string> xmp, Directory? iptc)
+    /// <summary>Every non-blank value of an XMP property, trimmed.</summary>
+    private static List<string> All(XmpPacket? xmp, string ns, string name) =>
+        xmp?.Values(ns, name).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).ToList() ?? [];
+
+    private static string First(XmpPacket? xmp, string ns, string name) => All(xmp, ns, name) is [var first, ..] ? first : string.Empty;
+
+    /// <summary>A dataset as one line; repeats are joined with a space, as the panel has always shown them.</summary>
+    private static string Iptc(IptcRecords? iptc, byte dataSet) => iptc is null ? string.Empty : Clean(string.Join(' ', iptc.Get(IptcRecords.ApplicationRecord, dataSet)));
+
+    private static string ReadKeywords(XmpPacket? xmp, IptcRecords? iptc)
     {
-        // IPTC returns its repeated field already joined, with its own separator.
-        var keywords = XmpProperties.All(xmp, "dc:subject");
-        if (keywords.Count == 0)
-            keywords = Describe(iptc, IptcDirectory.TagKeywords)
+        var keywords = All(xmp, XmpNamespaces.Dc, "subject");
+        if (keywords.Count == 0 && iptc is not null)
+            keywords = Clean(string.Join(';', iptc.Get(IptcRecords.ApplicationRecord, IptcRecords.Keywords)))
                 .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToList();
 
@@ -74,7 +78,7 @@ internal static class DescriptiveReader
 
         return string.Join(", ", keywords.Take(MaxKeywords)) + $" (+{keywords.Count - MaxKeywords} more)";
     }
-    
+
     private static string DescribeRating(string value)
     {
         if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rating))

@@ -1,14 +1,13 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
-using MetadataExtractor;
-using MetadataExtractor.Formats.Png;
-using MetadataExtractor.Formats.Xmp;
-using Directory = MetadataExtractor.Directory;
+using Lyra.Metadata;
+using Lyra.Metadata.Containers;
+using Lyra.Metadata.Photoshop;
 
 namespace Lyra.Imaging.Metadata;
 
 /// <summary>
-/// Turns a file's metadata directories into the flat record the panel displays.
+/// Turns a file's metadata into the flat record the panel displays.
 ///
 /// The work is split by source: <see cref="ExifReader"/> reads what the camera recorded,
 /// <see cref="FormatHeaderReader"/> what the format's own header says, <see cref="DescriptiveReader"/>
@@ -16,8 +15,9 @@ namespace Lyra.Imaging.Metadata;
 /// This class owns the entry points, the order those passes run in, and the final reconciliation
 /// between them.
 ///
-/// MetadataExtractor supplies the directories for every format but one: a BigTIFF goes to
-/// <see cref="BigTiffMetadataReader"/>, which produces the same directories from 64-bit offsets.
+/// Lyra.Metadata reads and resolves the blocks (<see cref="ImageMetadata"/>): anything laid out as a
+/// TIFF, and the containers it opens; PSD's resources come located by Lyra.Psd. A file of any other
+/// format has no metadata Lyra reads.
 /// </summary>
 internal static class MetadataProcessor
 {
@@ -25,9 +25,8 @@ internal static class MetadataProcessor
     {
         try
         {
-            return ProcessMetadata(BigTiffMetadataReader.IsBigTiff(path)
-                ? BigTiffMetadataReader.Read(path)
-                : ImageMetadataReader.ReadMetadata(path));
+            using var stream = File.OpenRead(path);
+            return Process(Read(stream) ?? throw new InvalidDataException(UnknownFormat));
         }
         catch (Exception e)
         {
@@ -40,9 +39,7 @@ internal static class MetadataProcessor
     {
         try
         {
-            return ProcessMetadata(BigTiffMetadataReader.IsBigTiff(stream)
-                ? BigTiffMetadataReader.Read(stream)
-                : ReadTolerating(stream, path));
+            return Process(Read(stream) ?? throw new InvalidDataException(UnknownFormat));
         }
         catch (Exception e)
         {
@@ -52,26 +49,14 @@ internal static class MetadataProcessor
     }
 
     /// <summary>
-    /// Parses metadata handed over as raw blocks rather than as a file, for containers
-    /// MetadataExtractor cannot open itself - JPEG XL and JPEG 2000, whose decoders pull the
-    /// blocks out of the container's boxes with <see cref="IsoBoxMetadata"/>.
+    /// Parses the blocks a decoder located itself, for containers it already holds in memory -
+    /// JPEG XL and JPEG 2000.
     /// </summary>
-    public static ExifInfo ParseMetadata(byte[]? exif, byte[]? xmp, string path)
+    public static ExifInfo ParseMetadata(ContainerContents container, string path)
     {
         try
         {
-            var directories = new List<Directory>();
-
-            if (exif is { Length: > 0 })
-            {
-                using var stream = new MemoryStream(exif, writable: false);
-                directories.AddRange(ImageMetadataReader.ReadMetadata(stream));
-            }
-
-            if (xmp is { Length: > 0 })
-                directories.Add(new XmpReader().Extract(xmp));
-
-            return ProcessMetadata(directories);
+            return Process(Readable(ImageMetadata.From(container)));
         }
         catch (Exception e)
         {
@@ -80,35 +65,29 @@ internal static class MetadataProcessor
         }
     }
 
+    /// <summary>A PSD's metadata resources, which PsdDecoder finds through Lyra.Psd, in file order.</summary>
+    public static ExifInfo ParsePhotoshopResources(IEnumerable<PhotoshopResource> resources, string path) => ParseMetadata(ContainerContents.FromPhotoshop(resources), path);
+
     /// <summary>
-    /// Camera raw: an MRW's EXIF is read from its TTW block, and what EXIF leaves out is filled
-    /// from LibRaw's own reading, which also stands in when EXIF cannot be read at all.
+    /// Camera raw: what EXIF leaves out is filled from LibRaw's own reading, which also stands in
+    /// when EXIF cannot be read at all - as for a raw with no metadata Lyra reads (CRW, X3F).
     /// </summary>
     public static ExifInfo ParseRawMetadata(Stream stream, string path, RawCapture capture)
     {
-        IReadOnlyList<Directory> directories;
+        ImageMetadata? metadata = null;
         try
         {
-            if (RawMetadata.MrwTiff(stream) is { } tiff)
-            {
-                using var tiffStream = new MemoryStream(tiff, writable: false);
-                directories = ImageMetadataReader.ReadMetadata(tiffStream);
-            }
-            else
-            {
-                directories = ReadTolerating(stream, path);
-            }
+            metadata = Read(stream);
         }
         catch (Exception e)
         {
             Logger.Warning($"[MetadataProcessor] Could not read metadata from {path}: {e.Message}");
-            directories = [];
         }
 
         try
         {
-            var exifInfo = ProcessMetadata(directories, info => RawMetadata.Apply(info, capture));
-            return directories.Count == 0 && !exifInfo.HasData() ? ExifInfo.Failed() : exifInfo;
+            var exifInfo = Process(metadata ?? ImageMetadata.Empty, info => RawMetadata.Apply(info, capture));
+            return metadata is null or { IsEmpty: true } && !exifInfo.HasData() ? ExifInfo.Failed() : exifInfo;
         }
         catch (Exception e)
         {
@@ -117,39 +96,25 @@ internal static class MetadataProcessor
         }
     }
 
-    /// <summary>Reads the stream, retrying a PNG that <see cref="PngChunkRepair"/> can mend.</summary>
-    private static IReadOnlyList<Directory> ReadTolerating(Stream stream, string path)
+    private const string UnknownFormat = "The file is of no format whose metadata Lyra reads.";
+
+    /// <summary>The file's metadata, or null for a format Lyra.Metadata does not read; throws when its structure is unreadable.</summary>
+    private static ImageMetadata? Read(Stream stream) => ImageMetadata.Read(stream) is { } metadata ? Readable(metadata) : null;
+
+    private static ImageMetadata Readable(ImageMetadata metadata) => metadata.Unreadable ? throw new InvalidDataException("The file's structure is damaged.") : metadata;
+
+    private static ExifInfo Process(ImageMetadata metadata, Action<ExifInfo>? adjust = null)
     {
-        var start = stream.CanSeek ? stream.Position : -1;
-
-        try
-        {
-            return ImageMetadataReader.ReadMetadata(stream);
-        }
-        catch (Exception e) when (start >= 0 && e is PngProcessingException or IOException)
-        {
-            stream.Position = start;
-
-            using var repaired = PngChunkRepair.Repair(stream, out var repair);
-            if (repaired is null)
-                throw;
-
-            Logger.Info($"[MetadataProcessor] {path}: {e.Message}; read around it ({repair}).");
-            return ImageMetadataReader.ReadMetadata(repaired);
-        }
-    }
-
-    private static ExifInfo ProcessMetadata(IReadOnlyList<Directory> directories, Action<ExifInfo>? adjust = null)
-    {
-        var exifInfo = ExifReader.Read(directories);
-        FormatHeaderReader.Apply(directories, exifInfo);
-        DescriptiveReader.Apply(directories, exifInfo);
+        var exifInfo = ExifReader.Read(metadata.Exif, IccFacts.From(metadata.Icc));
+        ExifReader.ApplyXmp(metadata.Xmp, exifInfo);
+        FormatHeaderReader.Apply(metadata.Facts, exifInfo);
+        DescriptiveReader.Apply(metadata.Xmp, metadata.Iptc, exifInfo);
         adjust?.Invoke(exifInfo);
         ResolveOverlaps(exifInfo);
 
         return exifInfo.Seal();
     }
-    
+
     private static void ResolveOverlaps(ExifInfo exifInfo)
     {
         // A named ICC profile answers the color question authoritatively and far more precisely

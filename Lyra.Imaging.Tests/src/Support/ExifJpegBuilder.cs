@@ -84,7 +84,10 @@ internal static class ExifJpegBuilder
         string[]? Keywords = null,
         int? Rating = null,
         string? Creator = null,
-        string? Rights = null
+        string? Rights = null,
+        string? Make = null,
+        string? Model = null,
+        string? LensModel = null
     );
 
     internal sealed record IptcFields(
@@ -203,8 +206,7 @@ internal static class ExifJpegBuilder
     }
 
     /// <summary>An XMP packet in the APP1 segment Adobe defined for it.</summary>
-    private static byte[] BuildXmpSegment(XmpFields fields) =>
-        [.. Encoding.UTF8.GetBytes("http://ns.adobe.com/xap/1.0/\0"), .. BuildXmpPacket(fields)];
+    private static byte[] BuildXmpSegment(XmpFields fields) => [.. Encoding.UTF8.GetBytes("http://ns.adobe.com/xap/1.0/\0"), .. BuildXmpPacket(fields)];
 
     /// <summary>The bare XMP packet, as JPEG XL's "xml " box and JP2's uuid box store it.</summary>
     public static byte[] BuildXmpPacket(XmpFields fields)
@@ -227,6 +229,15 @@ internal static class ExifJpegBuilder
         if (fields.Rights is not null)
             body.Append($"<dc:rights><rdf:Alt><rdf:li xml:lang=\"x-default\">{Escape(fields.Rights)}</rdf:li></rdf:Alt></dc:rights>");
 
+        if (fields.Make is not null)
+            body.Append($"<tiff:Make>{Escape(fields.Make)}</tiff:Make>");
+
+        if (fields.Model is not null)
+            body.Append($"<tiff:Model>{Escape(fields.Model)}</tiff:Model>");
+
+        if (fields.LensModel is not null)
+            body.Append($"<exifEX:LensModel>{Escape(fields.LensModel)}</exifEX:LensModel>");
+
         var rating = fields.Rating is { } value ? $" xmp:Rating=\"{value}\"" : string.Empty;
 
         var packet =
@@ -236,6 +247,8 @@ internal static class ExifJpegBuilder
             + "<rdf:Description rdf:about=\"\""
             + " xmlns:dc=\"http://purl.org/dc/elements/1.1/\""
             + " xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\""
+            + " xmlns:tiff=\"http://ns.adobe.com/tiff/1.0/\""
+            + " xmlns:exifEX=\"http://cipa.jp/exif/1.0/\""
             + rating + ">"
             + body
             + "</rdf:Description></rdf:RDF></x:xmpmeta>"

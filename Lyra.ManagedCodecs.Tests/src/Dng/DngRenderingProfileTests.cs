@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using Lyra.ManagedCodecs.Raster.Dng;
-using Lyra.ManagedCodecs.Raster.Tiff;
+using Lyra.Metadata.Tiff;
 using Xunit;
 
 namespace Lyra.ManagedCodecs.Tests.Dng;
@@ -14,11 +14,18 @@ public class DngRenderingProfileTests
     {
         var curve = DngToneCurve.FromPairs([0f, 0f, 0.25f, 0.1f, 0.5f, 0.4f, 0.75f, 0.8f, 1f, 1f])!;
 
-        Assert.Equal(0.1f, curve.Evaluate(0.25f), 0.003f);
-        Assert.Equal(0.4f, curve.Evaluate(0.5f), 0.003f);
-        Assert.Equal(0.8f, curve.Evaluate(0.75f), 0.003f);
-        Assert.Equal(1f, curve.Evaluate(1f));
-        Assert.Equal(0f, curve.Evaluate(-1f));
+        Assert.Equal(0f, curve.Table[0]);
+        Assert.Equal(0.1f, At(curve, 0.25f), 0.003f);
+        Assert.Equal(0.4f, At(curve, 0.5f), 0.003f);
+        Assert.Equal(0.8f, At(curve, 0.75f), 0.003f);
+        Assert.Equal(1f, curve.Table[^1]);
+    }
+
+    private static float At(DngToneCurve curve, float value)
+    {
+        var position = value * (DngToneCurve.TableSize - 1);
+        var i = (int)position;
+        return curve.Table[i] + (curve.Table[i + 1] - curve.Table[i]) * (position - i);
     }
 
     [Fact]

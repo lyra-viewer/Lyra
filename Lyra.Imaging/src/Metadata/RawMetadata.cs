@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Globalization;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Interop;
@@ -30,62 +29,6 @@ internal readonly record struct RawCapture(
 
 internal static class RawMetadata
 {
-    private const int MaxTtwBytes = 16 << 20;
-
-    /// <summary>The TIFF in an MRW's TTW block, which MetadataExtractor cannot find itself; null for anything else.</summary>
-    public static byte[]? MrwTiff(Stream stream)
-    {
-        if (!stream.CanSeek)
-            return null;
-
-        var start = stream.Position;
-        try
-        {
-            Span<byte> header = stackalloc byte[8];
-            if (!ReadAt(stream, start, header) || !header[..4].SequenceEqual("\0MRM"u8))
-                return null;
-
-            var end = Math.Min(start + 8 + BinaryPrimitives.ReadUInt32BigEndian(header[4..]), stream.Length);
-            var offset = start + 8;
-
-            for (var i = 0; offset + 8 <= end && i < 64; i++)
-            {
-                if (!ReadAt(stream, offset, header))
-                    return null;
-
-                var length = BinaryPrimitives.ReadUInt32BigEndian(header[4..]);
-                if (header[..4].SequenceEqual("\0TTW"u8))
-                {
-                    if (length is 0 or > MaxTtwBytes || offset + 8 + length > stream.Length)
-                        return null;
-
-                    var tiff = new byte[length];
-                    stream.Position = offset + 8;
-                    stream.ReadExactly(tiff);
-                    return tiff;
-                }
-
-                offset += 8L + length;
-            }
-
-            return null;
-        }
-        finally
-        {
-            stream.Position = start;
-        }
-    }
-
-    private static bool ReadAt(Stream stream, long offset, Span<byte> buffer)
-    {
-        if (offset < 0 || offset + buffer.Length > stream.Length)
-            return false;
-
-        stream.Position = offset;
-        stream.ReadExactly(buffer);
-        return true;
-    }
-
     public static void Apply(ExifInfo exifInfo, RawCapture capture)
     {
         // These describe the embedded thumbnail or preview (IFD0, a RAF's JPEG), not the raw data.

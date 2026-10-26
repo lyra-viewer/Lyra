@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using Lyra.ManagedCodecs.Raster.Tiff;
+using Lyra.Metadata.Tiff;
 
 namespace Lyra.ManagedCodecs.Raster.Dng;
 
@@ -121,20 +121,6 @@ public sealed class DngToneCurve
         }
 
         return new DngToneCurve(table, n);
-    }
-
-    public float Evaluate(float value)
-    {
-        if (float.IsNaN(value) || value <= 0f)
-            return Table[0];
-
-        if (value >= 1f)
-            return Table[^1];
-
-        var position = value * (TableSize - 1);
-        var i = (int)position;
-        var f = position - i;
-        return Table[i] + (Table[Math.Min(i + 1, TableSize - 1)] - Table[i]) * f;
     }
 
     /// <summary>Second derivatives of a natural cubic spline through the points.</summary>

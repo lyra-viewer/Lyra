@@ -1,12 +1,6 @@
+using System.Globalization;
 using Lyra.Imaging.Content;
-using MetadataExtractor; // DirectoryExtensions: TryGetInt32
-using MetadataExtractor.Formats.Bmp;
-using MetadataExtractor.Formats.Heif;
-using MetadataExtractor.Formats.Ico;
-using MetadataExtractor.Formats.Jpeg;
-using MetadataExtractor.Formats.Png;
-using MetadataExtractor.Formats.Tga;
-using Directory = MetadataExtractor.Directory;
+using Lyra.Metadata.Containers;
 using static Lyra.Imaging.Metadata.MetadataValues;
 
 namespace Lyra.Imaging.Metadata;
@@ -21,104 +15,146 @@ namespace Lyra.Imaging.Metadata;
 /// </summary>
 internal static class FormatHeaderReader
 {
-    public static void Apply(IReadOnlyList<Directory> directories, ExifInfo exifInfo)
+    public static void Apply(IReadOnlyList<IFormatFacts> facts, ExifInfo exifInfo)
     {
-        var jpegDirectories = directories.OfType<JpegDirectory>();
-        foreach (var directory in jpegDirectories)
+        foreach (var fact in facts)
         {
-            var compression = Describe(directory, JpegDirectory.TagCompressionType);
-            exifInfo.Compression = AssignValue(exifInfo.Compression, compression, Priority.Low);
+            switch (fact)
+            {
+                case JpegFacts jpeg:
+                    ApplyJpeg(jpeg, exifInfo);
+                    break;
 
-            var dataPrecision = Describe(directory, JpegDirectory.TagDataPrecision);
-            exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, dataPrecision, Priority.Low);
+                case PngFacts png:
+                    ApplyPng(png, exifInfo);
+                    break;
 
-            var colorType = DescribeJpegColorType(directory);
-            exifInfo.ColorType = AssignValue(exifInfo.ColorType, colorType, Priority.Low);
+                case HeifFacts heif:
+                    ApplyHeif(heif, exifInfo);
+                    break;
+
+                case BmpFacts bmp:
+                    foreach (var header in bmp.Headers)
+                        ApplyBmp(header, exifInfo);
+                    break;
+
+                case IcoFacts ico:
+                    ApplyIco(ico, exifInfo);
+                    break;
+
+                case TgaFacts tga:
+                    exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, tga.ImageDepth.ToString(CultureInfo.InvariantCulture), Priority.Low);
+                    break;
+            }
         }
 
-        var pngDirectories = directories.OfType<PngDirectory>();
-        foreach (var directory in pngDirectories)
-        {
-            var iccProfile = Describe(directory, PngDirectory.TagIccProfileName);
-            exifInfo.IccProfile = AssignValue(exifInfo.IccProfile, iccProfile, Priority.Low);
-
-            var bitsPerSample = Describe(directory, PngDirectory.TagBitsPerSample);
-            exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, bitsPerSample, Priority.High);
-
-            var colorType = Describe(directory, PngDirectory.TagColorType);
-            exifInfo.ColorType = AssignValue(exifInfo.ColorType, colorType, Priority.High);
-
-            var compression = Describe(directory, PngDirectory.TagCompressionType);
-            exifInfo.Compression = AssignValue(exifInfo.Compression, compression, Priority.Low);
-        }
-
-        foreach (var directory in directories.OfType<BmpHeaderDirectory>())
-        {
-            var bitsPerPixel = Describe(directory, BmpHeaderDirectory.TagBitsPerPixel);
-            exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, bitsPerPixel, Priority.Low);
-
-            var compression = Describe(directory, BmpHeaderDirectory.TagCompression);
-            exifInfo.Compression = AssignValue(exifInfo.Compression, compression, Priority.Low);
-        }
-        
-        var openingDepth = directories.OfType<IcoDirectory>()
-            .Select(entry => (Pixels: IcoPixels(entry), Depth: Describe(entry, IcoDirectory.TagBitsPerPixel)))
-            .Where(entry => entry.Pixels > 0)
-            .OrderByDescending(entry => entry.Pixels)
-            .Select(entry => entry.Depth)
-            .FirstOrDefault(string.Empty);
-
-        if (openingDepth.Length > 0)
-            exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, openingDepth, Priority.Low);
-
-        foreach (var directory in directories.OfType<TgaHeaderDirectory>())
-        {
-            var imageDepth = Describe(directory, TgaHeaderDirectory.TagImageDepth);
-            exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, imageDepth, Priority.Low);
-        }
-
-        foreach (var directory in directories.OfType<HeicImagePropertiesDirectory>())
-        {
-            var bitDepth = Describe(directory, HeicImagePropertiesDirectory.TagBitDepthLuma);
-            exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, bitDepth, Priority.Low);
-
-            if (exifInfo.ContainerRotation == ExifOrientation.Unknown)
-                exifInfo.ContainerRotation = ReadContainerRotation(directory);
-        }
-
-        // WebP and Photoshop are deliberately absent. WebP's directory holds only dimensions plus
-        // alpha and animation flags, which are true of almost every file and so say nothing worth
-        // a row; PSD has its own path through PsdDecoder and the Lyra.Psd package.
+        // WebP has no facts worth a row - dimensions, alpha and animation are true of almost every
+        // file - and PSD's header is described by PsdDecoder through Lyra.Psd.
     }
     
-    private static int IcoPixels(Directory entry)
+    private static void ApplyJpeg(JpegFacts jpeg, ExifInfo exifInfo)
     {
-        var width = entry.TryGetInt32(IcoDirectory.TagImageWidth, out var w) ? w : 0;
-        var height = entry.TryGetInt32(IcoDirectory.TagImageHeight, out var h) ? h : 0;
-
-        return (width == 0 ? 256 : width) * (height == 0 ? 256 : height);
+        var compression = JpegProcesses.GetValueOrDefault(jpeg.FrameMarker, string.Empty);
+        exifInfo.Compression = AssignValue(exifInfo.Compression, compression, Priority.Low);
+        exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, $"{jpeg.Precision} bits", Priority.Low);
+        exifInfo.ColorType = AssignValue(exifInfo.ColorType, DescribeJpegColorType(jpeg.Components), Priority.Low);
     }
 
-    private static string DescribeJpegColorType(Directory jpeg) =>
-        jpeg.TryGetInt32(JpegDirectory.TagNumberOfComponents, out var components)
-            ? components switch
-            {
-                1 => "Grayscale",
-                3 => "YCbCr",
-                4 => "CMYK / YCCK",
-                _ => string.Empty
-            }
-            : string.Empty;
+    private static void ApplyPng(PngFacts png, ExifInfo exifInfo)
+    {
+        if (png.IccName is { } name)
+            exifInfo.IccProfile = AssignValue(exifInfo.IccProfile, Clean(name), Priority.Low);
+
+        exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, png.BitDepth.ToString(CultureInfo.InvariantCulture), Priority.High);
+        exifInfo.ColorType = AssignValue(exifInfo.ColorType, PngColorTypes.GetValueOrDefault(png.ColorType, string.Empty), Priority.High);
+        exifInfo.Compression = AssignValue(exifInfo.Compression, png.CompressionMethod == 0 ? "Deflate" : string.Empty, Priority.Low);
+    }
+
+    private static void ApplyBmp(BmpHeader bmp, ExifInfo exifInfo)
+    {
+        exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, Clean(bmp.BitsPerPixel?.ToString(CultureInfo.InvariantCulture)), Priority.Low);
+        exifInfo.Compression = AssignValue(exifInfo.Compression, Clean(DescribeBmpCompression(bmp)), Priority.Low);
+    }
+
+    /// <summary>A BMP's compression, worded as the panel has always shown it; OS/2's 64-byte header reuses two codes.</summary>
+    private static string? DescribeBmpCompression(BmpHeader bmp) => bmp is { Compression: { } compression, HeaderSize: { } size }
+        ? compression switch
+        {
+            0 => "None",
+            1 => "RLE 8-bit/pixel",
+            2 => "RLE 4-bit/pixel",
+            3 => size == 64 ? "Huffman 1D" : "Bit Fields",
+            4 => size == 64 ? "RLE 24-bit/pixel" : "JPEG",
+            5 => "PNG",
+            6 => "RGBA Bit Fields",
+            11 => "CMYK Uncompressed",
+            12 => "CMYK RLE-8",
+            13 => "CMYK RLE-4",
+            _ => $"Unimplemented compression type {compression}"
+        }
+        : null;
+
+    /// <summary>An icon shows its largest entry first, so that entry's depth is the one given.</summary>
+    private static void ApplyIco(IcoFacts ico, ExifInfo exifInfo)
+    {
+        var depth = Clean(ico.Largest?.BitsPerPixel?.ToString(CultureInfo.InvariantCulture));
+
+        if (depth.Length > 0)
+            exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, depth, Priority.Low);
+    }
+
+    private static void ApplyHeif(HeifFacts heif, ExifInfo exifInfo)
+    {
+        if (heif.BitDepthLuma is { } luma)
+            exifInfo.ColorDepth = AssignValue(exifInfo.ColorDepth, luma.ToString(CultureInfo.InvariantCulture), Priority.Low);
+
+        if (exifInfo.ContainerRotation == ExifOrientation.Unknown && heif.Rotation is { } degrees)
+            exifInfo.ContainerRotation = ContainerRotation(degrees);
+    }
+
+    /// <summary>IHDR's color types, worded as the panel has always shown them.</summary>
+    private static readonly Dictionary<int, string> PngColorTypes = new()
+    {
+        [0] = "Greyscale",
+        [2] = "True Color",
+        [3] = "Indexed Color",
+        [4] = "Greyscale with Alpha",
+        [6] = "True Color with Alpha"
+    };
+
+    /// <summary>The coding process each SOF marker stands for, worded as the panel has always shown it.</summary>
+    private static readonly Dictionary<byte, string> JpegProcesses = new()
+    {
+        [0xC0] = "Baseline",
+        [0xC1] = "Extended sequential, Huffman",
+        [0xC2] = "Progressive, Huffman",
+        [0xC3] = "Lossless, Huffman",
+        [0xC5] = "Differential sequential, Huffman",
+        [0xC6] = "Differential progressive, Huffman",
+        [0xC7] = "Differential lossless, Huffman",
+        [0xC9] = "Extended sequential, arithmetic",
+        [0xCA] = "Progressive, arithmetic",
+        [0xCB] = "Lossless, arithmetic",
+        [0xCD] = "Differential sequential, arithmetic",
+        [0xCE] = "Differential progressive, arithmetic",
+        [0xCF] = "Differential lossless, arithmetic"
+    };
+
+    private static string DescribeJpegColorType(int components) => components switch
+    {
+        1 => "Grayscale",
+        3 => "YCbCr",
+        4 => "CMYK / YCCK",
+        _ => string.Empty
+    };
     
-    private static ExifOrientation ReadContainerRotation(Directory properties) =>
-        properties.TryGetInt32(HeicImagePropertiesDirectory.TagRotation, out var degrees)
-            ? degrees switch
-            {
-                0 => ExifOrientation.Normal,
-                90 => ExifOrientation.Rotate270Cw,
-                180 => ExifOrientation.Rotate180,
-                270 => ExifOrientation.Rotate90Cw,
-                _ => ExifOrientation.Unknown
-            }
-            : ExifOrientation.Unknown;
+    /// <summary>irot turns anticlockwise; the orientation names the clockwise turn that shows the image upright.</summary>
+    private static ExifOrientation ContainerRotation(int degrees) => degrees switch
+    {
+        0 => ExifOrientation.Normal,
+        90 => ExifOrientation.Rotate270Cw,
+        180 => ExifOrientation.Rotate180,
+        270 => ExifOrientation.Rotate90Cw,
+        _ => ExifOrientation.Unknown
+    };
 }

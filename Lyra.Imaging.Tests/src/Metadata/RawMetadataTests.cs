@@ -1,8 +1,8 @@
-using System.Buffers.Binary;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Metadata;
 using Lyra.Imaging.Tests.Support;
+using Lyra.Metadata.Tests.Support;
 using Xunit;
 
 namespace Lyra.Imaging.Tests.Metadata;
@@ -17,7 +17,7 @@ public class RawMetadataTests
     [Fact]
     public void AnMrw_IsReadFromItsTtwBlock()
     {
-        using var stream = new MemoryStream(Mrw(ExifJpegBuilder.BuildTiff(dateTimeOriginal: "2009:11:29 12:45:48", compression: 6)));
+        using var stream = new MemoryStream(MrwFixture.Build(ExifJpegBuilder.BuildTiff(dateTimeOriginal: "2009:11:29 12:45:48", compression: 6)));
 
         var exif = MetadataProcessor.ParseRawMetadata(stream, "test.mrw", NoCapture);
 
@@ -25,33 +25,6 @@ public class RawMetadataTests
         Assert.Equal("2009-11-29 12:45:48", exif.Taken);
         Assert.Equal("sRGB", exif.ColorSpace);
         Assert.Equal(string.Empty, exif.Compression);
-    }
-
-    [Fact]
-    public void TheTtwBlock_IsFoundBehindOtherBlocks()
-    {
-        var tiff = ExifJpegBuilder.BuildTiff();
-        using var stream = new MemoryStream(Mrw(tiff, leading: [Block("PRD", new byte[24])]));
-
-        Assert.Equal(tiff, RawMetadata.MrwTiff(stream));
-        Assert.Equal(0, stream.Position);
-    }
-
-    [Fact]
-    public void AnMrwWithATtwBlockPastTheEnd_YieldsNothing()
-    {
-        var file = Mrw(ExifJpegBuilder.BuildTiff());
-        using var stream = new MemoryStream(file[..^(64 + 4)]);
-
-        Assert.Null(RawMetadata.MrwTiff(stream));
-    }
-
-    [Fact]
-    public void ATiffRaw_IsNotMistakenForAnMrw()
-    {
-        using var stream = new MemoryStream(ExifJpegBuilder.BuildTiff());
-
-        Assert.Null(RawMetadata.MrwTiff(stream));
     }
 
     [Fact]
@@ -112,28 +85,5 @@ public class RawMetadataTests
     public void LibRawsVersion_DropsTheBuildSuffix(string version, string expected)
     {
         Assert.Equal(expected, RawNative.ShortVersion(version));
-    }
-
-    private static byte[] Mrw(byte[] tiff, byte[][]? leading = null)
-    {
-        byte[][] blocks = [.. leading ?? [], Block("TTW", tiff)];
-        var length = blocks.Sum(block => block.Length);
-
-        var header = new byte[8];
-        "\0MRM"u8.CopyTo(header);
-        BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(4), (uint)length);
-
-        return [.. header, .. blocks.SelectMany(block => block), .. new byte[64]];
-    }
-
-    private static byte[] Block(string tag, byte[] data)
-    {
-        var header = new byte[8];
-        header[1] = (byte)tag[0];
-        header[2] = (byte)tag[1];
-        header[3] = (byte)tag[2];
-        BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(4), (uint)data.Length);
-
-        return [.. header, .. data];
     }
 }

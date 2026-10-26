@@ -1,12 +1,16 @@
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Metadata;
 using Lyra.Imaging.Tests.Support;
+using Lyra.Metadata.Exif;
+using Lyra.Metadata.Tiff;
+using SkiaSharp;
 using Xunit;
+using static Lyra.Metadata.Tests.Support.TiffFixture;
 
 namespace Lyra.Imaging.Tests.Metadata;
 
 /// <summary>
-/// Covers the normalization layer between MetadataExtractor and the panel: placeholder values
+/// Covers the normalization layer between Lyra.Metadata and the panel: placeholder values
 /// must not occupy rows or outrank real ones, and raw library formatting must not reach the UI.
 /// </summary>
 public class MetadataProcessorTests
@@ -34,21 +38,6 @@ public class MetadataProcessorTests
     public void Clean_KeepsRealValues(string value, string expected)
     {
         Assert.Equal(expected, MetadataValues.Clean(value));
-    }
-
-    [Theory]
-    // multiLocalizedUnicode, as MetadataExtractor renders it
-    [InlineData("1 enUS(Display P3)", "Display P3")]
-    // a single record whose name contains parentheses: the last ')' closes it
-    [InlineData("1 enUS(sRGB IEC61966-2.1 (v2))", "sRGB IEC61966-2.1 (v2)")]
-    // several records: stop at the first one rather than swallowing the rest
-    [InlineData("2 enUS(Display P3)deDE(Anzeige P3)", "Display P3")]
-    // older profiles store plain text and arrive ready to display
-    [InlineData("Adobe RGB (1998)", "Adobe RGB (1998)")]
-    [InlineData("", "")]
-    public void ExtractIccProfileName_UnwrapsTheLocalizedForm(string value, string expected)
-    {
-        Assert.Equal(expected, MetadataValues.ExtractIccProfileName(value));
     }
 
     [Fact]
@@ -302,5 +291,55 @@ public class MetadataProcessorTests
         Assert.Contains(new ExifEntry("Exposure Time", "1/250 sec"), rows);
         Assert.Contains(new ExifEntry("ISO", "400"), rows);
         Assert.Contains(new ExifEntry("Taken", "2024-09-26 18:32:17"), rows);
+    }
+
+    [Fact]
+    public void ABigTiffsOrientationReachesTheRecordTheViewerReads()
+    {
+        var file = Build(little: false, big: true, [Short(ExifTags.Orientation, 8), Pointer(TiffDirectoryReader.TagExifIfd, Rational(ExifTags.ExposureTime, R(1, 60)))]);
+
+        using var stream = new MemoryStream(file, writable: false);
+        var info = MetadataProcessor.ParseMetadata(stream, "synthetic.tif");
+
+        Assert.Equal(ExifOrientation.Rotate270Cw, info.OrientationValue);
+        Assert.Contains(new ExifEntry("Exposure Time", "1/60 sec"), info.ToKeyValuePairs());
+    }
+
+    [Fact]
+    public void AnRw2IsReadFromTheFullExifOfTheJpegItCarries()
+    {
+        // The RW2's own EXIF directory is sparse; the camera JPEG in tag 0x2E has the rest.
+        var cameraExif = Build(
+        [
+            Ascii(ExifTags.Make, "Panasonic"),
+            Pointer(TiffDirectoryReader.TagExifIfd, Short(ExifTags.IsoEquivalent, 3200), Short(ExifTags.WhiteBalanceMode, 0))
+        ]);
+
+        var rw2 = Build(
+        [
+            Ascii(ExifTags.Make, "Panasonic"),
+            Undefined(0x002E, JpegWithExif(cameraExif)),
+            Pointer(TiffDirectoryReader.TagExifIfd, Rational(ExifTags.ExposureTime, R(1, 60)))
+        ]);
+        rw2[2] = 0x55;
+
+        using var stream = new MemoryStream(rw2, writable: false);
+        var rows = MetadataProcessor.ParseMetadata(stream, "synthetic.rw2").ToKeyValuePairs();
+
+        Assert.Contains(new ExifEntry("ISO", "3200"), rows);
+        Assert.Contains(new ExifEntry("White Balance", "Auto white balance"), rows);
+        Assert.Contains(new ExifEntry("Exposure Time", "1/60 sec"), rows);
+    }
+
+    private static byte[] JpegWithExif(byte[] tiff)
+    {
+        using var bitmap = new SKBitmap(8, 8);
+        bitmap.Erase(SKColors.Teal);
+        using var data = bitmap.Encode(SKEncodedImageFormat.Jpeg, 90);
+        var jpeg = data.ToArray();
+
+        byte[] payload = [.. "Exif\0\0"u8, .. tiff];
+        var length = payload.Length + 2;
+        return [.. jpeg[..2], 0xFF, 0xE1, (byte)(length >> 8), (byte)length, .. payload, .. jpeg[2..]];
     }
 }
