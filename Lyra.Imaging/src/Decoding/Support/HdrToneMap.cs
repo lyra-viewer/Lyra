@@ -339,8 +339,7 @@ internal static class HdrToneMap
 
     private static float Sanitize(float value) => float.IsNaN(value) ? 0f : MathF.Max(value, 0f);
 
-    private static byte Encode(float mapped)
-        => GammaLut[(int)((Math.Clamp(mapped, 0f, 1f) * (GammaLutSize - 1)) + 0.5f)];
+    internal static byte Encode(float mapped) => GammaLut[(int)((Math.Clamp(mapped, 0f, 1f) * (GammaLutSize - 1)) + 0.5f)];
 
     /// <summary>Applies the selected curve then the sRGB encode. NaN maps to 0 (black).</summary>
     private static byte ToneMap(float value, ToneMapMode mode, float whitePoint, float exposureScale)
@@ -393,7 +392,7 @@ internal static class HdrToneMap
     }
 
     /// <summary>Alpha to 8 bits - NOT gamma-encoded. NaN is treated as fully opaque.</summary>
-    private static byte AlphaToByte(float value)
+    internal static byte AlphaToByte(float value)
     {
         if (float.IsNaN(value))
             return 255;

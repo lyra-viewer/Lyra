@@ -133,6 +133,38 @@ public class LinearRowsTests
     }
 
     [Fact]
+    public void Downsampling_KeepsEveryBoxFinite()
+    {
+        float[] floats =
+        [
+            float.PositiveInfinity, 0, 0, 1,   1e6f, 1e6f, 1e6f, 1,   float.NaN, 0.5f, 0.5f, 1,   -4f, 0.5f, 0.5f, 1,
+            1e6f, 0, 0, 1,                     1e6f, 1e6f, 1e6f, 1,   0.5f, 0.5f, 0.5f, 1,         0.5f, 0.5f, 0.5f, 1
+        ];
+
+        SKImage? image;
+
+        unsafe
+        {
+            fixed (float* p = floats)
+                image = HdrImageBuilder.DownsampleToHalfFloat(new FloatRgbaRows(p, 4, 2), 2, 1, CancellationToken.None);
+        }
+
+        Assert.NotNull(image);
+        using (image)
+        {
+            var pixels = Pixels(image);
+            Assert.All(pixels, value => Assert.True(Half.IsFinite(value), $"{value} is not finite."));
+
+            Assert.Equal(65504f, (float)pixels[0]);
+            Assert.Equal(65504f, (float)pixels[1]);
+
+            // NaN and negative are no light, not a poisoned box.
+            Assert.Equal(0.25f, (float)pixels[4], 0.002f);
+            Assert.Equal(0.5f, (float)pixels[5], 0.002f);
+        }
+    }
+
+    [Fact]
     public void AnImageClippedAtWhite_IsWithinSdrWhite()
     {
         var floats = new float[Width * Height * 4];

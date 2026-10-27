@@ -32,6 +32,7 @@ public class HdrToneMapShaderTests
             "ceiling",
             "sceneWhite",
             "peak",
+            "encoding",
             "toneLutSize",
             "toWorking",
             "fromWorking",

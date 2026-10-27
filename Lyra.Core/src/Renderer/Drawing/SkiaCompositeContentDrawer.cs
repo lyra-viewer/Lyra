@@ -59,7 +59,7 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
 
         var exposure = HdrDecodeSettings.ExposureScale;
 
-        using var paint = HdrToneMapShader.CreatePaint(preview, sampling, localMatrix, HdrDecodeSettings.ToneMapMode, exposure, whitePoint * exposure, surface, rasterLarge.Range);
+        using var paint = HdrToneMapShader.CreatePaint(preview, sampling, localMatrix, HdrDecodeSettings.ToneMapMode, exposure, whitePoint * exposure, surface, rasterLarge.Range, rasterLarge.PreviewEncoding);
         if (paint is null)
         {
             canvas.DrawImage(preview, destFullRect, sampling);
@@ -97,7 +97,8 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
             exposure,
             hdr.WhitePoint * exposure,
             surface,
-            hdr.Range
+            hdr.Range,
+            hdr.Encoding
         );
 
         if (paint is null)
@@ -217,7 +218,7 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
 
             var exposure = HdrDecodeSettings.ExposureScale;
 
-            using var paint = HdrToneMapShader.CreatePaint(tile.Image, sampling, localMatrix, HdrDecodeSettings.ToneMapMode, exposure, measured * exposure, surface, rasterLarge.Range);
+            using var paint = HdrToneMapShader.CreatePaint(tile.Image, sampling, localMatrix, HdrDecodeSettings.ToneMapMode, exposure, measured * exposure, surface, rasterLarge.Range, rasterLarge.TileEncoding);
             if (paint is null)
             {
                 canvas.DrawImage(tile.Image, tile.DestRect, sampling);

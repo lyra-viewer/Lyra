@@ -30,6 +30,8 @@ public sealed class RasterLargeContent : ICompositeContent
     /// </summary>
     public float? PreviewWhitePoint { get; private set; }
 
+    public SceneEncoding PreviewEncoding { get; private set; }
+
     public bool HasScenePreview => PreviewImage is not null && PreviewWhitePoint is not null;
 
     /// <summary>
@@ -37,6 +39,8 @@ public sealed class RasterLargeContent : ICompositeContent
     /// controls at every zoom.
     /// </summary>
     public float? TileWhitePoint { get; private set; }
+
+    public SceneEncoding TileEncoding { get; private set; }
 
     public ITileSource? TileSource { get; private set; }
 
@@ -101,6 +105,7 @@ public sealed class RasterLargeContent : ICompositeContent
 
         SetPreview(preview);
         PreviewWhitePoint = whitePoint;
+        PreviewEncoding = SceneEncoding.Linear;
     }
 
     public void SetPreview(SKImage? preview)
@@ -114,10 +119,12 @@ public sealed class RasterLargeContent : ICompositeContent
     /// <summary>
     /// Marks preview and tiles alike as scene-referred light, to be tone-mapped at draw time.
     /// </summary>
-    public void MarkSceneReferred(float whitePoint)
+    public void MarkSceneReferred(float whitePoint, SceneEncoding encoding = SceneEncoding.Linear)
     {
         PreviewWhitePoint = whitePoint;
         TileWhitePoint = whitePoint;
+        PreviewEncoding = encoding;
+        TileEncoding = encoding;
     }
 
     public void SetTiles(ITileSource tiles)

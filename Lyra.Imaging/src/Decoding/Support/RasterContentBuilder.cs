@@ -12,7 +12,7 @@ namespace Lyra.Imaging.Decoding.Support;
 /// </summary>
 internal static class RasterContentBuilder
 {
-    public static ICompositeContent Build(SKBitmap bitmap, Composite composite, float? sceneWhitePoint = null)
+    public static ICompositeContent Build(SKBitmap bitmap, Composite composite, float? sceneWhitePoint = null, SceneEncoding encoding = SceneEncoding.Linear)
     {
         ArgumentNullException.ThrowIfNull(bitmap);
         ArgumentNullException.ThrowIfNull(composite);
@@ -20,31 +20,31 @@ internal static class RasterContentBuilder
         bitmap.SetImmutable();
 
         if (ImageBytes.Of(bitmap) <= DecodePolicy.SingleTextureCeilingBytes)
-            return Single(bitmap, sceneWhitePoint);
+            return Single(bitmap, sceneWhitePoint, encoding);
 
         try
         {
             var large = BuildLarge(bitmap, composite);
 
             if (sceneWhitePoint is { } whitePoint)
-                large.MarkSceneReferred(whitePoint);
+                large.MarkSceneReferred(whitePoint, encoding);
 
             return large;
         }
         catch (Exception ex)
         {
             Logger.Warning($"[RasterContentBuilder] Could not build the tiled form ({ex.Message}); falling back to a single texture.");
-            return Single(bitmap, sceneWhitePoint);
+            return Single(bitmap, sceneWhitePoint, encoding);
         }
     }
 
     /// <summary>One texture for the whole image, scene-referred when a white point came with it.</summary>
-    private static RasterContent Single(SKBitmap bitmap, float? sceneWhitePoint)
+    private static RasterContent Single(SKBitmap bitmap, float? sceneWhitePoint, SceneEncoding encoding)
     {
         var image = SKImage.FromBitmap(bitmap);
 
         return sceneWhitePoint is { } whitePoint
-            ? new HdrRasterContent(bitmap, image, whitePoint)
+            ? new HdrRasterContent(bitmap, image, whitePoint, encoding)
             : new RasterContent(bitmap, image);
     }
 

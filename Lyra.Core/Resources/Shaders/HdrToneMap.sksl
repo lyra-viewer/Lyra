@@ -18,6 +18,8 @@ uniform float ceiling;
 uniform float sceneWhite;
 uniform float peak;
 
+uniform float encoding;
+
 float encodeChannel(float linear) {
     float g = encodeGABC.x;
     float a = encodeGABC.y;
@@ -38,6 +40,12 @@ float encodeChannel(float linear) {
     }
 
     return (pow(max(linear - e, 0.0), 1.0 / g) - b) / a;
+}
+
+float expandChannel(float stored) {
+    float v = stored <= 0.04045 ? stored / 12.92 : pow((stored + 0.055) / 1.055, 2.4);
+    v = clamp(v, 0.0, 1023.0 / 1024.0);
+    return v / (1.0 - v);
 }
 
 float acesCurve(float x) {
@@ -75,7 +83,11 @@ float spendHeadroom(float mapped, float ceiling) {
 
 half4 main(float2 coord) {
     half4 src = image.eval(coord);
-    float3 scene = max(float3(src.rgb) * exposure, float3(0.0));
+    float3 light = float3(src.rgb);
+    if (encoding > 0.5) {
+        light = float3(expandChannel(light.r), expandChannel(light.g), expandChannel(light.b));
+    }
+    float3 scene = max(light * exposure, float3(0.0));
     float3 x = max(gamut * scene, float3(0.0));
 
     float top = peak > 0.0 ? min(ceiling, max(peak, 1.0)) : ceiling;

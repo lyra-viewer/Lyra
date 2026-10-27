@@ -14,11 +14,8 @@ namespace Lyra.Imaging.Decoding.Support;
 internal static class HdrImageBuilder
 {
     /// <summary>
-    /// Above this many pixels, keep the 8-bit tone-mapped form instead of scene-referred half-float.
-    ///
-    /// Half-float costs 8 bytes per pixel against 4, which is a fair price for live exposure and
-    /// curve controls at 4K (64 MB) or 6K (183 MB), and a bad one at 16K (1 GB) - precisely the
-    /// sizes where the controls are least usable because the image barely fits anyway.
+    /// Above this many pixels the image is tiled: half-float within <see cref="TiledSceneBudget"/>,
+    /// <see cref="SceneEncoding.Compressed"/> light past it, at 4 bytes per pixel instead of 8.
     /// </summary>
     private const long LivePixelBudget = 32L * 1024 * 1024;
 
@@ -43,10 +40,14 @@ internal static class HdrImageBuilder
     }
 
     /// <summary>The same, from linear rows of any layout, carrying what is known of where the light ends.</summary>
-    public static ICompositeContent Build(LinearRows rows, Composite composite, CancellationToken ct, out PixelFacts facts, SceneRange range = default)
+    public static ICompositeContent Build(LinearRows rows, Composite composite, CancellationToken ct, out PixelFacts facts, SceneRange range = default) =>
+        Build(rows, composite, ct, out facts, range, new HdrBudgets(LivePixelBudget, TiledSceneBudget));
+
+    /// <summary>The same, with the size thresholds given, so tests need not allocate gigabytes to reach them.</summary>
+    internal static ICompositeContent Build(LinearRows rows, Composite composite, CancellationToken ct, out PixelFacts facts, SceneRange range, HdrBudgets budgets)
     {
         var whitePoint = HdrToneMap.MeasureWhitePoint(rows);
-        var content = Build(rows, whitePoint, range, composite, ct, out var isGrayscale);
+        var content = Build(rows, whitePoint, range, budgets, composite, ct, out var isGrayscale);
 
         switch (content)
         {
@@ -62,12 +63,12 @@ internal static class HdrImageBuilder
         return content;
     }
 
-    private static ICompositeContent Build(LinearRows rows, float whitePoint, SceneRange range, Composite composite, CancellationToken ct, out bool isGrayscale)
+    private static ICompositeContent Build(LinearRows rows, float whitePoint, SceneRange range, HdrBudgets budgets, Composite composite, CancellationToken ct, out bool isGrayscale)
     {
         var width = rows.Width;
         var height = rows.Height;
         var pixels = rows.PixelCount;
-        if (pixels <= LivePixelBudget)
+        if (pixels <= budgets.LivePixels)
         {
             var single = TryBuildHalfFloat(rows, ct, out isGrayscale);
             if (single is not null)
@@ -83,14 +84,14 @@ internal static class HdrImageBuilder
         }
 
         var halfFloatBytes = pixels * 8;
-        if (halfFloatBytes <= TiledSceneBudget)
+        if (halfFloatBytes <= budgets.TiledSceneBytes)
         {
             var tiled = TryBuildHalfFloat(rows, ct, out isGrayscale);
             if (tiled is not null)
             {
                 Logger.Debug($"[HdrImageBuilder] {width}x{height} is {pixels / 1024 / 1024} MP, over the " +
-                             $"{LivePixelBudget / 1024 / 1024} MP live-controls budget but within the " +
-                             $"{TiledSceneBudget / 1024 / 1024} MB scene-referred budget " +
+                             $"{budgets.LivePixels / 1024 / 1024} MP live-controls budget but within the " +
+                             $"{budgets.TiledSceneBytes / 1024 / 1024} MB scene-referred budget " +
                              $"({halfFloatBytes / 1024 / 1024} MB); keeping the whole image as light.");
 
                 composite.HdrBakedReason = null;
@@ -100,13 +101,12 @@ internal static class HdrImageBuilder
 
         Logger.Debug($"[HdrImageBuilder] {width}x{height} is {pixels / 1024 / 1024} MP " +
                      $"({halfFloatBytes / 1024 / 1024} MB as half-float), over the " +
-                     $"{TiledSceneBudget / 1024 / 1024} MB scene-referred tile budget; tone-mapping at " +
-                     "decode instead (halves the footprint; HDR controls apply to the preview only).");
+                     $"{budgets.TiledSceneBytes / 1024 / 1024} MB scene-referred tile budget; keeping the " +
+                     "tiles as 8-bit compressed light instead (halves the footprint, controls stay live).");
 
-        composite.HdrBakedReason = $"{halfFloatBytes / 1024 / 1024} MB over the " +
-                                   $"{TiledSceneBudget / 1024 / 1024} MB scene budget.";
+        composite.HdrBakedReason = null;
 
-        return BuildToneMapped(rows, composite, whitePoint, range, ct, out isGrayscale);
+        return BuildCompressed(rows, composite, whitePoint, ct, out isGrayscale);
     }
 
     private static string DescribeDynamicRange(float whitePoint)
@@ -190,9 +190,31 @@ internal static class HdrImageBuilder
         return content;
     }
 
+    private static ICompositeContent BuildCompressed(LinearRows rows, Composite composite, float whitePoint, CancellationToken ct, out bool isGrayscale)
+    {
+        var info = new SKImageInfo(rows.Width, rows.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul, SKColorSpace.CreateSrgb());
+        var bitmap = new SKBitmap(info);
+
+        try
+        {
+            isGrayscale = CompressedRows.Write(rows, bitmap, ct);
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
+
+        var content = RasterContentBuilder.Build(bitmap, composite, whitePoint, SceneEncoding.Compressed);
+        if (content is RasterLargeContent large)
+            AttachScenePreview(large, rows, whitePoint, ct);
+
+        return content;
+    }
+
     /// <summary>
     /// Replaces the large form's preview with scene-referred half-float light, so an image whose
-    /// full resolution must be baked still uses the display's headroom at fit-to-window.
+    /// full resolution cannot be half-float still uses the display's headroom at fit-to-window.
     /// </summary>
     /// <remarks>
     /// About 130 MB for a 128 MP panorama. On failure the tone-mapped preview stands.
@@ -280,10 +302,10 @@ internal static class HdrImageBuilder
                     for (var x = x0[tx]; x < x1[tx]; x++)
                     {
                         var i = x * 4;
-                        r += line[i];
-                        g += line[i + 1];
-                        b += line[i + 2];
-                        a += line[i + 3];
+                        r += Light(line[i]);
+                        g += Light(line[i + 1]);
+                        b += Light(line[i + 2]);
+                        a += float.IsNaN(line[i + 3]) ? 1f : Math.Clamp(line[i + 3], 0f, 1f);
                     }
 
                     var o = tx * 4;
@@ -302,9 +324,10 @@ internal static class HdrImageBuilder
                 var scale = samples > 0 ? 1.0 / samples : 0.0;
                 var o = tx * 4;
 
-                row[o + 0] = (Half)(sums[o] * scale);
-                row[o + 1] = (Half)(sums[o + 1] * scale);
-                row[o + 2] = (Half)(sums[o + 2] * scale);
+                // A sun averages past what half holds; +Inf would come out of the shader black.
+                row[o + 0] = ToHalf((float)(sums[o] * scale));
+                row[o + 1] = ToHalf((float)(sums[o + 1] * scale));
+                row[o + 2] = ToHalf((float)(sums[o + 2] * scale));
                 row[o + 3] = (Half)(sums[o + 3] * scale);
             }
 
@@ -312,6 +335,8 @@ internal static class HdrImageBuilder
             return true;
         });
     }
+
+    private static float Light(float value) => value > 0f ? value : 0f;
 
     private static unsafe bool ConvertRow(float* srcRow, Half* dstRow, int width)
     {
@@ -352,3 +377,5 @@ internal static class HdrImageBuilder
         return (Half)MathF.Min(MathF.Max(value, 0f), 65504f);
     }
 }
+
+internal readonly record struct HdrBudgets(long LivePixels, long TiledSceneBytes);

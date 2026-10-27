@@ -18,7 +18,7 @@ namespace Lyra.Imaging.Content;
 /// more than the 8 bits this replaces), at half the memory. A 4K environment map is 64 MB
 /// instead of 128 MB.
 /// </summary>
-public sealed class HdrRasterContent(SKBitmap backingBitmap, SKImage image, float whitePoint)
+public sealed class HdrRasterContent(SKBitmap backingBitmap, SKImage image, float whitePoint, SceneEncoding encoding = SceneEncoding.Linear)
     : RasterContent(backingBitmap, image)
 {
     /// <summary>
@@ -27,6 +27,8 @@ public sealed class HdrRasterContent(SKBitmap backingBitmap, SKImage image, floa
     /// every frame, and the answer never changes once the image is decoded.
     /// </summary>
     public float WhitePoint { get; } = whitePoint;
+
+    public SceneEncoding Encoding { get; } = encoding;
 
     /// <summary>Where the light ends, when the format knows; set before the content is published.</summary>
     public SceneRange Range { get; internal set; }

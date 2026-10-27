@@ -55,7 +55,7 @@ internal static class HdrToneMapShader
         }
     }
     
-    public static SKPaint? CreatePaint(SKImage image, SKSamplingOptions sampling, SKMatrix localMatrix, ToneMapMode mode, float exposureScale, float whitePoint, SurfaceProfile surface, SceneRange range = default)
+    public static SKPaint? CreatePaint(SKImage image, SKSamplingOptions sampling, SKMatrix localMatrix, ToneMapMode mode, float exposureScale, float whitePoint, SurfaceProfile surface, SceneRange range = default, SceneEncoding encoding = SceneEncoding.Linear)
     {
         var effect = Effect.Value;
         if (effect is null)
@@ -76,6 +76,7 @@ internal static class HdrToneMapShader
             ["ceiling"]     = surface.Ceiling,
             ["sceneWhite"]  = range.SceneWhite ?? 0f,
             ["peak"]        = range.Peak ?? 0f,
+            ["encoding"]    = (float)encoding,
             ["toneLutSize"] = toneLut?.Width ?? 0f,
             ["toWorking"]   = GamutTransform.Between(image.ColorSpace, CameraToneCurve.WorkingSpace),
             ["fromWorking"] = GamutTransform.Between(CameraToneCurve.WorkingSpace, surface.ColorSpace),
