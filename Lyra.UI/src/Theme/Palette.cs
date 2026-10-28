@@ -16,6 +16,7 @@ public static class Palette
         Faint               = new SKColor(100, 103, 108),
 
         SelectedForeground  = new SKColor(235, 175, 70),
+        SecondaryForeground = new SKColor(94, 196, 176),
         SelectedBackground  = new SKColor(255, 255, 255, 25),
         ForegroundDark      = new SKColor(28, 30, 33),
 
@@ -60,6 +61,9 @@ public static class Palette
 
     // Solid amber accent
     public static SKColor SelectedForeground => _current.SelectedForeground;
+
+    // A second highlight, told apart from the selection colour
+    public static SKColor SecondaryForeground => _current.SecondaryForeground;
 
     // Selection / pick highlight
     public static SKColor SelectedBackground => _current.SelectedBackground;

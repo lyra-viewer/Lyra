@@ -2,38 +2,39 @@ type = "dark"
 version = 1
 
 [colors]
-background          = "#26282B"
+background           = "#26282B"
 
-foreground          = "#CDD0D4"
-muted               = "#A5A8AC"
-dim                 = "#878A8F"
-faint               = "#646770"
+foreground           = "#CDD0D4"
+muted                = "#A5A8AC"
+dim                  = "#878A8F"
+faint                = "#646770"
 
-selected_foreground = "#EBAF46"
-selected_background = "#FFFFFF19"
-foreground_dark     = "#1C1E21"
+selected_foreground  = "#EBAF46"
+secondary_foreground = "#5EC4B0"
+selected_background  = "#FFFFFF19"
+foreground_dark      = "#1C1E21"
 
-primary             = "#52565C"
-hover_primary       = "#484C52"
-pressed_primary     = "#3E4248"
+primary              = "#52565C"
+hover_primary        = "#484C52"
+pressed_primary      = "#3E4248"
 
-disabled            = "#00000066"
+disabled             = "#00000066"
 
-accent              = "#EEF0F3"
-hover_accent        = "#DADCDF"
-pressed_accent      = "#C6C8CB"
+accent               = "#EEF0F3"
+hover_accent         = "#DADCDF"
+pressed_accent       = "#C6C8CB"
 
-danger              = "#9B2D2D"
-hover_danger        = "#AA3737"
-pressed_danger      = "#872626"
+danger               = "#9B2D2D"
+hover_danger         = "#AA3737"
+pressed_danger       = "#872626"
 
-warning             = "#D9733B"
+warning              = "#D9733B"
 
-subtle              = "#FFFFFF0A"
-hover_subtle        = "#FFFFFF1E"
-pressed_subtle      = "#FFFFFF28"
+subtle               = "#FFFFFF0A"
+hover_subtle         = "#FFFFFF1E"
+pressed_subtle       = "#FFFFFF28"
 
-border              = "#FFFFFF19"
-border_active       = "#FFFFFF3C"
+border               = "#FFFFFF19"
+border_active        = "#FFFFFF3C"
 
-panel               = "#16181BDC"
+panel                = "#16181BDC"
