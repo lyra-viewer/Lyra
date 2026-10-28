@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace Lyra.Imaging.Content;
+namespace Lyra.Imaging.Content.Exif;
 
 /// <summary>
 /// EXIF orientation (IFD0 tag 0x0112): how stored pixels relate to the upright image.

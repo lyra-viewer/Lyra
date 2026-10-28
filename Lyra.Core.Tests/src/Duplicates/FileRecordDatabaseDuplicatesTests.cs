@@ -51,6 +51,59 @@ public sealed class FileRecordDatabaseDuplicatesTests
     }
 
     [Fact]
+    public void Remove_InDuplicatesView_AlsoRemovesFromFullCollection()
+    {
+        FileRecordDatabase.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png"), Rec("/x/c.png", groupId: 1)]);
+        FileRecordDatabase.EnterDuplicatesView();
+
+        Assert.True(FileRecordDatabase.Remove("/x/a.png"));
+        FileRecordDatabase.ExitDuplicatesView();
+
+        Assert.Equal(["/x/b.png", "/x/c.png"], FileRecordDatabase.Records.Select(r => r.Path).ToArray());
+    }
+
+    [Fact]
+    public void ExitDuplicatesView_LandsOnShownDuplicate()
+    {
+        FileRecordDatabase.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png"), Rec("/x/c.png", groupId: 1)]);
+        FileRecordDatabase.MoveTo("/x/b.png");
+        FileRecordDatabase.EnterDuplicatesView();
+        FileRecordDatabase.MoveTo("/x/c.png");
+
+        FileRecordDatabase.ExitDuplicatesView();
+
+        Assert.Equal("/x/c.png", FileRecordDatabase.Current?.Path);
+    }
+
+    [Fact]
+    public void ExitDuplicatesView_EmptySubset_FallsBackToPreScanRecord()
+    {
+        FileRecordDatabase.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png"), Rec("/x/c.png")]);
+        FileRecordDatabase.MoveTo("/x/c.png");
+        FileRecordDatabase.EnterDuplicatesView();
+
+        FileRecordDatabase.Remove("/x/a.png");
+        FileRecordDatabase.ExitDuplicatesView();
+
+        Assert.Equal("/x/c.png", FileRecordDatabase.Current?.Path);
+    }
+
+    [Fact]
+    public void Remove_LastDuplicate_LeavesSubsetEmptyAndFullCollectionIntact()
+    {
+        FileRecordDatabase.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png")]);
+        FileRecordDatabase.EnterDuplicatesView();
+
+        FileRecordDatabase.Remove("/x/a.png");
+
+        Assert.True(FileRecordDatabase.InDuplicatesView);
+        Assert.Null(FileRecordDatabase.Current);
+
+        FileRecordDatabase.ExitDuplicatesView();
+        Assert.Equal(["/x/b.png"], FileRecordDatabase.Records.Select(r => r.Path).ToArray());
+    }
+
+    [Fact]
     public void ClearGroups_RemovesAllGroupIds()
     {
         FileRecordDatabase.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png", groupId: 1)]);

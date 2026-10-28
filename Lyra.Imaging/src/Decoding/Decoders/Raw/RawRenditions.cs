@@ -1,4 +1,5 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Loading;
@@ -19,7 +20,7 @@ internal sealed class RawRenditions : IVariantProvider
     private readonly Composite _composite;
     private readonly string _path;
     private readonly RawNative.PreviewEntry[] _previews;
-    private VariantRasterContent? _set;
+    private VariantContainer? _set;
 
     private RawRenditions(Composite composite, string path, RawNative.PreviewEntry[] previews)
     {
@@ -32,7 +33,7 @@ internal sealed class RawRenditions : IVariantProvider
     private static long Budget => ImageLoader.CacheBudgetBytes / 2;
 
     /// <summary>The renditions, with <paramref name="standIn"/> in the developed image's place until it arrives.</summary>
-    public static VariantRasterContent WithStandIn(Composite composite, string path, RawNative.ImageHandle image, RawNative.RawInfo info, ICompositeContent standIn)
+    public static VariantContainer WithStandIn(Composite composite, string path, RawNative.ImageHandle image, RawNative.RawInfo info, ICompositeContent standIn)
     {
         var previews = RawNative.ListPreviews(image);
         return Build(composite, path, previews, info.Flip, DevelopedVariant(composite, info.Width, info.Height), standIn);
@@ -54,10 +55,10 @@ internal sealed class RawRenditions : IVariantProvider
 
     public static ImageVariant DescribeDeveloped(Composite composite, RawDecoder.DevelopedImage developed) => DevelopedVariant(composite, developed.Width, developed.Height);
 
-    private static VariantRasterContent Build(Composite composite, string path, RawNative.PreviewEntry[] previews, int flip, ImageVariant developed, ICompositeContent first)
+    private static VariantContainer Build(Composite composite, string path, RawNative.PreviewEntry[] previews, int flip, ImageVariant developed, ICompositeContent first)
     {
         var provider = new RawRenditions(composite, path, previews);
-        var set = new VariantRasterContent([developed, .. previews.Select(preview => PreviewVariant(preview, flip))], Developed, first, provider, Budget);
+        var set = new VariantContainer([developed, .. previews.Select(preview => PreviewVariant(preview, flip))], Developed, first, provider, Budget);
 
         provider._set = set;
         return set;

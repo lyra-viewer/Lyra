@@ -1,4 +1,5 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.ManagedCodecs.Raster.Icns;
 using SkiaSharp;
@@ -159,7 +160,8 @@ public class IcnsDecoderTests
     {
         var impossible = Convert.FromHexString(
             "FF4FFF51002F0000000000CB0020009800000000000000000000" +
-            "00CB00000098000000000000000000030701010701010701");
+            "00CB00000098000000000000000000030701010701010701"
+        );
 
         var icns = Container(
             Chunk("ic10", impossible),
@@ -204,7 +206,7 @@ public class IcnsDecoderTests
             using var composite = new Composite(new FileInfo(path));
             new IcnsDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
 
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
             Assert.Equal(["128 x 128", "32 x 32", "16 x 16"], set.Variants.Select(v => v.Label));
 
             // Opens on the largest, and Content tracks the selection.
@@ -282,7 +284,7 @@ public class IcnsDecoderTests
             using var composite = new Composite(new FileInfo(path));
             new IcnsDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
 
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
             var held = Assert.IsType<RasterContent>(set.Active).Image;
 
             set.Select(1);
@@ -317,7 +319,7 @@ public class IcnsDecoderTests
             using var composite = new Composite(new FileInfo(path));
             new IcnsDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
 
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(["512 x 512", "64 x 64"], set.Variants.Select(v => v.Label));
             Assert.Equal(512f, composite.Content!.DecodedWidth);

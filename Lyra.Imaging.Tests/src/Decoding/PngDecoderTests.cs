@@ -1,5 +1,7 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Decoding.Decoders.Animation;
 using Lyra.Imaging.Loading;
@@ -37,7 +39,7 @@ public class PngDecoderTests
 
         WithDecoded(png, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(VariantKind.Frames, set.Kind);
             Assert.Equal(["Frame 1", "Frame 2", "Frame 3"], set.Variants.Select(v => v.Label));
@@ -95,7 +97,7 @@ public class PngDecoderTests
 
         WithDecoded(png, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(2, set.Variants.Count);
             Assert.Equal(Red, PixelOf(set.Active, 3, 3));
@@ -110,7 +112,7 @@ public class PngDecoderTests
 
         WithDecoded(png, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.True(SelectAndWait(set, 2));
             Assert.Null(set.FailureOf(2));
@@ -248,7 +250,7 @@ public class PngDecoderTests
 
         WithDecoded(png[..(int)(last.Offset + last.Length / 2)], composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
             Assert.Equal("stops before the end chunk", Facts(composite)["Truncated"]);
 
             Assert.True(SelectAndWait(set, 2));
@@ -265,7 +267,7 @@ public class PngDecoderTests
 
         WithDecoded(png[..(int)(last.Offset - 2)], composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.True(SelectAndWait(set, 1));
             Assert.Equal(LoadWarning.PartiallyDecoded("Frame 2 is cut off: the file ends before its image data"), set.WarningOf(1));
@@ -281,7 +283,7 @@ public class PngDecoderTests
 
         WithDecoded([.. png[..fdat], .. png[(fdat + 16 + data.Length)..]], composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.True(SelectAndWait(set, 1));
             Assert.Equal(LoadWarning.PartiallyDecoded("Frame 2 has no image data"), set.WarningOf(1));
@@ -301,7 +303,7 @@ public class PngDecoderTests
 
         WithDecoded(png, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.True(SelectAndWait(set, 1));
             Assert.Null(set.FailureOf(1));
@@ -350,10 +352,10 @@ public class PngDecoderTests
     private static Dictionary<string, string> Facts(Composite composite) =>
         composite.FormatSpecificSnapshot().ToDictionary(p => p.Key, p => p.Value);
 
-    private static bool SelectAndWait(VariantRasterContent set, int index)
+    private static bool SelectAndWait(VariantContainer set, int index)
     {
         using var settled = new ManualResetEventSlim(false);
-        void Settle(VariantRasterContent _) => settled.Set();
+        void Settle(VariantContainer _) => settled.Set();
 
         set.VariantReady += Settle;
         set.VariantFailed += Settle;

@@ -1,4 +1,6 @@
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
+
 
 namespace Lyra.Imaging.Decoding.Decoders.Animation;
 
@@ -10,7 +12,7 @@ internal sealed class FrameDamageLog
 {
     private readonly Dictionary<int, string> _damaged = new();
     private readonly Lock _gate = new();
-    private VariantRasterContent? _frames;
+    private VariantContainer? _frames;
 
     public void Report(int index, string why)
     {
@@ -27,7 +29,7 @@ internal sealed class FrameDamageLog
             return _damaged.TryGetValue(index, out var why) ? LoadWarning.PartiallyDecoded(why) : null;
     }
 
-    public void Attach(VariantRasterContent frames)
+    public void Attach(VariantContainer frames)
     {
         lock (_gate)
         {

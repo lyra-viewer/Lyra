@@ -1,4 +1,5 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Decoding.Decoders.Tiff;
 using Lyra.Imaging.Interop;
@@ -308,7 +309,7 @@ public class TiffReadPathTests
     private static Decoded DecodeFirstPage(TiffBuilder.Page page)
     {
         var (file, composite) = Decode(TiffBuilder.Build(page, page));
-        var document = Assert.IsType<VariantRasterContent>(composite.Content);
+        var document = Assert.IsType<VariantContainer>(composite.Content);
 
         Assert.Equal(2, document.Variants.Count);
 

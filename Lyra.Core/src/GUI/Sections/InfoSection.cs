@@ -1,6 +1,9 @@
 using Lyra.Common;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Exif;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
 using Lyra.SdlCore;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Layout;
@@ -18,6 +21,7 @@ public sealed class InfoSection : IUISection
     private readonly HStack _fileRow;
     private readonly Label _collectionLabel;
     private readonly Label _dirNavLabel;
+    private readonly Label _variantNavLabel;
     private readonly Label _fileNameLabel;
     private readonly Label _fileSizeLabel;
 
@@ -68,6 +72,7 @@ public sealed class InfoSection : IUISection
             DimPrefix("[File]        "),
             _collectionLabel = ForegroundLabel(),
             _dirNavLabel = HighlightedLabel(),
+            _variantNavLabel = new Label("").Color(Palette.SecondaryForeground).Transient(),
             Separator(),
             _fileNameLabel = ForegroundLabel(),
             Separator(),
@@ -154,7 +159,7 @@ public sealed class InfoSection : IUISection
         // File row
         _collectionLabel.Text = $"{app.CollectionIndex}/{app.CollectionCount}";
 
-        if (app.InDuplicatesMode)
+        if (app.ViewMode == ViewMode.Duplicates)
         {
             _dirNavLabel.Present = true;
             _dirNavLabel.Text = $"GROUP-ID: {state.CurrentRecord?.GroupId}";
@@ -169,6 +174,10 @@ public sealed class InfoSection : IUISection
             _dirNavLabel.Present = false;
         }
         
+        var variantNav = VariantNav(composite.Content as VariantContainer);
+        _variantNavLabel.Present = variantNav is not null;
+        _variantNavLabel.Text = variantNav ?? "";
+
         _fileNameLabel.Text = fileInfo.Name;
         _fileSizeLabel.Text = Formatters.SizeToStr(composite.FileSizeBytes);
 
@@ -264,7 +273,7 @@ public sealed class InfoSection : IUISection
         if (composite is { State: CompositeState.Failed, Failure: { } failure })
             return new Problem(true, failure.Message, failure.Description);
 
-        var set = composite.Content as VariantRasterContent;
+        var set = composite.Content as VariantContainer;
 
         if (set?.LastFailure is { } page)
             return new Problem(true, $"{set.Variants[page.Index].Label}: {page.Failure.Message}", page.Failure.Description);
@@ -285,6 +294,29 @@ public sealed class InfoSection : IUISection
             .Spacing(11)
             .ExpandH()
             .Align(HAlign.Left);
+
+    /// <summary>Where <c>[</c> and <c>]</c> are among the file's pages, frames or sizes; null when there is only one.</summary>
+    internal static string? VariantNav(VariantContainer? set)
+    {
+        if (set is null || set.StepOrder.Count < 2)
+            return null;
+
+        var position = 0;
+        for (var i = 0; i < set.StepOrder.Count; i++)
+        {
+            if (set.StepOrder[i] == set.ActiveIndex)
+                position = i + 1;
+        }
+
+        var kind = set.Kind switch
+        {
+            VariantKind.Pages => "Page",
+            VariantKind.Frames => "Frame",
+            _ => "Size"
+        };
+
+        return position > 0 ? $"[{kind} {position}/{set.StepOrder.Count}]" : $"[{kind} -/{set.StepOrder.Count}]";
+    }
 
     private static Label DimPrefix(string text) =>
         new Label(text).Color(Palette.Dim).Transient();

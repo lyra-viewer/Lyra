@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Decoding.Decoders.Tiff;
 using Lyra.Imaging.Decoding.Support;

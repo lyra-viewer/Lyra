@@ -1,8 +1,9 @@
 using Lyra.Common;
 using Lyra.Imaging.ConstraintsProvider;
+using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Hdr;
 using Lyra.Imaging.Content.Tiling;
 using SkiaSharp;
-using Lyra.Imaging.Content;
 
 namespace Lyra.Imaging.Decoding.Support;
 

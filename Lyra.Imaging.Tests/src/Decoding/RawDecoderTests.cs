@@ -1,5 +1,8 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Exif;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Decoding.Decoders.Raw;
 using Lyra.Imaging.Interop;
@@ -567,7 +570,7 @@ public class RawDecoderTests
         }
     }
 
-    private static VariantRasterContent Renditions(Composite composite) => Assert.IsType<VariantRasterContent>(composite.Content);
+    private static VariantContainer Renditions(Composite composite) => Assert.IsType<VariantContainer>(composite.Content);
 
     private static string Fact(Composite composite, string key) => composite.FormatSpecificSnapshot().Single(p => p.Key == key).Value;
 

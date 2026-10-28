@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders.J2K;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;

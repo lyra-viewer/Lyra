@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Lyra.Imaging.Content;
+namespace Lyra.Imaging.Content.Status;
 
 public sealed class LoadMeasurement
 {

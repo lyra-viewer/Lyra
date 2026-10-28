@@ -1,5 +1,5 @@
 using Lyra.Common;
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Structure;

@@ -1,6 +1,6 @@
 using SkiaSharp;
 
-namespace Lyra.Imaging.Content;
+namespace Lyra.Imaging.Content.Hdr;
 
 /// <summary>
 /// The tone curve a camera's profile prescribes (DNG ProfileToneCurve), applied in place of the

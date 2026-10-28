@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.ManagedCodecs.Raster.Qoi;
 using SkiaSharp;

@@ -12,7 +12,7 @@ public readonly record struct ApplicationStates(
     int? DirectoryIndex,
     int? DirectoryCount,
 
-    bool InDuplicatesMode,
+    ViewMode ViewMode,
 
     float Zoom,
     DisplayMode DisplayMode,

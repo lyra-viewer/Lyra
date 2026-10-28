@@ -1,11 +1,11 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders.J2K;
+using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Metadata;
 using Lyra.Metadata.Containers;
 using SkiaSharp;
-using Lyra.Imaging.Decoding.Support;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 

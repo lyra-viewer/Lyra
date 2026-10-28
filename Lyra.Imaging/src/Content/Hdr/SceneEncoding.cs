@@ -1,4 +1,4 @@
-namespace Lyra.Imaging.Content;
+namespace Lyra.Imaging.Content.Hdr;
 
 /// <summary>How a texture holding scene-referred light stores it.</summary>
 public enum SceneEncoding

@@ -1,3 +1,4 @@
+using Lyra.Imaging.Content.Hdr;
 using Lyra.Imaging.Content.Tiling;
 using SkiaSharp;
 

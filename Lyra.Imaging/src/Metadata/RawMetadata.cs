@@ -1,5 +1,5 @@
 using System.Globalization;
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Exif;
 using Lyra.Imaging.Interop;
 using static Lyra.Imaging.Metadata.MetadataValues;
 

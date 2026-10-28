@@ -1,6 +1,7 @@
 using Lyra.FileLoader.Navigation;
 using Lyra.FileLoader.Store;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
 
 namespace Lyra.GUI;
 

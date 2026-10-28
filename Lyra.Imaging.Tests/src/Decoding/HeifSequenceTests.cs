@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Tests.Support;
 using Lyra.Metadata.Tests.Iso;
@@ -31,7 +33,7 @@ public class HeifSequenceTests
     {
         WithDecoded(HeifSequenceFixtures.Avif, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(VariantKind.Frames, set.Kind);
             Assert.Equal(["Frame 1", "Frame 2", "Frame 3"], set.Variants.Select(v => v.Label));
@@ -51,7 +53,7 @@ public class HeifSequenceTests
     {
         WithDecoded(HeifSequenceFixtures.Avif, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(0, PixelOf(set.Active, 2, 2).Alpha);
             Assert.Equal(Red, (uint)PixelOf(set.Active, 12, 6));
@@ -69,7 +71,7 @@ public class HeifSequenceTests
     {
         WithDecoded(HeifSequenceFixtures.AvifOldAlpha, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(0, PixelOf(set.Active, 2, 2).Alpha);
             Assert.Equal(Red, (uint)PixelOf(set.Active, 12, 6));
@@ -84,7 +86,7 @@ public class HeifSequenceTests
     {
         WithDecoded(HeifSequenceFixtures.AvifThreePlays, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(["16x12, 10 ms", "16x12, 10 ms"], set.Variants.Select(v => v.Detail));
             Assert.Equal("2 repeats", Facts(composite)["Loop"]);
@@ -96,7 +98,7 @@ public class HeifSequenceTests
     {
         WithDecoded(HeifSequenceFixtures.Hevc, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.All(set.Variants, v => Assert.Equal((64, 48), (v.Width, v.Height)));
             Assert.Equal("HEVC", Facts(composite)["Codec"]);
@@ -223,7 +225,7 @@ public class HeifSequenceTests
 
         WithDecoded(file, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
             Assert.Equal(3, set.Variants.Count);
             Assert.Equal(0, PixelOf(set.Active, 2, 2).Alpha);
             Assert.Equal(Red, (uint)PixelOf(set.Active, 12, 6));
@@ -311,13 +313,13 @@ public class HeifSequenceTests
 
     private static Dictionary<string, string> Facts(Composite composite) => composite.FormatSpecificSnapshot().ToDictionary(p => p.Key, p => p.Value);
 
-    private static bool SelectAndWait(VariantRasterContent set, int index)
+    private static bool SelectAndWait(VariantContainer set, int index)
     {
         if (set.ShownIndex == index)
             return true;
 
         using var settled = new ManualResetEventSlim(false);
-        void Settle(VariantRasterContent _) => settled.Set();
+        void Settle(VariantContainer _) => settled.Set();
 
         set.VariantReady += Settle;
         set.VariantFailed += Settle;

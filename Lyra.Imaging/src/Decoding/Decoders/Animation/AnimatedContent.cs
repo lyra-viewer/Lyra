@@ -1,5 +1,7 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Support;
 using SkiaSharp;
 
@@ -58,7 +60,7 @@ internal static class AnimatedContent
 
             Logger.Info(typeof(AnimatedContent), $"[{format}] {Path.GetFileName(path)} holds {source.Count} frames; decoding the first and the rest on demand.");
 
-            var set = new VariantRasterContent(
+            var set = new VariantContainer(
                 describe(),
                 active: 0,
                 first,

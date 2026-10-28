@@ -1,4 +1,4 @@
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Loading;
 using Lyra.Imaging.Tests.Support;
 using Xunit;

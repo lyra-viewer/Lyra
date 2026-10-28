@@ -1,5 +1,5 @@
 using System.Reflection;
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Exif;
 using Xunit;
 
 namespace Lyra.Imaging.Tests.Content;

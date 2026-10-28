@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Tests.Support;

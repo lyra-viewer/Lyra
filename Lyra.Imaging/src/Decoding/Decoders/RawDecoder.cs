@@ -1,6 +1,10 @@
 using System.Diagnostics;
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Exif;
+using Lyra.Imaging.Content.Hdr;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders.Raw;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
@@ -87,7 +91,7 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
 
     private static LoadStage Developed(Stopwatch clock) => new(StageLabel, $"Developed in {clock.Elapsed.TotalSeconds:0.0} s");
     
-    private static VariantRasterContent? TryShowPreview(Composite composite, string path, CancellationToken ct)
+    private static VariantContainer? TryShowPreview(Composite composite, string path, CancellationToken ct)
     {
         using var image = RawNative.OpenFile(path, out var info);
         if (image is null || info.Width <= 0 || info.Height <= 0)
@@ -138,7 +142,7 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
         preview.SetImmutable();
         var standIn = new RasterContent(preview, SKImage.FromBitmap(preview));
 
-        VariantRasterContent renditions;
+        VariantContainer renditions;
         try
         {
             renditions = RawRenditions.WithStandIn(composite, path, image, info, standIn);
@@ -161,7 +165,7 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
     /// Develops the raw data and puts it in place of the stand-in. On failure the preview stays,
     /// marked as all there is; completion is signaled either way unless the load was canceled.
     /// </summary>
-    private static async Task DevelopBehindPreviewAsync(Composite composite, string path, VariantRasterContent renditions, Stopwatch clock, CancellationToken ct)
+    private static async Task DevelopBehindPreviewAsync(Composite composite, string path, VariantContainer renditions, Stopwatch clock, CancellationToken ct)
     {
         try
         {

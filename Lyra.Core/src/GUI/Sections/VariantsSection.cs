@@ -1,5 +1,6 @@
 using Lyra.Common;
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
 using Lyra.UI.Components.Layout;
@@ -18,7 +19,7 @@ public sealed class VariantsSection : IUISection, IDisposable
     private IReadOnlyList<ImageVariant>? _lastVariants;
     private int _lastActive = -1;
 
-    private VariantRasterContent? _set;
+    private VariantContainer? _set;
     private int _lastFailureVersion = -1;
     private int _lastWarningVersion = -1;
 
@@ -79,9 +80,9 @@ public sealed class VariantsSection : IUISection, IDisposable
             .Child(_body);
     }
 
-    public void Refresh(UIState state) => Refresh(state.Composite?.Content as VariantRasterContent);
+    public void Refresh(UIState state) => Refresh(state.Composite?.Content as VariantContainer);
 
-    internal void Refresh(VariantRasterContent? set)
+    internal void Refresh(VariantContainer? set)
     {
         var variants = set?.Variants;
         _set = set;
@@ -138,7 +139,7 @@ public sealed class VariantsSection : IUISection, IDisposable
     private static bool ShowsJump(VariantKind kind, int count) =>
         count >= (kind == VariantKind.Frames ? 3 : 13);
 
-    private void RebuildJump(VariantRasterContent set)
+    private void RebuildJump(VariantContainer set)
     {
         _jump.Present = ShowsJump(set.Kind, set.Variants.Count);
 

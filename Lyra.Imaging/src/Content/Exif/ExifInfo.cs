@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Reflection;
 
-namespace Lyra.Imaging.Content;
+namespace Lyra.Imaging.Content.Exif;
 
 public sealed class ExifInfo
 {

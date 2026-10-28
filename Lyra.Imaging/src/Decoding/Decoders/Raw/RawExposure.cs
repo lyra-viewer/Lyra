@@ -1,4 +1,4 @@
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Hdr;
 using Lyra.Imaging.Decoding.Support;
 using SkiaSharp;
 

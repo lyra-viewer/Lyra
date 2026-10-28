@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Tests.Support;
@@ -48,7 +49,7 @@ public class JxlAnimationTests
     {
         WithDecoded(ThreeFrames, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(VariantKind.Frames, set.Kind);
             Assert.Equal(["Frame 1", "Frame 2", "Frame 3"], set.Variants.Select(v => v.Label));
@@ -75,7 +76,7 @@ public class JxlAnimationTests
     {
         WithDecoded(ThreeFrames, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.True(SelectAndWait(set, 1));
             AssertSrgb(Green, set.Active, 3, 5);
@@ -92,7 +93,7 @@ public class JxlAnimationTests
     {
         WithDecoded(LossyThreeFrames, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
             AssertSrgb(Red, set.Active, 12, 8, tolerance: 32);
 
             Assert.True(SelectAndWait(set, 1));
@@ -116,7 +117,7 @@ public class JxlAnimationTests
     {
         WithDecoded(ClearThenBlue, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(0, PixelOf(set.Active, 2, 2).Alpha);
             AssertSrgb(Red, set.Active, 12, 2);
@@ -129,7 +130,7 @@ public class JxlAnimationTests
     {
         WithDecoded(ThreePlays, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(["4x4, 70 ms", "4x4, 70 ms"], set.Variants.Select(v => v.Detail));
             Assert.Equal("2 repeats", Facts(composite)["Loop"]);
@@ -141,7 +142,7 @@ public class JxlAnimationTests
     {
         WithDecoded(HdrFrames, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
             Assert.Equal("Yes", Facts(composite)["HDR"]);
 
             // Each frame has its own range, which is not the file's.
@@ -181,7 +182,7 @@ public class JxlAnimationTests
     {
         WithDecoded(ThreeFrames, cut: 80, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.True(SelectAndWait(set, 1));
             Assert.Null(set.FailureOf(1));
@@ -196,7 +197,7 @@ public class JxlAnimationTests
     {
         WithDecoded(ThreeFrames, cut: 70, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(2, set.Variants.Count);
             Assert.Equal("stops before the animation ends", Facts(composite)["Truncated"]);
@@ -270,10 +271,10 @@ public class JxlAnimationTests
 
     private static Dictionary<string, string> Facts(Composite composite) => composite.FormatSpecificSnapshot().ToDictionary(p => p.Key, p => p.Value);
 
-    private static bool SelectAndWait(VariantRasterContent set, int index)
+    private static bool SelectAndWait(VariantContainer set, int index)
     {
         using var settled = new ManualResetEventSlim(false);
-        void Settle(VariantRasterContent _) => settled.Set();
+        void Settle(VariantContainer _) => settled.Set();
 
         set.VariantReady += Settle;
         set.VariantFailed += Settle;

@@ -1,4 +1,4 @@
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
 
 namespace Lyra.Imaging.Decoding.Support;
 

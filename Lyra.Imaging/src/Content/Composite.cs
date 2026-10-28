@@ -1,4 +1,8 @@
 using Lyra.Common;
+using Lyra.Imaging.Content.Exif;
+using Lyra.Imaging.Content.Hdr;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Psd.Core.Decode.Layers;
 
 namespace Lyra.Imaging.Content;
@@ -86,7 +90,7 @@ public sealed class Composite : IDisposable
 
     /// <summary>
     /// Set by a decoder when the image is shown, but not whole. A set of renditions keeps one per
-    /// rendition instead, on <see cref="VariantRasterContent.WarningOf"/>.
+    /// rendition instead, on <see cref="VariantContainer.WarningOf"/>.
     /// </summary>
     public volatile LoadWarning? Warning;
 
@@ -117,13 +121,13 @@ public sealed class Composite : IDisposable
     };
 
     /// <summary>What is on screen: the content itself, or the rendition a page set is showing.</summary>
-    private ICompositeContent? Displayed => Content is VariantRasterContent variants ? variants.Active : Content;
+    private ICompositeContent? Displayed => Content is VariantContainer variants ? variants.Active : Content;
 
-    public float LogicalWidth => Content is VariantRasterContent pages
+    public float LogicalWidth => Content is VariantContainer pages
         ? pages.DecodedWidth ?? 0f
         : FullWidth ?? Content?.DecodedWidth ?? 0f;
 
-    public float LogicalHeight => Content is VariantRasterContent pages
+    public float LogicalHeight => Content is VariantContainer pages
         ? pages.DecodedHeight ?? 0f
         : FullHeight ?? Content?.DecodedHeight ?? 0f;
 

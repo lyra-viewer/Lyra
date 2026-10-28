@@ -1,21 +1,22 @@
-using Lyra.Common.Settings.Enums;
-using Lyra.Common.Settings;
-using Lyra.Common.SystemExtensions;
+using System.Collections.Concurrent;
 using Lyra.Common;
+using Lyra.Common.Settings;
+using Lyra.Common.Settings.Enums;
+using Lyra.Common.SystemExtensions;
 using Lyra.DropStatusProvider;
-using Lyra.FileLoader.Duplicates.Perceptual;
 using Lyra.FileLoader.Duplicates;
+using Lyra.FileLoader.Duplicates.Perceptual;
 using Lyra.FileLoader.Navigation;
 using Lyra.GUI;
-using Lyra.Imaging.Content;
-using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging;
+using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
+using Lyra.Imaging.Decoding.Support;
+using Lyra.Renderer;
 using Lyra.Renderer.Backends;
 using Lyra.Renderer.Display;
-using Lyra.Renderer;
 using Lyra.UI.SupportingTypes;
 using SkiaSharp;
-using System.Collections.Concurrent;
 using static SDL3.SDL;
 
 namespace Lyra.SdlCore;
@@ -433,6 +434,8 @@ public partial class SdlCore : IDisposable
     private void LoadImage(NavigationDirection direction = NavigationDirection.None)
     {
         PurgeNotExistingFiles(direction);
+        if (ReconcileViewMode())
+            PurgeNotExistingFiles(direction);
 
         var keepPaths = DirectoryNavigator.GetRange(CleanupSafeRange);
         ImageStore.Cleanup(keepPaths);
@@ -580,7 +583,7 @@ public partial class SdlCore : IDisposable
     {
         DispatchToMain(() =>
         {
-            if (_refitForVariant >= 0 && ReferenceEquals(c, _composite) && c.Content is VariantRasterContent { IsWaiting: false } variants)
+            if (_refitForVariant >= 0 && ReferenceEquals(c, _composite) && c.Content is VariantContainer { IsWaiting: false } variants)
             {
                 var arrived = variants.ShownIndex == _refitForVariant;
                 _refitForVariant = -1;
@@ -610,7 +613,7 @@ public partial class SdlCore : IDisposable
 
     private void OnVariantSelected(int index)
     {
-        if (_composite?.Content is not VariantRasterContent variants || !variants.Select(index))
+        if (_composite?.Content is not VariantContainer variants || !variants.Select(index))
             return;
 
         _refitForVariant = variants.IsWaiting ? index : -1;

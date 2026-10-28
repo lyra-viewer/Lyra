@@ -1,5 +1,7 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Decoding.Decoders.Animation;
 using Lyra.Imaging.Decoding.Structure;
@@ -40,7 +42,7 @@ public class GifDecoderTests
 
         WithDecoded(gif, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(VariantKind.Frames, set.Kind);
             Assert.Equal(["Frame 1", "Frame 2", "Frame 3"], set.Variants.Select(v => v.Label));
@@ -111,7 +113,7 @@ public class GifDecoderTests
 
         WithDecoded(gif, composite =>
         {
-            Assert.IsNotType<VariantRasterContent>(composite.Content);
+            Assert.IsNotType<VariantContainer>(composite.Content);
             Assert.Equal(Width, composite.Content!.DecodedWidth);
             Assert.Null(composite.Structure);
             Assert.Equal(["Format", "Palette"], composite.FormatSpecificSnapshot().Select(p => p.Key));
@@ -125,7 +127,7 @@ public class GifDecoderTests
 
         WithDecoded(gif, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             using var arrived = new ManualResetEventSlim(false);
             set.VariantReady += _ => arrived.Set();
@@ -348,7 +350,7 @@ public class GifDecoderTests
 
         WithDecoded(gif, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(LoadWarning.PartiallyDecoded("Frame 1 holds 1 of its 4 pixels"), set.WarningOf(0));
             Assert.Null(set.WarningOf(1));
@@ -405,7 +407,7 @@ public class GifDecoderTests
 
         WithDecoded(gif, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             using var settled = new ManualResetEventSlim(false);
             set.VariantFailed += _ => settled.Set();

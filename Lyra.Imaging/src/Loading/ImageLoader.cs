@@ -3,7 +3,9 @@ using Lyra.Common;
 using Lyra.Common.Estimation;
 using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Content.Tiling;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders.Raw;
 
 namespace Lyra.Imaging.Loading;
@@ -470,7 +472,7 @@ internal class ImageLoader : IDisposable
             if (largeContent is not null)
                 largeContent.TilesProgressChanged += _ => composite.SignalProgress();
             
-            if (composite.Content is VariantRasterContent variants)
+            if (composite.Content is VariantContainer variants)
             {
                 variants.VariantReady += _ => composite.SignalProgress();
                 variants.VariantFailed += _ => composite.SignalProgress();

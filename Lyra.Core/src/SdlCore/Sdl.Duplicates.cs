@@ -1,4 +1,4 @@
-using Lyra.FileLoader.Navigation;
+using Lyra.GUI;
 
 namespace Lyra.SdlCore;
 
@@ -12,32 +12,24 @@ public partial class SdlCore
 
     private void OnFindDuplicatesRequested()
     {
-        // "New Search"/"Regroup": leave duplicates mode and restore the full collection before rescanning.
-        var wasInDuplicatesMode = DirectoryNavigator.IsDuplicatesMode;
-        if (wasInDuplicatesMode)
-        {
-            DirectoryNavigator.ExitDuplicatesMode();
-            LoadImage();
-        }
+        // "New Search"/"Regroup": scan the full collection, never the subset.
+        if (CurrentViewMode() == ViewMode.Duplicates)
+            TryLeaveViewMode();
 
-        _ui.SetDuplicatesState(inDuplicatesMode: wasInDuplicatesMode, noDuplicatesFound: false);
+        _ui.SetNoDuplicatesFound(false);
         _duplicateScanService.Start();
     }
 
     private void OnDuplicatesGoBack()
     {
-        if (!DirectoryNavigator.IsDuplicatesMode)
-            return;
-
-        DirectoryNavigator.ExitDuplicatesMode();
-        LoadImage();
-        _ui.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false);
+        if (CurrentViewMode() == ViewMode.Duplicates)
+            TryLeaveViewMode();
     }
 
     /// <summary>Scan aborted (raised on the scan thread) - drop back to the pre-scan state.</summary>
     private void OnDuplicateScanAborted()
     {
-        DispatchToMain(() => _ui.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: false));
+        DispatchToMain(() => _ui.SetNoDuplicatesFound(false));
     }
 
     /// <summary>Scan finished (raised on the scan thread) - apply the result on the main thread.</summary>
@@ -45,15 +37,8 @@ public partial class SdlCore
     {
         DispatchToMain(() =>
         {
-            if (groupCount > 0 && DirectoryNavigator.EnterDuplicatesMode())
-            {
-                LoadImage();
-                _ui.SetDuplicatesState(inDuplicatesMode: true, noDuplicatesFound: false);
-            }
-            else
-            {
-                _ui.SetDuplicatesState(inDuplicatesMode: false, noDuplicatesFound: true);
-            }
+            var entered = groupCount > 0 && TryEnterDuplicatesView();
+            _ui.SetNoDuplicatesFound(!entered);
         });
     }
 }

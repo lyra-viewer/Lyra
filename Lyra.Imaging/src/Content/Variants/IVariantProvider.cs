@@ -1,4 +1,4 @@
-namespace Lyra.Imaging.Content;
+namespace Lyra.Imaging.Content.Variants;
 
 /// <summary>
 /// Supplies one rendition on demand. Implemented by decoders whose container holds more renditions

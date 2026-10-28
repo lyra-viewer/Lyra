@@ -1,8 +1,18 @@
+using System.Diagnostics;
 using Lyra.Common;
+using Lyra.Imaging.Content.Status;
 
-namespace Lyra.Imaging.Content;
+namespace Lyra.Imaging.Content.Variants;
 
-public sealed class VariantRasterContent : ICompositeContent
+/// <param name="Identity">Stands for one request, so a new request is a new load to the progress bar.</param>
+public readonly record struct VariantWait(object Identity, int Index, double ElapsedMs);
+
+/// <summary>
+/// The renditions a file holds - pages, frames, sizes, a model's textures and contact sheets -
+/// each any kind of content, decoded up front or on demand within a byte budget. Holds the one on
+/// screen, may preload its neighbours, and lends decoded ones out for other renditions to reuse.
+/// </summary>
+public sealed partial class VariantContainer : ICompositeContent
 {
     private readonly List<ICompositeContent?> _contents;
     private readonly IVariantProvider? _provider;
@@ -16,6 +26,7 @@ public sealed class VariantRasterContent : ICompositeContent
     private readonly Lock _gate = new();
     private CancellationTokenSource? _pending;
     private int _pendingIndex = -1;
+    private long _pendingSince;
     private bool _disposed;
 
     private readonly Dictionary<int, LoadFailure> _failures = new();
@@ -29,7 +40,7 @@ public sealed class VariantRasterContent : ICompositeContent
     /// Every rendition decoded up front. For containers small enough that laziness would only add
     /// failure modes.
     /// </summary>
-    public VariantRasterContent(IReadOnlyList<ImageVariant> variants, List<ICompositeContent> contents, int active)
+    public VariantContainer(IReadOnlyList<ImageVariant> variants, List<ICompositeContent> contents, int active)
     {
         ArgumentNullException.ThrowIfNull(variants);
         ArgumentNullException.ThrowIfNull(contents);
@@ -47,7 +58,7 @@ public sealed class VariantRasterContent : ICompositeContent
     /// Renditions decoded on demand, with <paramref name="first"/> already in hand so there is
     /// something to draw immediately.
     /// </summary>
-    public VariantRasterContent(IReadOnlyList<ImageVariant> variants, int active, ICompositeContent first, IVariantProvider provider, long residentByteBudget)
+    public VariantContainer(IReadOnlyList<ImageVariant> variants, int active, ICompositeContent first, IVariantProvider provider, long residentByteBudget)
     {
         ArgumentNullException.ThrowIfNull(variants);
         ArgumentNullException.ThrowIfNull(first);
@@ -73,6 +84,44 @@ public sealed class VariantRasterContent : ICompositeContent
 
     /// <summary>What the renditions are. Defaults to the icon case: sizes of one image.</summary>
     public VariantKind Kind { get; init; } = VariantKind.Variants;
+
+    private IReadOnlyList<int>? _stepOrder;
+
+    /// <summary>
+    /// The renditions stepped through one at a time, in order. All of them unless the creator says
+    /// otherwise, as a model leaves out its missing textures and its contact sheets.
+    /// </summary>
+    public IReadOnlyList<int> StepOrder
+    {
+        get => _stepOrder ??= [.. Enumerable.Range(0, Variants.Count)];
+        init => _stepOrder = [.. value.Where(index => index >= 0 && index < Variants.Count)];
+    }
+
+    /// <summary>The rendition <paramref name="steps"/> away from the selected one in <see cref="StepOrder"/>, or null past either end.</summary>
+    public int? StepFrom(int steps)
+    {
+        var order = StepOrder;
+        if (order.Count == 0)
+            return null;
+
+        var at = IndexOf(order, ActiveIndex);
+        var target = at < 0
+            ? steps > 0 ? 0 : order.Count - 1
+            : at + steps;
+
+        return target >= 0 && target < order.Count && order[target] != ActiveIndex ? order[target] : null;
+    }
+
+    private static int IndexOf(IReadOnlyList<int> order, int index)
+    {
+        for (var i = 0; i < order.Count; i++)
+        {
+            if (order[i] == index)
+                return i;
+        }
+
+        return -1;
+    }
 
     /// <summary>What the interface shows as selected, which a pending decode has already moved.</summary>
     public int ActiveIndex { get; private set; }
@@ -111,6 +160,18 @@ public sealed class VariantRasterContent : ICompositeContent
         {
             lock (_gate)
                 return _pendingIndex >= 0;
+        }
+    }
+
+    /// <summary>The rendition asked for and not arrived yet, and for how long, or null.</summary>
+    public VariantWait? Waiting
+    {
+        get
+        {
+            lock (_gate)
+                return _pendingIndex >= 0 && _pending is { } request
+                    ? new VariantWait(request, _pendingIndex, Stopwatch.GetElapsedTime(_pendingSince).TotalMilliseconds)
+                    : null;
         }
     }
 
@@ -164,11 +225,44 @@ public sealed class VariantRasterContent : ICompositeContent
         }
     }
 
+    /// <summary>
+    /// Records that a rendition cannot be shown, found out before anyone asked for it, such as a
+    /// texture whose file is missing. Unlike a failed request it is not reported as the last failure.
+    /// </summary>
+    public void RecordUnavailable(int index, LoadFailure failure)
+    {
+        if (index < 0 || index >= Variants.Count)
+            return;
+
+        lock (_gate)
+        {
+            _failures[index] = failure;
+            Interlocked.Increment(ref _failureVersion);
+        }
+    }
+
+    /// <summary>
+    /// Replaces a rendition's description, for renditions whose size is only known once decoded.
+    /// Safe from any thread; a description equal to the current one changes nothing.
+    /// </summary>
+    public void Redescribe(int index, ImageVariant variant)
+    {
+        ArgumentNullException.ThrowIfNull(variant);
+
+        lock (_gate)
+        {
+            if (_disposed || index < 0 || index >= Variants.Count || Variants[index] == variant)
+                return;
+
+            Variants = [.. Variants.Select((existing, i) => i == index ? variant : existing)];
+        }
+    }
+
     /// <summary>Raised on a background thread when a requested rendition becomes drawable.</summary>
-    public event Action<VariantRasterContent>? VariantReady;
+    public event Action<VariantContainer>? VariantReady;
 
     /// <summary>Raised on a background thread when a requested rendition could not be decoded.</summary>
-    public event Action<VariantRasterContent>? VariantFailed;
+    public event Action<VariantContainer>? VariantFailed;
 
     public bool IsResolutionIndependent => Active?.IsResolutionIndependent == true;
 
@@ -224,9 +318,19 @@ public sealed class VariantRasterContent : ICompositeContent
             _lastFailedIndex = -1;
 
             _pending?.Cancel();
-            _pending = new CancellationTokenSource();
             _pendingIndex = index;
+            _pendingSince = Stopwatch.GetTimestamp();
 
+            // Already on its way: wait for that rather than start again.
+            if (_preloadIndex == index && _preload is { } preload)
+            {
+                _pending = preload;
+                return true;
+            }
+
+            CancelPreload();
+
+            _pending = new CancellationTokenSource();
             var cts = _pending;
             _ = Task.Run(() => Fetch(index, cts.Token), CancellationToken.None);
         }
@@ -249,9 +353,9 @@ public sealed class VariantRasterContent : ICompositeContent
             failure = LoadFailure.From(ex);
 
             if (failure.IsExpected)
-                Logger.Warning(typeof(VariantRasterContent), $"{Variants[index].Label}: {failure.Message}. Detail: {failure.Detail}");
+                Logger.Warning(typeof(VariantContainer), $"{Variants[index].Label}: {failure.Message}. Detail: {failure.Detail}");
             else
-                Logger.Error(typeof(VariantRasterContent), $"{Variants[index].Label} failed to decode: {ex}");
+                Logger.Error(typeof(VariantContainer), $"{Variants[index].Label} failed to decode: {ex}");
         }
 
         if (decoded is null && failure is null && !ct.IsCancellationRequested)
@@ -262,11 +366,20 @@ public sealed class VariantRasterContent : ICompositeContent
 
         lock (_gate)
         {
-            if (decoded is null || _disposed || ct.IsCancellationRequested || _pendingIndex != index)
+            var requested = _pendingIndex == index;
+            var preloaded = _preloadIndex == index;
+
+            if (preloaded)
+            {
+                _preload = null;
+                _preloadIndex = -1;
+            }
+
+            if (decoded is null || _disposed || ct.IsCancellationRequested || !(requested || preloaded))
             {
                 decoded?.Dispose();
 
-                if (_pendingIndex == index)
+                if (requested)
                 {
                     _pendingIndex = -1;
 
@@ -279,8 +392,14 @@ public sealed class VariantRasterContent : ICompositeContent
                             RecordFailure(index, failure);
                     }
                 }
+                else if (preloaded && failure is not null && !_disposed && !ct.IsCancellationRequested)
+                {
+                    // Listed as failed, but not reported as the last failure: nobody asked for it.
+                    _failures[index] = failure;
+                    Interlocked.Increment(ref _failureVersion);
+                }
             }
-            else
+            else if (requested)
             {
                 _contents[index] = decoded;
                 _pendingIndex = -1;
@@ -288,6 +407,18 @@ public sealed class VariantRasterContent : ICompositeContent
                 Trim();
                 publish = true;
             }
+            else if (_contents[index] is null && _contents.Sum(c => c?.ByteSize ?? 0) + decoded.ByteSize <= _residentByteBudget)
+            {
+                // Not yet seen, so first to go when room is needed.
+                _contents[index] = decoded;
+                _recent.Insert(0, index);
+            }
+            else
+            {
+                decoded.Dispose();
+            }
+
+            SchedulePreload();
         }
 
         if (publish)
@@ -348,6 +479,8 @@ public sealed class VariantRasterContent : ICompositeContent
 
         _recent.Remove(index);
         _recent.Add(index);
+
+        SchedulePreload();
     }
 
     private void RecordFailure(int index, LoadFailure failure)
@@ -391,8 +524,9 @@ public sealed class VariantRasterContent : ICompositeContent
             if (_retired.Count == 0)
                 return;
 
-            retired = [.. _retired];
-            _retired.Clear();
+            // Lent content stays until it comes back.
+            retired = [.. _retired.Where(content => !_leases.ContainsKey(content))];
+            _retired.RemoveAll(content => !_leases.ContainsKey(content));
         }
 
         foreach (var content in retired)
@@ -406,17 +540,19 @@ public sealed class VariantRasterContent : ICompositeContent
             _disposed = true;
             _pending?.Cancel();
             _pending = null;
+            CancelPreload();
 
-            for (var i = 0; i < _contents.Count; i++)
-            {
-                _contents[i]?.Dispose();
-                _contents[i] = null;
-            }
+            foreach (var content in _contents.OfType<ICompositeContent>())
+                _retired.Add(content);
 
-            foreach (var content in _retired)
+            _contents.Clear();
+            _contents.AddRange(Enumerable.Repeat<ICompositeContent?>(null, Variants.Count));
+
+            // Lent content is disposed when it comes back.
+            foreach (var content in _retired.Where(content => !_leases.ContainsKey(content)))
                 content.Dispose();
 
-            _retired.Clear();
+            _retired.RemoveAll(content => !_leases.ContainsKey(content));
             _recent.Clear();
         }
 

@@ -1,4 +1,5 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Tests.Support;
 using SkiaSharp;
@@ -45,7 +46,7 @@ public class JxlOrientationAndAlphaTests
     {
         WithDecoded(RotatedAnimation, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
             Assert.All(set.Variants, v => Assert.Equal((2, 4), (v.Width, v.Height)));
 
             var raster = Assert.IsType<RasterContent>(set.Active);
@@ -62,7 +63,7 @@ public class JxlOrientationAndAlphaTests
     {
         WithDecoded(fixture, composite =>
         {
-            var raster = Assert.IsType<RasterContent>(composite.Content is VariantRasterContent set ? set.Active : composite.Content);
+            var raster = Assert.IsType<RasterContent>(composite.Content is VariantContainer set ? set.Active : composite.Content);
             var pixel = Srgb(raster, 1, 1);
 
             Assert.InRange(pixel.Alpha, 126, 130);

@@ -1,5 +1,6 @@
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Tiling;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Renderer.Backends;
 using SkiaSharp;
@@ -14,9 +15,10 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
         if (content is null)
             return;
         
-        while (content is VariantRasterContent variants)
+        while (content is VariantContainer variants)
         {
             variants.ReleaseRetired();
+            variants.StartPreloading();
             content = variants.Active;
         }
 

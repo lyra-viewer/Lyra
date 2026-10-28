@@ -1,14 +1,15 @@
 using Lyra.Common;
-using Lyra.Imaging.Content.Tiling;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Exif;
+using Lyra.Imaging.Content.Tiling;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Metadata;
 using Lyra.Metadata.Photoshop;
-using SkiaSharp;
+using Lyra.Psd;
 using Lyra.Psd.Core.Decode.Composite;
 using Lyra.Psd.Core.SectionData;
-using Lyra.Psd;
+using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 

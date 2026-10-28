@@ -1,4 +1,5 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using SkiaSharp;
 using Xunit;
 
@@ -29,7 +30,7 @@ public class HdrDetectionTests : IDisposable
     [Fact]
     public void AnHdrPageInAPageSetCountsAsLiveHdr()
     {
-        _composite.Content = new VariantRasterContent([Page(1), Page(2)], [Hdr(), Hdr()], active: 0);
+        _composite.Content = new VariantContainer([Page(1), Page(2)], [Hdr(), Hdr()], active: 0);
 
         Assert.True(_composite.IsHdrDecoded);
         Assert.True(_composite.IsHdrImage);
@@ -38,7 +39,7 @@ public class HdrDetectionTests : IDisposable
     [Fact]
     public void AnSdrPageSetIsNot()
     {
-        _composite.Content = new VariantRasterContent([Page(1), Page(2)], [Sdr(), Sdr()], active: 0);
+        _composite.Content = new VariantContainer([Page(1), Page(2)], [Sdr(), Sdr()], active: 0);
 
         Assert.False(_composite.IsHdrDecoded);
         Assert.False(_composite.IsHdrImage);
@@ -47,7 +48,7 @@ public class HdrDetectionTests : IDisposable
     [Fact]
     public void ItFollowsThePageOnScreen()
     {
-        var set = new VariantRasterContent([Page(1), Page(2)], [Sdr(), Hdr()], active: 0);
+        var set = new VariantContainer([Page(1), Page(2)], [Sdr(), Hdr()], active: 0);
         _composite.Content = set;
 
         Assert.False(_composite.IsHdrDecoded);

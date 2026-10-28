@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.ManagedCodecs.Raster.Ico;
 using SkiaSharp;
@@ -268,7 +269,7 @@ public class IcoDecoderTests
 
         WithDecoded(ico, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(["256 x 256", "32 x 32", "16 x 16"], set.Variants.Select(variant => variant.Label));
             Assert.Equal(0, set.ActiveIndex);
@@ -287,7 +288,7 @@ public class IcoDecoderTests
 
         WithDecoded(ico, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(["16 x 16", "16 x 16"], set.Variants.Select(variant => variant.Label));
             Assert.Equal(["32-bit BMP", "4-bit BMP"], set.Variants.Select(variant => variant.Detail));
@@ -301,7 +302,7 @@ public class IcoDecoderTests
 
         WithDecoded(ico, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             for (var i = 0; i < set.Variants.Count; i++)
             {
@@ -340,7 +341,7 @@ public class IcoDecoderTests
 
         WithDecoded(ico, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal("32 x 32", Assert.Single(set.Variants).Label);
         });

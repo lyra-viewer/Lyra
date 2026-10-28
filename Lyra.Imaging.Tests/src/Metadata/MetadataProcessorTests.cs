@@ -1,4 +1,4 @@
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Exif;
 using Lyra.Imaging.Metadata;
 using Lyra.Imaging.Tests.Support;
 using Lyra.Metadata.Exif;

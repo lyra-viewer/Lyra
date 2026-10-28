@@ -34,18 +34,18 @@ public sealed class HelpSection : IUISection
         
         AddRow("← / →", "Previous / Next image");
         AddRow(isMac ? "⌘← / ⌘→" : "Home / End", "First / Last image");
-
         (_dirEdgeKey, _dirEdgeDesc) = AddRow(isMac ? "⌥← / ⌥→" : "Ctrl← / Ctrl→", "Prev / Next directory edge");
-
-        AddRow("↵",             isMac ? "Reveal in Finder" : "Reveal in file explorer");
-        AddRow("+ / −",         "Zoom in / out");
-        AddRow("Mouse Wheel",   "Zoom at cursor");
-        AddRow("0",             "Fit screen / Original size");
-        AddRow("L",             "Lock zoom & pan");
-        AddRow("I",             "Toggle info");
-        AddRow("U",             "Toggle sidebar");
-        AddRow("H",             "Toggle help");
-        AddRow("B",             "Toggle background");
+        
+        AddRow("[ / ]",       "Previous / Next variant");
+        AddRow("↵",           isMac ? "Reveal in Finder" : "Reveal in file explorer");
+        AddRow("+ / −",       "Zoom in / out");
+        AddRow("Mouse Wheel", "Zoom at cursor");
+        AddRow("0",           "Fit screen / Original size");
+        AddRow("L",           "Lock zoom & pan");
+        AddRow("I",           "Toggle info");
+        AddRow("U",           "Toggle sidebar");
+        AddRow("H",           "Toggle help");
+        AddRow("B",           "Toggle background");
         
         (_samplingKey, _samplingDesc) = AddRow("S", "Toggle sampling");
 
@@ -65,7 +65,7 @@ public sealed class HelpSection : IUISection
     public void Refresh(UIState state)
     {
         // The edge-modifier row doubles as group navigation in duplicates mode.
-        if (state.AppStates.InDuplicatesMode)
+        if (state.AppStates.ViewMode == ViewMode.Duplicates)
         {
             _dirEdgeKey.Present  = true;
             _dirEdgeDesc.Present = true;

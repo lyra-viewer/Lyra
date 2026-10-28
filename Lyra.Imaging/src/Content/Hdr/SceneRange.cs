@@ -1,4 +1,4 @@
-namespace Lyra.Imaging.Content;
+namespace Lyra.Imaging.Content.Hdr;
 
 /// <summary>
 /// Where a scene-referred image's highlights top out, when the content knows. A camera raw does,

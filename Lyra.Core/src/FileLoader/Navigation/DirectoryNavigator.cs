@@ -46,11 +46,11 @@ public static class DirectoryNavigator
     private static int _cachedFullTreeVersion = -1;
 
     public static int Version => _version;
+    
+    public static bool HasDuplicatesSubset => FileRecordDatabase.InDuplicatesView;
 
-    public static bool IsDuplicatesMode => FileRecordDatabase.InDuplicatesView;
-
-    /// <summary>Enters duplicates mode (grouped records only). Returns false if nothing is grouped.</summary>
-    public static bool EnterDuplicatesMode()
+    /// <summary>Narrows the records to the grouped ones. Returns false if nothing is grouped.</summary>
+    public static bool ApplyDuplicatesSubset()
     {
         if (!FileRecordDatabase.EnterDuplicatesView())
             return false;
@@ -59,7 +59,8 @@ public static class DirectoryNavigator
         return true;
     }
 
-    public static void ExitDuplicatesMode()
+    /// <summary>Restores the full collection if the duplicates subset is applied.</summary>
+    public static void RestoreFullCollection()
     {
         if (!FileRecordDatabase.InDuplicatesView)
             return;
@@ -159,7 +160,7 @@ public static class DirectoryNavigator
     /// </summary>
     public static bool MoveToNextGroup()
     {
-        if (!IsDuplicatesMode)
+        if (!HasDuplicatesSubset)
             return false;
 
         var records = FileRecordDatabase.Records;
@@ -187,7 +188,7 @@ public static class DirectoryNavigator
     /// </summary>
     public static bool MoveToPreviousGroup()
     {
-        if (!IsDuplicatesMode)
+        if (!HasDuplicatesSubset)
             return false;
 
         var records = FileRecordDatabase.Records;

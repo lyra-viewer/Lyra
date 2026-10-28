@@ -1,4 +1,5 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using Xunit;
 
 namespace Lyra.Imaging.Tests.Content;
@@ -31,11 +32,11 @@ public class VariantRetirementTests
     private static IReadOnlyList<ImageVariant> Variants(int count) => [.. Enumerable.Range(0, count).Select(i => new ImageVariant($"Page {i + 1}", 100 + i, 200 + i, "detail", 64))];
 
     /// <summary>Selects <paramref name="index"/> and returns once the fetch has published it.</summary>
-    private static void SelectAndWait(VariantRasterContent set, int index)
+    private static void SelectAndWait(VariantContainer set, int index)
     {
         using var published = new ManualResetEventSlim(false);
 
-        void OnReady(VariantRasterContent _) => published.Set();
+        void OnReady(VariantContainer _) => published.Set();
 
         set.VariantReady += OnReady;
         try
@@ -56,7 +57,7 @@ public class VariantRetirementTests
         var second = new FakeContent();
 
         // A budget below one rendition, so every fetch trims whatever is no longer shown.
-        var set = new VariantRasterContent(Variants(2), active: 0, first, new FakeProvider(_ => second), residentByteBudget: 1);
+        var set = new VariantContainer(Variants(2), active: 0, first, new FakeProvider(_ => second), residentByteBudget: 1);
 
         SelectAndWait(set, 1);
 
@@ -73,7 +74,7 @@ public class VariantRetirementTests
     public void ReleaseRetired_IsANoOpWhenNothingWasTrimmed()
     {
         var only = new FakeContent();
-        var set = new VariantRasterContent(Variants(1), active: 0, only, new FakeProvider(_ => new FakeContent()), residentByteBudget: 1);
+        var set = new VariantContainer(Variants(1), active: 0, only, new FakeProvider(_ => new FakeContent()), residentByteBudget: 1);
 
         set.ReleaseRetired();
         set.ReleaseRetired();
@@ -88,7 +89,7 @@ public class VariantRetirementTests
         var first = new FakeContent();
         var second = new FakeContent();
 
-        var set = new VariantRasterContent(Variants(2), active: 0, first, new FakeProvider(_ => second), residentByteBudget: 1);
+        var set = new VariantContainer(Variants(2), active: 0, first, new FakeProvider(_ => second), residentByteBudget: 1);
 
         SelectAndWait(set, 1);
         Assert.False(first.Disposed);
@@ -102,7 +103,7 @@ public class VariantRetirementTests
     [Fact]
     public void DecodedSize_ComesFromTheDescription_NotFromLiveContent()
     {
-        var set = new VariantRasterContent(Variants(2), active: 0, new FakeContent(), new FakeProvider(_ => new FakeContent()), residentByteBudget: 1);
+        var set = new VariantContainer(Variants(2), active: 0, new FakeContent(), new FakeProvider(_ => new FakeContent()), residentByteBudget: 1);
 
         Assert.Equal(100, set.DecodedWidth);
         Assert.Equal(200, set.DecodedHeight);
@@ -119,7 +120,7 @@ public class VariantRetirementTests
     public void EagerForm_DisposesEveryRendition()
     {
         List<ICompositeContent> contents = [new FakeContent(), new FakeContent(), new FakeContent()];
-        var set = new VariantRasterContent(Variants(3), contents, active: 1);
+        var set = new VariantContainer(Variants(3), contents, active: 1);
 
         Assert.Equal(101, set.DecodedWidth);
 

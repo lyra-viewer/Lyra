@@ -1,4 +1,6 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
 using Xunit;
 
 namespace Lyra.Imaging.Tests.Content;
@@ -24,13 +26,13 @@ public class VariantFailureTests
     private static IReadOnlyList<ImageVariant> Variants(int count) => [.. Enumerable.Range(0, count).Select(i => new ImageVariant($"Page {i + 1}", 100, 100, "detail", 64))];
 
     /// <summary>Selects <paramref name="index"/> and waits for it to arrive or fail; true when it failed.</summary>
-    private static bool SelectAndSettle(VariantRasterContent set, int index)
+    private static bool SelectAndSettle(VariantContainer set, int index)
     {
         using var settled = new ManualResetEventSlim(false);
         var failed = false;
 
-        void OnReady(VariantRasterContent _) => settled.Set();
-        void OnFailed(VariantRasterContent _)
+        void OnReady(VariantContainer _) => settled.Set();
+        void OnFailed(VariantContainer _)
         {
             failed = true;
             settled.Set();
@@ -56,7 +58,7 @@ public class VariantFailureTests
     public void AFailedPage_ReturnsTheSelectionToThePageOnScreen()
     {
         var first = new FakeContent();
-        using var set = new VariantRasterContent(Variants(3), active: 0, first,
+        using var set = new VariantContainer(Variants(3), active: 0, first,
             new FakeProvider(_ => throw new InvalidOperationException("unreadable page")), residentByteBudget: long.MaxValue);
 
         Assert.True(SelectAndSettle(set, 2));
@@ -73,7 +75,7 @@ public class VariantFailureTests
         var attempts = 0;
         var second = new FakeContent();
 
-        using var set = new VariantRasterContent(Variants(2), active: 0, new FakeContent(),
+        using var set = new VariantContainer(Variants(2), active: 0, new FakeContent(),
             new FakeProvider(_ => ++attempts == 1 ? throw new IOException("share went away") : second), residentByteBudget: long.MaxValue);
 
         Assert.True(SelectAndSettle(set, 1));
@@ -86,7 +88,7 @@ public class VariantFailureTests
     [Fact]
     public void AFailedPage_SaysWhy()
     {
-        using var set = new VariantRasterContent(Variants(3), active: 0, new FakeContent(),
+        using var set = new VariantContainer(Variants(3), active: 0, new FakeContent(),
             new FakeProvider(_ => throw new UnauthorizedAccessException("denied")), residentByteBudget: long.MaxValue);
 
         Assert.True(SelectAndSettle(set, 2));
@@ -102,7 +104,7 @@ public class VariantFailureTests
     [Fact]
     public void APageThatDecodesToNothing_StillSaysWhy()
     {
-        using var set = new VariantRasterContent(Variants(2), active: 0, new FakeContent(),
+        using var set = new VariantContainer(Variants(2), active: 0, new FakeContent(),
             new FakeProvider(_ => null!), residentByteBudget: long.MaxValue);
 
         Assert.True(SelectAndSettle(set, 1));
@@ -115,7 +117,7 @@ public class VariantFailureTests
     {
         var attempts = 0;
 
-        using var set = new VariantRasterContent(Variants(2), active: 0, new FakeContent(),
+        using var set = new VariantContainer(Variants(2), active: 0, new FakeContent(),
             new FakeProvider(_ => ++attempts == 1 ? throw new IOException("share went away") : new FakeContent()), residentByteBudget: long.MaxValue);
 
         Assert.True(SelectAndSettle(set, 1));
@@ -131,7 +133,7 @@ public class VariantFailureTests
     [Fact]
     public void ShowingAnotherPage_ClearsTheLastFailure_ButKeepsTheFailedPageMarked()
     {
-        using var set = new VariantRasterContent(Variants(3), active: 0, new FakeContent(),
+        using var set = new VariantContainer(Variants(3), active: 0, new FakeContent(),
             new FakeProvider(index => index == 1 ? throw new InvalidOperationException("unreadable page") : new FakeContent()), residentByteBudget: long.MaxValue);
 
         Assert.True(SelectAndSettle(set, 1));
@@ -144,7 +146,7 @@ public class VariantFailureTests
     [Fact]
     public void AnArrivedPage_IsTheOneShown()
     {
-        using var set = new VariantRasterContent(Variants(2), active: 0, new FakeContent(),
+        using var set = new VariantContainer(Variants(2), active: 0, new FakeContent(),
             new FakeProvider(_ => new FakeContent()), residentByteBudget: long.MaxValue);
 
         Assert.False(SelectAndSettle(set, 1));
@@ -159,7 +161,7 @@ public class VariantFailureTests
         using var release = new ManualResetEventSlim(false);
         using var failedOnce = new ManualResetEventSlim(false);
 
-        using var set = new VariantRasterContent(Variants(3), active: 0, new FakeContent(),
+        using var set = new VariantContainer(Variants(3), active: 0, new FakeContent(),
             new FakeProvider(index =>
             {
                 if (index != 1)

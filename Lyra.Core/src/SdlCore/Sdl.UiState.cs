@@ -3,10 +3,10 @@ using Lyra.Common.SystemExtensions;
 using Lyra.DuplicateStatusProvider;
 using Lyra.FileLoader.Navigation;
 using Lyra.FileLoader.Store;
-using Lyra.Imaging.Content;
-using Lyra.Renderer;
 using Lyra.GUI;
 using Lyra.GUI.Presenters;
+using Lyra.Imaging.Content.Status;
+using Lyra.Renderer;
 using SkiaSharp;
 
 namespace Lyra.SdlCore;
@@ -29,7 +29,7 @@ public partial class SdlCore
             CollectionCount = navigation.CollectionCount,
             DirectoryIndex = navigation.DirectoryIndex,
             DirectoryCount = navigation.DirectoryCount,
-            InDuplicatesMode = DirectoryNavigator.IsDuplicatesMode,
+            ViewMode = CurrentViewMode(),
             Zoom = _zoomPercentage,
             DisplayMode = _displayMode,
             ViewLocked = _viewState.ViewLocked,

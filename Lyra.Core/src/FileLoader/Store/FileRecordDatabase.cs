@@ -103,16 +103,25 @@ public static class FileRecordDatabase
         return true;
     }
 
-    /// <summary>Restores the full stashed collection.</summary>
+    /// <summary>
+    /// Restores the full stashed collection at the record shown in the subset; falls back to
+    /// the pre-scan position when the subset has no current record.
+    /// </summary>
     public static void ExitDuplicatesView()
     {
         if (_stashedRecords is null)
             return;
 
+        var currentPath = Current?.Path;
+
         _records = _stashedRecords;
         _stashedRecords = null;
         RebuildIndexMap();
-        _index = _records.Count == 0 ? -1 : Math.Clamp(_stashedIndex, 0, _records.Count - 1);
+
+        if (currentPath != null && IndexByPath.TryGetValue(currentPath, out var i))
+            _index = i;
+        else
+            _index = _records.Count == 0 ? -1 : Math.Clamp(_stashedIndex, 0, _records.Count - 1);
     }
 
     public static void MoveNext()
@@ -160,12 +169,15 @@ public static class FileRecordDatabase
 
     /// <summary>
     /// Removes a record by path and keeps the cursor pointing at a sensible neighbor.
+    /// In duplicates view it is removed from the stashed full collection too.
     /// Returns false if the path was not present.
     /// </summary>
     public static bool Remove(string path)
     {
+        var removedFromStash = RemoveFromStash(path);
+
         if (!IndexByPath.TryGetValue(path, out var idx))
-            return false;
+            return removedFromStash;
 
         _records.RemoveAt(idx);
         RebuildIndexMap();
@@ -176,6 +188,22 @@ public static class FileRecordDatabase
             _index--;
         else if (idx == _index)
             _index = Math.Min(_index, _records.Count - 1);
+
+        return true;
+    }
+
+    private static bool RemoveFromStash(string path)
+    {
+        if (_stashedRecords is null)
+            return false;
+
+        var idx = _stashedRecords.FindIndex(r => PathComparer.CommonPathComparer.Equals(r.Path, path));
+        if (idx < 0)
+            return false;
+
+        _stashedRecords.RemoveAt(idx);
+        if (idx < _stashedIndex)
+            _stashedIndex--;
 
         return true;
     }

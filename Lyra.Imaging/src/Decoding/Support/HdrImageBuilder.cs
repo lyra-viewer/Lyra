@@ -1,6 +1,7 @@
 using System.Buffers;
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Hdr;
 using Lyra.Imaging.Loading;
 using SkiaSharp;
 

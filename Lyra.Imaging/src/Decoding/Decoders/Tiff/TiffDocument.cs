@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
@@ -25,10 +26,13 @@ internal static class TiffDocument
         var first = DecodePage(path, pages[0], directories[pages[0]], composite, ct);
         var variants = TiffPageSet.Describe(directories, pages, encodedBytes);
 
-        composite.Content = new VariantRasterContent(variants, active: 0, first, new PageProvider(path, pages, directories, composite), DecodePolicy.ResidentPageBudgetBytes)
+        var set = new VariantContainer(variants, active: 0, first, new PageProvider(path, pages, directories, composite), DecodePolicy.ResidentPageBudgetBytes)
         {
-            Kind = VariantKind.Pages
+            Kind = VariantKind.Pages,
+            PreloadsNeighbours = true
         };
+
+        composite.Content = set;
     }
 
     /// <summary>Decodes one page, read in place.</summary>

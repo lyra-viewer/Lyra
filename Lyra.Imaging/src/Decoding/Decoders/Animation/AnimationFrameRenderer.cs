@@ -1,5 +1,5 @@
 using Lyra.Common;
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
 using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Decoders.Animation;

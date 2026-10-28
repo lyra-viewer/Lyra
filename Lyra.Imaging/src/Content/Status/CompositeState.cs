@@ -1,4 +1,4 @@
-namespace Lyra.Imaging.Content;
+namespace Lyra.Imaging.Content.Status;
 
 public enum CompositeState
 {

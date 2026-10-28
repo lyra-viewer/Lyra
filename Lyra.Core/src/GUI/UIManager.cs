@@ -70,6 +70,7 @@ public class UIManager : IRenderOverlay, IDisposable
             Faint               = Pick(c, "faint", d.Faint),
 
             SelectedForeground  = Pick(c, "selected_foreground", d.SelectedForeground),
+            SecondaryForeground = Pick(c, "secondary_foreground", d.SecondaryForeground),
             SelectedBackground  = Pick(c, "selected_background", d.SelectedBackground),
             ForegroundDark      = Pick(c, "foreground_dark", d.ForegroundDark),
 
@@ -145,6 +146,8 @@ public class UIManager : IRenderOverlay, IDisposable
         return true;
     }
 
+    public OverlayKind ActiveOverlay => _mainLayer.ActiveOverlay;
+
     public bool DismissModalIfOpen()
     {
         var dismissed = _context.DismissModal();
@@ -206,9 +209,9 @@ public class UIManager : IRenderOverlay, IDisposable
     }
 
     /// <summary>Reflects duplicate-scan state on the Duplicates Finder section.</summary>
-    public void SetDuplicatesState(bool inDuplicatesMode, bool noDuplicatesFound)
+    public void SetNoDuplicatesFound(bool noDuplicatesFound)
     {
-        _mainLayer.SetDuplicatesState(inDuplicatesMode, noDuplicatesFound);
+        _mainLayer.SetNoDuplicatesFound(noDuplicatesFound);
         Invalidate();
     }
 

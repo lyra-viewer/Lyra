@@ -1,5 +1,7 @@
 using Lyra.Common.Estimation;
 using Lyra.GUI.Presenters;
+using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using Xunit;
 
 namespace Lyra.Core.Tests.GUI;
@@ -121,5 +123,50 @@ public class LoadProgressPresenterTests
 
         Assert.Equal(20f / 21, arrived.Value, precision: 3);
         Assert.Equal(20f / 21 + 0.5f / 21, halfDecoded.Value, precision: 3);
+    }
+
+    private sealed class Slow : IVariantProvider
+    {
+        public ManualResetEventSlim Release { get; } = new(false);
+
+        public ICompositeContent Decode(int index, CancellationToken ct)
+        {
+            Release.Wait(ct);
+            throw new OperationCanceledException();
+        }
+    }
+
+    private sealed class Still : ICompositeContent
+    {
+        public bool IsResolutionIndependent => false;
+        public float? DecodedWidth => 4;
+        public float? DecodedHeight => 4;
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public void APageDecodingAfterTheFileHasLoaded_SweepsTheBarOnceItTakesAWhile()
+    {
+        var provider = new Slow();
+        var variants = new[] { new ImageVariant("1", 4, 4, "", 64), new ImageVariant("2", 4, 4, "", 64) };
+        using var pages = new VariantContainer(variants, 0, new Still(), provider, 1 << 20);
+        using var composite = new Composite(new FileInfo("/nowhere/pages.tif")) { Content = pages };
+
+        Assert.False(LoadSnapshot.Of(composite).Active);
+
+        Assert.True(pages.Select(1));
+        var snapshot = LoadSnapshot.Of(composite);
+
+        Assert.True(snapshot.Active);
+        Assert.Equal(pages.Waiting!.Value.Identity, snapshot.Identity);
+
+        var bar = new LoadProgressPresenter();
+        Assert.False(bar.Update(snapshot with { ElapsedMs = 100 }).Visible);
+
+        var later = bar.Update(snapshot with { ElapsedMs = 400 });
+        Assert.True(later.Visible);
+        Assert.True(later.Indeterminate);
+
+        provider.Release.Set();
     }
 }

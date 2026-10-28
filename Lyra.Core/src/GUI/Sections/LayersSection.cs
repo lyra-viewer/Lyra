@@ -1,4 +1,5 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
 using Lyra.Psd.Core.Decode.Layers;
 using Lyra.UI;
 using Lyra.UI.Components;

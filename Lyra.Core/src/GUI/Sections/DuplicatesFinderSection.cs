@@ -8,8 +8,9 @@ using Lyra.UI.Theme;
 namespace Lyra.GUI.Sections;
 
 /// <summary>
-/// Sidebar collapsible that drives the duplicate scan. Hidden until revealed by the menu;
-/// state is pushed imperatively via <see cref="SetState"/> and the buttons surface as events.
+/// Sidebar collapsible that drives the duplicate scan. Hidden until revealed by the menu.
+/// Button state follows <see cref="ViewMode"/>; only the scan result is pushed, via
+/// <see cref="SetNoDuplicatesFound"/>. The buttons surface as events.
 /// </summary>
 public sealed class DuplicatesFinderSection : IUISection
 {
@@ -22,6 +23,9 @@ public sealed class DuplicatesFinderSection : IUISection
     private readonly Button _findButton;
     private readonly Button _goBackButton;
     private readonly Label _noDuplicatesLabel;
+
+    private bool _inDuplicatesMode;
+    private bool _noDuplicatesFound;
 
     public Collapsible Collapsible => _collapsible;
     public IComponent Root => _collapsible;
@@ -80,11 +84,10 @@ public sealed class DuplicatesFinderSection : IUISection
                     .PadBottom(12f));
     }
 
-    public void SetState(bool inDuplicatesMode, bool noDuplicatesFound)
+    public void SetNoDuplicatesFound(bool noDuplicatesFound)
     {
-        _findButton.Text = inDuplicatesMode ? Regroup : FindCaption;
-        _goBackButton.Enabled = inDuplicatesMode;
-        _noDuplicatesLabel.Present = noDuplicatesFound && !inDuplicatesMode;
+        _noDuplicatesFound = noDuplicatesFound;
+        Apply();
     }
 
     public void Show() => _collapsible.Present = true;
@@ -98,6 +101,14 @@ public sealed class DuplicatesFinderSection : IUISection
 
     public void Refresh(UIState state)
     {
-        // State is pushed imperatively via SetState; nothing to pull from UIState.
+        _inDuplicatesMode = state.AppStates.ViewMode == ViewMode.Duplicates;
+        Apply();
+    }
+
+    private void Apply()
+    {
+        _findButton.Text = _inDuplicatesMode ? Regroup : FindCaption;
+        _goBackButton.Enabled = _inDuplicatesMode;
+        _noDuplicatesLabel.Present = _noDuplicatesFound && !_inDuplicatesMode;
     }
 }

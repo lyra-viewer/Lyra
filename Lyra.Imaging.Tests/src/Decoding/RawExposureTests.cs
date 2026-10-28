@@ -1,5 +1,5 @@
 using Lyra.Common.Settings.Enums;
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Hdr;
 using Lyra.Imaging.Decoding.Decoders.Raw;
 using Lyra.Imaging.Decoding.Support;
 using SkiaSharp;

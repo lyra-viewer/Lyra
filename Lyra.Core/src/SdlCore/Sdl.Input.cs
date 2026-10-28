@@ -1,4 +1,6 @@
 using Lyra.FileLoader.Navigation;
+using Lyra.GUI;
+using Lyra.Imaging.Content.Variants;
 using Lyra.SystemUtils;
 using SkiaSharp;
 using static SDL3.SDL;
@@ -26,6 +28,8 @@ public partial class SdlCore
             { Scancode.Left, PreviousImage },
             { Scancode.Home, FirstImage },
             { Scancode.End, LastImage },
+            { Scancode.Leftbracket, PreviousVariant },
+            { Scancode.Rightbracket, NextVariant },
             { Scancode.I, ToggleInfo },
             { Scancode.B, ToggleBackground },
             { Scancode.F, ToggleFullscreen },
@@ -42,6 +46,9 @@ public partial class SdlCore
 
     private void HandleScancode(Scancode scancode, Keymod mods)
     {
+        if (_ui.ActiveOverlay != OverlayKind.None && scancode != Scancode.Escape)
+            return;
+
         var absoluteModifier = OperatingSystem.IsMacOS() && (mods & Keymod.GUI) != 0;
         var edgeModifier = OperatingSystem.IsMacOS()
             ? (mods & Keymod.Alt) != 0
@@ -61,19 +68,21 @@ public partial class SdlCore
         {
             // In duplicates mode the edge modifier steps between groups
             // (decrease / increase the group id) instead of directory edges.
-            if (DirectoryNavigator.IsDuplicatesMode)
+            switch (CurrentViewMode())
             {
-                if (scancode == Scancode.Left)
-                    PreviousGroup();
-                else if (scancode == Scancode.Right)
-                    NextGroup();
-            }
-            else
-            {
-                if (scancode == Scancode.Left)
-                    MoveToLeftEdge();
-                else if (scancode == Scancode.Right)
-                    MoveToRightEdge();
+                case ViewMode.Duplicates:
+                    if (scancode == Scancode.Left)
+                        PreviousGroup();
+                    else if (scancode == Scancode.Right)
+                        NextGroup();
+                    break;
+
+                case ViewMode.Default:
+                    if (scancode == Scancode.Left)
+                        MoveToLeftEdge();
+                    else if (scancode == Scancode.Right)
+                        MoveToRightEdge();
+                    break;
             }
 
             return;
@@ -95,6 +104,9 @@ public partial class SdlCore
             return;
 
         if (_duplicateScanService.CancelIfRunning())
+            return;
+
+        if (TryLeaveViewMode())
             return;
 
         ExitApplication();
@@ -154,6 +166,16 @@ public partial class SdlCore
             DirectoryNavigator.MoveToRightEdge();
             LoadImage(NavigationDirection.Forward);
         }
+    }
+
+    private void NextVariant() => StepVariant(+1);
+
+    private void PreviousVariant() => StepVariant(-1);
+
+    private void StepVariant(int steps)
+    {
+        if (_composite?.Content is VariantContainer variants && variants.StepFrom(steps) is { } index)
+            OnVariantSelected(index);
     }
 
     private void NextGroup()

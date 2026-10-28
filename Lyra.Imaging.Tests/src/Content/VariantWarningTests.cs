@@ -1,4 +1,6 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
 using Xunit;
 
 namespace Lyra.Imaging.Tests.Content;
@@ -17,10 +19,10 @@ public class VariantWarningTests
         public void Dispose() { }
     }
 
-    private static VariantRasterContent Set(int count)
+    private static VariantContainer Set(int count)
     {
         var variants = Enumerable.Range(0, count).Select(i => new ImageVariant($"Frame {i + 1}", 10, 10, "detail", 64)).ToList();
-        return new VariantRasterContent(variants, variants.Select(ICompositeContent (_) => new FakeContent()).ToList(), active: 0);
+        return new VariantContainer(variants, variants.Select(ICompositeContent (_) => new FakeContent()).ToList(), active: 0);
     }
 
     [Fact]

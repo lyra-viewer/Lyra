@@ -1,5 +1,7 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders;
 using Lyra.Imaging.Decoding.Decoders.Animation;
 using Lyra.Imaging.Loading;
@@ -41,7 +43,7 @@ public class WebpDecoderTests
 
         WithDecoded(webp, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             Assert.Equal(VariantKind.Frames, set.Kind);
             Assert.Equal(["Frame 1", "Frame 2", "Frame 3"], set.Variants.Select(v => v.Label));
@@ -121,7 +123,7 @@ public class WebpDecoderTests
 
         WithDecoded(webp, composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             using var arrived = new ManualResetEventSlim(false);
             set.VariantReady += _ => arrived.Set();
@@ -223,7 +225,7 @@ public class WebpDecoderTests
 
         WithDecoded(webp[..^(int)(WebpChunkReader.Read(webp)!.Frames[2].EncodedBytes / 2)], composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
             Assert.Equal(2, set.Variants.Count);
             Assert.Equal("ends inside frame 3, which is not shown", Facts(composite)["Truncated"]);
         });
@@ -237,7 +239,7 @@ public class WebpDecoderTests
 
         WithDecoded([.. webp[..^last], .. new byte[last]], composite =>
         {
-            var set = Assert.IsType<VariantRasterContent>(composite.Content);
+            var set = Assert.IsType<VariantContainer>(composite.Content);
 
             using var settled = new ManualResetEventSlim(false);
             set.VariantFailed += _ => settled.Set();

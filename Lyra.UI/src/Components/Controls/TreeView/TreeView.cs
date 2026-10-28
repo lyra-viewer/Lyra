@@ -83,6 +83,10 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
     /// Arrow color.
     public SKColor ArrowColor { get; set; } = Palette.Muted;
 
+    /// Whether a row can be picked. A row that cannot be picked expands or
+    /// collapses when clicked if it has children, and otherwise does nothing.
+    public Func<TreeNode<T>, bool>? CanPick { get; set; }
+
     /// Optional icon provider for the indicator column.
     /// When set and returning non-null, the icon replaces the
     /// default expand/collapse arrow for that node.
@@ -552,12 +556,14 @@ public class TreeView<T> : ComponentBase, IContainer, IScrollable
             var indent = node.Depth * IndentWidth;
             var arrowRight = ArrangedBounds.Left + Padding.Left + indent + ArrowColumnWidth;
 
-            if (!node.IsLeaf && point.X < arrowRight)
+            var pickable = CanPick?.Invoke(node) != false;
+
+            if (!node.IsLeaf && (point.X < arrowRight || !pickable))
             {
                 node.IsExpanded = !node.IsExpanded;
                 MarkRowsDirty();
             }
-            else
+            else if (pickable)
             {
                 PickedNode = node;
                 Picked?.Invoke(node);

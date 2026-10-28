@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.ManagedCodecs.Raster;
 using SkiaSharp;
@@ -62,7 +63,7 @@ internal abstract class IconContainerDecoder<TEntry> : DecoderBase
 
         var ordered = InPresentationOrder(icons).ToList();
 
-        composite.Content = new VariantRasterContent(
+        composite.Content = new VariantContainer(
             [.. ordered.Select(icon => icon.Variant)],
             [.. ordered.Select(icon => icon.Content)],
             active: 0

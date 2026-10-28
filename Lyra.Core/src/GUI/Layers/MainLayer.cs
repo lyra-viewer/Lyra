@@ -243,9 +243,9 @@ public class MainLayer : IUIEvents, IDisposable
 
     public void SetExposureStops(int stops) => _hdrDecodeSection.SetExposureStops(stops);
 
-    public void SetDuplicatesState(bool inDuplicatesMode, bool noDuplicatesFound)
+    public void SetNoDuplicatesFound(bool noDuplicatesFound)
     {
-        _duplicatesFinderSection.SetState(inDuplicatesMode, noDuplicatesFound);
+        _duplicatesFinderSection.SetNoDuplicatesFound(noDuplicatesFound);
         _context.Invalidate();
     }
     
@@ -265,7 +265,17 @@ public class MainLayer : IUIEvents, IDisposable
     public void ShowAboutModal()
     {
         _aboutSection ??= new AboutSection();
-        _context.ShowModal(_aboutSection.Root);
+        ShowOverlay(OverlayKind.About, _aboutSection.Root);
+    }
+
+    private OverlayKind _overlay;
+
+    public OverlayKind ActiveOverlay => _context.IsModalOpen ? _overlay : OverlayKind.None;
+
+    private void ShowOverlay(OverlayKind kind, IComponent content)
+    {
+        _context.ShowModal(content, () => _overlay = OverlayKind.None);
+        _overlay = kind;
     }
 
     // --------------------------------------------------------

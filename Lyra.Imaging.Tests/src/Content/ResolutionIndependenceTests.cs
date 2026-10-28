@@ -1,4 +1,5 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using SkiaSharp;
 using Xunit;
 
@@ -53,7 +54,7 @@ public class ResolutionIndependenceTests
             new("vector", 32, 32, "", 0)
         };
 
-        using var content = new VariantRasterContent(variants, contents, active: 0);
+        using var content = new VariantContainer(variants, contents, active: 0);
         Assert.False(content.IsResolutionIndependent);
 
         Assert.True(content.Select(1));

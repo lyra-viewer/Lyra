@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Text;
-using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Decoding.Decoders.J2K;
 using Lyra.Metadata.Containers;
 using Xunit;
@@ -12,7 +12,8 @@ public class J2KHeaderTests
 {
     private static readonly byte[] BrokenJpc = Convert.FromHexString(
         "FF4FFF51002F0000000000CB0020009800000000000000000000" +
-        "00CB00000098000000000000000000030701010701010701");
+        "00CB00000098000000000000000000030701010701010701"
+    );
 
     private static byte[] Codestream(uint width, uint height, ushort components, uint xOrigin = 0, uint yOrigin = 0)
     {

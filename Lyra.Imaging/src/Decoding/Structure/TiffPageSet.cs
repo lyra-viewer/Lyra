@@ -1,4 +1,5 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Interop;
 
 namespace Lyra.Imaging.Decoding.Structure;
