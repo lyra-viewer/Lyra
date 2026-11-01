@@ -14,38 +14,38 @@ namespace Lyra.Imaging.Decoding.Decoders.Tiff;
 /// </summary>
 internal static class TiffDocument
 {
-    public static void Decode(string path, Composite composite, IReadOnlyList<TiffNative.DirectoryInfo> directories, long[]? encodedBytes, List<int> pages, CancellationToken ct)
+    public static void Decode(string path, DecodeContext context, IReadOnlyList<TiffNative.DirectoryInfo> directories, long[]? encodedBytes, List<int> pages, CancellationToken ct)
     {
         Logger.Info($"[TiffDecoder] {Path.GetFileName(path)} holds {pages.Count} pages across {directories.Count} directories; decoding the first and the rest on demand.");
 
-        composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
-        composite.Structure = [TiffPageSet.Summarise(directories, pages)];
+        context.ExifInfo = MetadataProcessor.ParseMetadata(path);
+        context.Structure = [TiffPageSet.Summarise(directories, pages)];
 
         ct.ThrowIfCancellationRequested();
 
-        var first = DecodePage(path, pages[0], directories[pages[0]], composite, ct);
+        var first = DecodePage(path, pages[0], directories[pages[0]], context, ct);
         var variants = TiffPageSet.Describe(directories, pages, encodedBytes);
 
-        var set = new VariantContainer(variants, active: 0, first, new PageProvider(path, pages, directories, composite), DecodePolicy.ResidentPageBudgetBytes)
+        var set = new VariantContainer(variants, active: 0, first, new PageProvider(path, pages, directories, context), DecodePolicy.ResidentPageBudgetBytes)
         {
             Kind = VariantKind.Pages,
             PreloadsNeighbours = true
         };
 
-        composite.Content = set;
+        context.Content = set;
     }
 
     /// <summary>Decodes one page, read in place.</summary>
-    private static ICompositeContent DecodePage(string path, int directory, TiffNative.DirectoryInfo info, Composite composite, CancellationToken ct) =>
-        TiffRoute.Decode(path, directory, info, composite, () => TiffWholeImage.ReadDirectory(path, directory, info, ct), ct);
+    private static ICompositeContent DecodePage(string path, int directory, TiffNative.DirectoryInfo info, DecodeContext context, CancellationToken ct) =>
+        TiffRoute.Decode(path, directory, info, context, () => TiffWholeImage.ReadDirectory(path, directory, info, ct), ct);
 
     /// <summary>
     /// Supplies pages as the interface asks for them. Holds the path rather than any open handle:
     /// a <c>TIFF*</c> is not thread-safe, and this is called from a background thread each time.
     /// </summary>
-    private sealed class PageProvider(string path, List<int> pages, IReadOnlyList<TiffNative.DirectoryInfo> directories, Composite composite)
+    private sealed class PageProvider(string path, List<int> pages, IReadOnlyList<TiffNative.DirectoryInfo> directories, DecodeContext context)
         : IVariantProvider
     {
-        public ICompositeContent Decode(int index, CancellationToken ct) => DecodePage(path, pages[index], directories[pages[index]], composite, ct);
+        public ICompositeContent Decode(int index, CancellationToken ct) => DecodePage(path, pages[index], directories[pages[index]], context, ct);
     }
 }

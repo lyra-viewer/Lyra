@@ -7,31 +7,42 @@ public class RasterContent : ICompositeContent
     public RasterContent(SKImage image)
     {
         Image = image ?? throw new ArgumentNullException(nameof(image));
+        _width = image.Width;
+        _height = image.Height;
+        _byteSize = ImageBytes.Of(image);
     }
 
-    public RasterContent(SKBitmap backingBitmap, SKImage image)
+    public RasterContent(SKBitmap backingBitmap, SKImage image) : this(image)
     {
-        Image = image ?? throw new ArgumentNullException(nameof(image));
         _backingBitmap = backingBitmap ?? throw new ArgumentNullException(nameof(backingBitmap));
     }
 
     public bool IsResolutionIndependent => false;
 
     public SKImage Image { get; }
-    
+
     private readonly SKBitmap? _backingBitmap;
-    
-    public float? DecodedWidth => Image.Width;
-    public float? DecodedHeight => Image.Height;
+    private readonly int _width;
+    private readonly int _height;
+    private readonly long _byteSize;
+    private int _disposed;
 
-    public long ByteSize => ImageBytes.Of(Image);
+    public float? DecodedWidth => _width;
+    public float? DecodedHeight => _height;
 
-    public virtual void Dispose()
+    public long ByteSize => Volatile.Read(ref _disposed) == 0 ? _byteSize : 0;
+
+    public void Dispose()
     {
-        if (Image.Handle != IntPtr.Zero)
-            Image.Dispose();
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
 
-        if (_backingBitmap is not null && _backingBitmap.Handle != IntPtr.Zero)
-            _backingBitmap.Dispose();
+        DisposeCore();
+    }
+
+    protected virtual void DisposeCore()
+    {
+        Image.Dispose();
+        _backingBitmap?.Dispose();
     }
 }

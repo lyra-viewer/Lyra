@@ -10,7 +10,7 @@ namespace Lyra.Imaging.Decoding.Decoders.Animation;
 /// decoder positioned after the last frame it produced, so stepping forward costs one frame;
 /// calls on it are serialized, as it is not thread-safe.
 /// </summary>
-internal sealed class JxlFrameSource(JxlNative.AnimationHandle handle, JxlNative.AnimationInfo info, SKColorSpace colorSpace, Composite composite, Action<int, string>? damaged = null)
+internal sealed class JxlFrameSource(JxlNative.AnimationHandle handle, JxlNative.AnimationInfo info, SKColorSpace colorSpace, DecodeContext context, Action<int, string>? damaged = null)
     : ExclusiveResource, IFrameSource
 {
     private readonly HashSet<int> _reported = [];
@@ -34,7 +34,7 @@ internal sealed class JxlFrameSource(JxlNative.AnimationHandle handle, JxlNative
             if (partial != 0 && _reported.Add(index))
                 damaged?.Invoke(index, $"Frame {index + 1} is cut short: the file ends inside it");
 
-            return JxlDecoder.BuildContent(pixels, info.Width, info.Height, info.IsHdr != 0, colorSpace, composite, ct, out _);
+            return JxlDecoder.BuildContent(pixels, info.Width, info.Height, info.IsHdr != 0, colorSpace, context, ct, out _);
         }
         finally
         {

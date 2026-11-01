@@ -1,5 +1,6 @@
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Loading;
 using Lyra.Imaging.Tests.Support;
 using Xunit;
@@ -33,8 +34,63 @@ public class LoadFailureTests : IDisposable
         { new OutOfMemoryException(), LoadFailureKind.OutOfMemory },
         { new OverflowException(), LoadFailureKind.TooLarge },
         { new LoadFailureException(LoadFailureKind.TooLarge, "over budget"), LoadFailureKind.TooLarge },
-        { new NullReferenceException(), LoadFailureKind.Unknown }
+        { new NullReferenceException(), LoadFailureKind.Unknown },
+        { new DllNotFoundException("Unable to load shared library 'libjxl_native'"), LoadFailureKind.ComponentUnavailable },
+        { new EntryPointNotFoundException("Unable to find an entry point named 'f'"), LoadFailureKind.ComponentUnavailable },
+        { new BadImageFormatException("wrong architecture"), LoadFailureKind.ComponentUnavailable }
     };
+
+    private const string MacDlopen =
+        "Unable to load shared library '/Users/x/Lyra/bin/lib/macOS/libjxl_native.dylib' or one of its dependencies. In order to help diagnose loading problems, consider setting the DYLD_PRINT_LIBRARIES environment variable: \n" +
+        "dlopen(/Users/x/Lyra/bin/lib/macOS/libjxl_native.dylib, 0x0001): Library not loaded: @rpath/libjxl.0.12.dylib\n" +
+        "  Referenced from: <C97D64F1> /Users/x/Lyra/bin/lib/macOS/libjxl_native.dylib\n" +
+        "  Reason: tried: '/opt/homebrew/opt/jpeg-xl/lib/libjxl.0.12.dylib' (no such file)";
+
+    [Theory]
+    [InlineData(MacDlopen, "libjxl_native.dylib could not be loaded; it needs libjxl.0.12.dylib")]
+    [InlineData("Unable to load shared library 'libjxl_native' or one of its dependencies. In order to help diagnose loading problems, consider setting the LD_DEBUG environment variable: libjxl.so.0.12: cannot open shared object file: No such file or directory", "libjxl_native could not be loaded; it needs libjxl.so.0.12")]
+    [InlineData("Unable to load DLL 'libjxl_native' or one of its dependencies: The specified module could not be found. (0x8007007E)", "libjxl_native could not be loaded")]
+    public void AMissingNativeLibraryIsAnApplicationErrorThatNamesWhatIsMissing(string message, string summary)
+    {
+        var failure = LoadFailure.From(new DllNotFoundException(message));
+
+        Assert.Equal("Application error", failure.Message);
+        Assert.StartsWith($"DllNotFoundException: {summary}. Full error in the log: ", failure.Description);
+        Assert.DoesNotContain('\n', failure.Description);
+        Assert.True(failure.IsApplicationFault);
+        Assert.False(failure.IsExpected);
+        Assert.False(failure.IsTransient);
+    }
+
+    [Fact]
+    public void AnEntryPointFailureIsNotMistakenForAMissingLibrary()
+    {
+        var failure = LoadFailure.From(new EntryPointNotFoundException("Unable to find an entry point named 'JxlNew' in shared library 'libjxl_native'."));
+
+        Assert.StartsWith("EntryPointNotFoundException: Unable to find an entry point named 'JxlNew' in shared library 'libjxl_native'. Full error", failure.Description);
+    }
+
+    [Fact]
+    public void AnUnclassifiedErrorIsAnApplicationErrorOnOneShortLine()
+    {
+        var failure = LoadFailure.From(new NullReferenceException(new string('x', 400) + "\nsecond line"));
+
+        Assert.Equal("Application error", failure.Message);
+        Assert.StartsWith("NullReferenceException: xxx", failure.Description);
+        Assert.DoesNotContain("second line", failure.Description);
+        Assert.Contains("…. Full error in the log: ", failure.Description);
+        Assert.True(failure.Description.Length < 400);
+    }
+
+    [Fact]
+    public void AFileProblemIsNotAnApplicationError()
+    {
+        var failure = LoadFailure.From(new InvalidDataException("bad header"));
+
+        Assert.False(failure.IsApplicationFault);
+        Assert.Null(failure.ErrorType);
+        Assert.Equal("bad header", failure.Description);
+    }
 
     [Theory]
     [MemberData(nameof(Classified))]
@@ -94,6 +150,49 @@ public class LoadFailureTests : IDisposable
         Assert.True(LoadFailure.From(new UnauthorizedAccessException()).IsExpected);
     }
 
+    public static TheoryData<Exception> AmbiguousCauses => new()
+    {
+        new InvalidOperationException("Nullable object must have a value."),
+        new ObjectDisposedException("SKImage")
+    };
+
+    [Theory]
+    [MemberData(nameof(AmbiguousCauses))]
+    public void AnExceptionBugsThrowToo_IsShownAsADecodeFailure_ButLoggedAsAFault(Exception ex)
+    {
+        var failure = LoadFailure.From(ex);
+
+        Assert.Equal(LoadFailureKind.DecodeFailed, failure.Kind);
+        Assert.True(failure.MayBeProgramFault);
+        Assert.False(failure.IsExpected);
+    }
+
+    public static TheoryData<Exception> FileFaults => new()
+    {
+        new LoadFailureException(LoadFailureKind.DecodeFailed, "bad header"),
+        new InvalidDataException("bad header"),
+        new NotSupportedException("Unsupported pixel depth 7."),
+        Lyra.Imaging.Interop.NativeErrors.DecodeFailed(IntPtr.Zero, "Z:/a.jp2")
+    };
+
+    [Theory]
+    [MemberData(nameof(FileFaults))]
+    public void AFaultTheFileIsKnownToCause_IsExpected(Exception ex)
+    {
+        var failure = LoadFailure.From(ex);
+
+        Assert.False(failure.MayBeProgramFault);
+        Assert.True(failure.IsExpected);
+    }
+
+    [Fact]
+    public void ImplausibleDimensions_AreTheFilesFault()
+    {
+        var thrown = Assert.Throws<LoadFailureException>(() => DecoderValidation.RequireSaneDimensions(0, 16));
+
+        Assert.True(LoadFailure.From(thrown).IsExpected);
+    }
+
     [Theory]
     [InlineData(LoadFailureKind.AccessDenied, true)]
     [InlineData(LoadFailureKind.NotFound, true)]
@@ -115,7 +214,7 @@ public class LoadFailureTests : IDisposable
     public void AnImageThatDidNotFail_IsNotRetried()
     {
         var composite = Image();
-        composite.State = CompositeState.Complete;
+        composite.MoveTo(CompositeState.Complete);
 
         Assert.False(ImageLoader.IsWorthRetrying(composite));
     }

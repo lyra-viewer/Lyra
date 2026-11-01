@@ -46,22 +46,22 @@ internal static class TiffRoute
     /// <summary>A timed-out source would only time out again.</summary>
     public static bool RetryAtNativeLayout(TiffNative.DirectoryInfo info, TiffRead failed) => info.NativeCapable != 0 && !failed.TimedOut;
 
-    public static ICompositeContent Decode(string path, int directory, TiffNative.DirectoryInfo info, Composite composite, Func<TiffRead> readWhole, CancellationToken ct, Func<NativeFileBuffer?>? fetch = null)
+    public static ICompositeContent Decode(string path, int directory, TiffNative.DirectoryInfo info, DecodeContext context, Func<TiffRead> readWhole, CancellationToken ct, Func<NativeFileBuffer?>? fetch = null)
     {
         ct.ThrowIfCancellationRequested();
 
         switch (For(info))
         {
             case TiffReadPath.NativeLayout:
-                return TiffNativeLayout.Decode(path, directory, info, composite, ct);
+                return TiffNativeLayout.Decode(path, directory, info, context, ct);
 
             case TiffReadPath.RegionStreamed:
-                return TiffRegion.Stream(path, directory, info, composite, ct);
+                return TiffRegion.Stream(path, directory, info, context, ct);
 
             case TiffReadPath.Region:
             {
                 using var fetched = TiffNative.MemoryRegionAvailable ? fetch?.Invoke() : null;
-                return RasterContentBuilder.Build(TiffRegion.DecodeWhole(path, directory, info, composite, ct, fetched), composite);
+                return RasterContentBuilder.Build(TiffRegion.DecodeWhole(path, directory, info, context, ct, fetched), context);
             }
         }
 
@@ -70,7 +70,7 @@ internal static class TiffRoute
         var read = readWhole();
 
         if (read.HasPixels)
-            return RasterContentBuilder.Build(TiffWholeImage.ToBitmap(read, tagColorSpace: true, ct), composite);
+            return RasterContentBuilder.Build(TiffWholeImage.ToBitmap(read, tagColorSpace: true, ct), context);
 
         if (!RetryAtNativeLayout(info, read))
             throw read.ToFailure($"Failed to decode directory {directory} of {path}.");
@@ -80,7 +80,7 @@ internal static class TiffRoute
             $"refused it ({read.Reason}); reading it at its own layout instead."
         );
 
-        return TiffNativeLayout.Decode(path, directory, info, composite, ct);
+        return TiffNativeLayout.Decode(path, directory, info, context, ct);
     }
 
     public static SKBitmap? Thumbnail(string path, int directory, TiffNative.DirectoryInfo info, int maxDimension,

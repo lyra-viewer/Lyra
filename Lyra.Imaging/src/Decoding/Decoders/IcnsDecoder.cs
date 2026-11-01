@@ -1,5 +1,4 @@
 using Lyra.Common;
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders.J2K;
 using Lyra.Imaging.Decoding.Support;
@@ -16,7 +15,7 @@ namespace Lyra.Imaging.Decoding.Decoders;
 /// </summary>
 internal sealed class IcnsDecoder : IconContainerDecoder<IcnsEntry>
 {
-    public override bool CanDecode(ImageFormatType format) => format == ImageFormatType.Icns;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Icns];
 
     protected override string EntryNoun => "icon";
 
@@ -73,15 +72,15 @@ internal sealed class IcnsDecoder : IconContainerDecoder<IcnsEntry>
             .ThenByDescending(icon => icon.Entry.Scale)
             .ThenBy(icon => icon.Entry.Type.Code, StringComparer.Ordinal);
 
-    protected override void ReportFormatSpecific(Composite composite, IReadOnlyList<DecodedIcon> icons)
+    protected override void ReportFormatSpecific(DecodeContext context, IReadOnlyList<DecodedIcon> icons)
     {
         var retina = icons.Count(icon => icon.Entry.Scale > 1);
         if (retina > 0)
-            composite.AddFormatSpecific("Retina Entries", $"{retina} of {icons.Count}");
+            context.AddFormatSpecific("Retina Entries", $"{retina} of {icons.Count}");
 
-        AddEncodings(composite, icons);
+        AddEncodings(context, icons);
 
-        composite.AddFormatSpecific("Types", string.Join(", ", icons.Select(icon => icon.Entry.Type.Code).Order(StringComparer.Ordinal)));
+        context.AddFormatSpecific("Types", string.Join(", ", icons.Select(icon => icon.Entry.Type.Code).Order(StringComparer.Ordinal)));
     }
 
     private static SKBitmap? DecodeEmbedded(byte[] data, IcnsEntry entry)

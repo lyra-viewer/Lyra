@@ -11,7 +11,7 @@ public class ExrGrayscaleTests
     // 4x2 uncompressed EXR with a single 32-bit float channel named "R", holding the ramp
     // 0.00 0.25 0.50 1.00 / 1.00 0.50 0.25 0.00. The ramp (rather than a flat fill) keeps
     // the test honest about the broadcast copying real pixel data into G and B.
-    private const string SingleChannelExrBase64 =
+    internal const string SingleChannelExrBase64 =
         "di8xAQIAAABjaGFubmVscwBjaGxpc3QAEwAAAFIAAgAAAAAAAAABAAAAAQAAAABjb21wcmVzc2lvbgBjb21wcmVzc2" +
         "lvbgABAAAAAGRhdGFXaW5kb3cAYm94MmkAEAAAAAAAAAAAAAAAAwAAAAEAAABkaXNwbGF5V2luZG93AGJveDJpABAA" +
         "AAAAAAAAAAAAAAMAAAABAAAAbGluZU9yZGVyAGxpbmVPcmRlcgABAAAAAHBpeGVsQXNwZWN0UmF0aW8AZmxvYXQABA" +

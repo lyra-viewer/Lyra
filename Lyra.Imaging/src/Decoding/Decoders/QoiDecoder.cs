@@ -18,23 +18,26 @@ internal sealed class QoiDecoder : DecoderBase, IThumbnailDecoder
     // content-sniffing Skia decoder, which reads whatever it really is.
     private static readonly SkiaDecoder Fallback = new();
 
-    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Qoi;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Qoi];
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    public override DecoderCapabilities Capabilities => DecoderCapabilities.ReadsFromMemory;
+
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
-        var bytes = composite.ReadAllBytes(ct);
+        var path = context.Source.Label;
+        var bytes = context.ReadAllBytes(ct);
 
         if (!QoiReader.CanDecode(bytes))
         {
             Logger.Warning($"[QoiDecoder] {path} has no QOI signature; falling back to {nameof(SkiaDecoder)}.");
-            Fallback.DecodeAsync(composite, ct).GetAwaiter().GetResult();
+            Fallback.TakeOver(context, ct);
             return;
         }
 
         var header = QoiReader.ReadHeader(bytes);
 
-        Describe(composite, header);
-        composite.ReportPixelCount(header.Width, header.Height);
+        Describe(context, header);
+        context.ReportPixelCount(header.Width, header.Height);
 
         var bitmap = DecodeBitmap(bytes, header, ct, out var decoded);
 
@@ -43,10 +46,10 @@ internal sealed class QoiDecoder : DecoderBase, IThumbnailDecoder
             var why = $"The file ends after {decoded} of its {header.PixelCount} pixels";
 
             Logger.Warning($"[QoiDecoder] {path}: {why}; shown as far as it goes, the rest left transparent.");
-            composite.Warning = LoadWarning.PartiallyDecoded(why);
+            context.Warning = LoadWarning.PartiallyDecoded(why);
         }
 
-        composite.Content = RasterContentBuilder.Build(bitmap, composite);
+        context.Content = RasterContentBuilder.Build(bitmap, context);
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)
@@ -102,9 +105,9 @@ internal sealed class QoiDecoder : DecoderBase, IThumbnailDecoder
         }
     }
 
-    private static void Describe(Composite composite, QoiHeader header)
+    private static void Describe(DecodeContext context, QoiHeader header)
     {
-        composite.AddFormatSpecific("Channels", header.Channels == 4 ? "RGBA" : "RGB");
-        composite.AddFormatSpecific("Color Space", header.ColorSpace == QoiColorSpace.Linear ? "linear" : "sRGB, linear alpha");
+        context.AddFormatSpecific("Channels", header.Channels == 4 ? "RGBA" : "RGB");
+        context.AddFormatSpecific("Color Space", header.ColorSpace == QoiColorSpace.Linear ? "linear" : "sRGB, linear alpha");
     }
 }

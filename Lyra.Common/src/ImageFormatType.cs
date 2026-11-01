@@ -24,9 +24,20 @@ public enum ImageFormatType
     [Description("OpenEXR Image")]
     Exr,
 
+    [NoDuplicateScan]
+    [FileExtension([".fbx"])]
+    [Description("FBX 3D Model")]
+    Fbx,
+
     [FileExtension([".gif"])]
     [Description("GIF Image")]
     Gif,
+
+    [NoDuplicateScan]
+    [FileExtension([".gltf", ".glb"])]
+    [FormatName("glTF")]
+    [Description("glTF 3D Model")]
+    Gltf,
 
     [FileExtension([".hdr"])]
     [Description("Radiance HDR Image")]
@@ -45,14 +56,17 @@ public enum ImageFormatType
     Icns,
 
     [FileExtension([".jif", ".jfif"])]
+    [FormatName("JPEG")]
     [Description("JPEG File Interchange Format")]
     Jfif,
 
     [FileExtension([".jp2", ".jpg2", ".jph"])]
+    [FormatName("JPEG 2000")]
     [Description("JPEG 2000 Container")]
     Jp2,
     
     [FileExtension([".j2k", ".j2c", ".jpc", ".jhc"])]
+    [FormatName("JPEG 2000")]
     [Description("JPEG 2000 Codestream")]
     J2k,
 
@@ -61,6 +75,7 @@ public enum ImageFormatType
     Jpeg,
     
     [FileExtension([".jxl"])]
+    [FormatName("JPEG XL")]
     [Description("JPEG XL")]
     Jxl,
 
@@ -99,9 +114,11 @@ public enum ImageFormatType
     Tiff,
 
     [FileExtension([".webp"])]
+    [FormatName("WebP")]
     [Description("WebP Image")]
     Webp,
 
+    [FormatName("Unknown")]
     [Description("Unknown Format")]
     Unknown
 }
@@ -113,6 +130,12 @@ public class FileExtensionAttribute(string[] extensions) : Attribute
 }
 
 [AttributeUsage(AttributeTargets.Field)]
+public class FormatNameAttribute(string name) : Attribute
+{
+    public string Name => name;
+}
+
+[AttributeUsage(AttributeTargets.Field)]
 public class DisabledTypeAttribute : Attribute;
 
 [AttributeUsage(AttributeTargets.Field)]
@@ -120,3 +143,6 @@ public class DisabledPreloadAttribute : Attribute;
 
 [AttributeUsage(AttributeTargets.Field)]
 public class NoPerceptualHashAttribute : Attribute;
+
+[AttributeUsage(AttributeTargets.Field)]
+public class NoDuplicateScanAttribute : Attribute;

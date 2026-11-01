@@ -1,56 +1,56 @@
 using Lyra.Common;
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Decoding.Decoders.Animation;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Metadata;
 using Lyra.ManagedCodecs.Raster.Gif;
-using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
 internal sealed class GifDecoder : SkiaDecoder
 {
-    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Gif;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Gif];
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
-        var bytes = composite.ReadAllBytes(ct);
+        var path = context.Source.Label;
+
+        var bytes = context.ReadAllBytes(ct);
 
         using (var metadata = new MemoryStream(bytes, writable: false))
-            composite.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
+            context.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
 
         var blocks = GifBlockReader.Read(bytes);
 
         using var stream = new MemoryStream(bytes, writable: false);
-        using var codec = SKCodec.Create(stream);
+        using var codec = SkiaStream.Codec(stream);
 
         if (codec is null)
         {
-            GifFrameSet.Describe(composite, [], blocks);
+            GifFrameSet.Describe(context, [], blocks);
             throw new LoadFailureException(LoadFailureKind.DecodeFailed, WhyNoImage(blocks));
         }
 
         var (width, height) = (codec.Info.Width, codec.Info.Height);
 
-        composite.ReportPixelCount(width, height);
+        context.ReportPixelCount(width, height);
         DecoderValidation.RequireSaneDimensions(width, height);
         DecoderValidation.RequireAvailableMemory(width, height);
 
         var frames = codec.FrameInfo;
 
-        GifFrameSet.Describe(composite, frames, blocks);
+        GifFrameSet.Describe(context, frames, blocks);
 
         if (frames.Length == 0)
             throw new LoadFailureException(LoadFailureKind.DecodeFailed, WhyNoImage(blocks));
 
         ct.ThrowIfCancellationRequested();
 
-        var open = AnimatedContent.Opener(bytes, path);
+        var open = AnimatedContent.Opener(bytes, context);
 
         AnimatedContent.Publish(
-            composite, path, codec, open,
+            context, path, codec, open,
             () => GifFrameSet.Describe(frames, blocks, width, height),
             Explainer(blocks, frames.Length, open),
             "GIF",

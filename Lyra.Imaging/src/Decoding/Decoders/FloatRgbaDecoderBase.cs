@@ -6,14 +6,14 @@ namespace Lyra.Imaging.Decoding.Decoders;
 internal abstract class FloatRgbaDecoderBase : DecoderBase
 {
     /// <summary>
-    /// Loads RGBA float pixels for <paramref name="composite"/>'s file. Implementations throw on
+    /// Loads RGBA float pixels for <paramref name="context"/>'s file. Implementations throw on
     /// failure; the returned buffer is owned by this base and released via its <c>Dispose</c>.
     /// </summary>
-    protected abstract FloatImageBuffer LoadPixels(Composite composite, CancellationToken ct);
+    protected abstract FloatImageBuffer LoadPixels(DecodeContext context, CancellationToken ct);
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
-        using var pixels = LoadPixels(composite, ct);
+        using var pixels = LoadPixels(context, ct);
 
         ct.ThrowIfCancellationRequested();
 
@@ -21,10 +21,10 @@ internal abstract class FloatRgbaDecoderBase : DecoderBase
         var height = pixels.Height;
         DecoderValidation.RequireSaneDimensions(width, height, bytesPerPixel: sizeof(float) * 4);
 
-        composite.ReportPixelCount(width, height);
+        context.ReportPixelCount(width, height);
         
-        composite.Content = HdrImageBuilder.Build(pixels.AsSpan(), width, height, composite, ct, out var facts);
+        context.Content = HdrImageBuilder.Build(pixels.AsSpan(), width, height, context, ct, out var facts);
 
-        facts.Describe(composite);
+        facts.Describe(context);
     }
 }

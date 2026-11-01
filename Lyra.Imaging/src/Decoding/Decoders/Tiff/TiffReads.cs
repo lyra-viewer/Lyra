@@ -267,7 +267,7 @@ internal static class TiffReads
 
 /// <summary>Sums the native reads of one load into a single transfer.</summary>
 /// <param name="live">Receives the running total as reads progress.</param>
-internal sealed class IoTally(Composite? live = null)
+internal sealed class IoTally(DecodeContext? live = null)
 {
     private long _bytes;
     private long _microseconds;
@@ -291,12 +291,12 @@ internal sealed class IoTally(Composite? live = null)
             Add(io.Bytes, io.Ms);
     }
 
-    public void ReportTo(Composite? composite)
+    public void ReportTo(DecodeContext? context)
     {
         var bytes = Interlocked.Read(ref _bytes);
-        if (composite is null || bytes <= 0)
+        if (context is null || bytes <= 0)
             return;
 
-        composite.CompleteTransfer(bytes, Interlocked.Read(ref _microseconds) / 1000.0);
+        context.CompleteTransfer(bytes, Interlocked.Read(ref _microseconds) / 1000.0);
     }
 }

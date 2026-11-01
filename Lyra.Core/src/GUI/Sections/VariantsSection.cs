@@ -20,8 +20,7 @@ public sealed class VariantsSection : IUISection, IDisposable
     private int _lastActive = -1;
 
     private VariantContainer? _set;
-    private int _lastFailureVersion = -1;
-    private int _lastWarningVersion = -1;
+    private int _lastVersion = -1;
 
     private readonly ValueSlider _jump;
 
@@ -84,6 +83,10 @@ public sealed class VariantsSection : IUISection, IDisposable
 
     internal void Refresh(VariantContainer? set)
     {
+        // Model's textures have their own section, as a tree.
+        if (set?.Textures is not null)
+            set = null;
+
         var variants = set?.Variants;
         _set = set;
 
@@ -111,10 +114,9 @@ public sealed class VariantsSection : IUISection, IDisposable
             RebuildJump(set);
         }
 
-        if (set.FailureVersion != _lastFailureVersion || set.WarningVersion != _lastWarningVersion)
+        if (set.Version != _lastVersion)
         {
-            _lastFailureVersion = set.FailureVersion;
-            _lastWarningVersion = set.WarningVersion;
+            _lastVersion = set.Version;
             _list.InvalidateRows();
         }
 
@@ -131,9 +133,10 @@ public sealed class VariantsSection : IUISection, IDisposable
 
     private static string TitleFor(VariantKind kind) => kind switch
     {
-        VariantKind.Pages  => "PAGES",
-        VariantKind.Frames => "FRAMES",
-        _                  => "VARIANTS"
+        VariantKind.Pages    => "PAGES",
+        VariantKind.Frames   => "FRAMES",
+        VariantKind.Textures => "TEXTURES",
+        _                    => "VARIANTS"
     };
     
     private static bool ShowsJump(VariantKind kind, int count) =>

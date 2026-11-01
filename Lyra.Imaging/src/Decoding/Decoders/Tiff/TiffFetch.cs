@@ -1,4 +1,3 @@
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Metadata;
 
@@ -15,20 +14,20 @@ internal static class TiffFetch
     /// The file in memory, its transfer reported and its metadata parsed from the copy; null when
     /// it is too large to hold that way. The caller disposes it.
     /// </summary>
-    public static NativeFileBuffer? IntoMemory(string path, Composite composite, CancellationToken ct)
+    public static NativeFileBuffer? IntoMemory(string path, DecodeContext context, CancellationToken ct)
     {
-        if (!NativeFileBuffer.ShouldBuffer(composite.FileSizeBytes ?? 0))
+        if (!NativeFileBuffer.ShouldBuffer(context.Source.Length ?? 0))
             return null;
 
-        var data = NativeFileBuffer.Read(path, ct, out var readMs, composite.ReportTransferred);
+        var data = NativeFileBuffer.Read(path, ct, out var readMs, context.ReportTransferred);
 
         try
         {
-            composite.CompleteTransfer((long)data.Length, readMs);
+            context.CompleteTransfer((long)data.Length, readMs);
             ct.ThrowIfCancellationRequested();
 
             using var metadata = data.AsStream();
-            composite.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
+            context.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
 
             return data;
         }

@@ -11,7 +11,7 @@ public readonly record struct LoadSnapshot(object? Identity, bool Active, double
 {
     public static LoadSnapshot Of(Composite? composite)
     {
-        // A page, frame or size decoding after the file itself has loaded: how long is all there is to go on.
+        // A page, frame or texture decoding after the file itself has loaded: how long is all there is to go on.
         if (composite is { State: not CompositeState.Loading, Content: VariantContainer { Waiting: { } wait } })
             return new LoadSnapshot(wait.Identity, Active: true, wait.ElapsedMs, DecodeEstimateMs: 0, BytesTotal: 0, BytesRead: 0, Source: null);
 

@@ -1,3 +1,5 @@
+using Lyra.Common.Settings.Enums;
+using Lyra.Imaging.Decoding;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
 using SkiaSharp;
@@ -13,6 +15,8 @@ public class LinearRowsTests
 {
     private const int Width = 37;
     private const int Height = 23;
+
+    private static readonly ToneCurve Curve = new(ToneMapMode.Aces, 1f);
 
     [Fact]
     public void Rgb16_BuildsTheSameHalfFloatImageAsFloats()
@@ -38,12 +42,12 @@ public class LinearRowsTests
         using var fromFloats = new SKBitmap(new SKImageInfo(Width, Height, SKColorType.Rgba8888, SKAlphaType.Unpremul));
         using var fromRgb16 = new SKBitmap(fromFloats.Info);
 
-        HdrToneMap.ToBitmap(floats, fromFloats, 1.5f, CancellationToken.None, out var floatGray);
+        HdrToneMap.ToBitmap(floats, fromFloats, 1.5f, Curve, CancellationToken.None, out var floatGray);
 
         unsafe
         {
             fixed (ushort* p = rgb16)
-                HdrToneMap.ToBitmap(new Rgb16Rows(p, Width, Height), fromRgb16, 1.5f, default, CancellationToken.None, out _);
+                HdrToneMap.ToBitmap(new Rgb16Rows(p, Width, Height), fromRgb16, 1.5f, default, Curve, CancellationToken.None, out _);
         }
 
         Assert.False(floatGray);
@@ -197,12 +201,12 @@ public class LinearRowsTests
     }
 
     private static ICompositeContent Build(float[] floats, out PixelFacts facts) =>
-        HdrImageBuilder.Build(floats, Width, Height, new Composite(new FileInfo("floats.exr")), CancellationToken.None, out facts);
+        HdrImageBuilder.Build(floats, Width, Height, DecodeContext.For(new Composite(new FileInfo("floats.exr"))), CancellationToken.None, out facts);
 
     private static unsafe ICompositeContent BuildRgb16(ushort[] rgb16, out PixelFacts facts)
     {
         fixed (ushort* p = rgb16)
-            return HdrImageBuilder.Build(new Rgb16Rows(p, Width, Height), new Composite(new FileInfo("rgb16.dng")), CancellationToken.None, out facts);
+            return HdrImageBuilder.Build(new Rgb16Rows(p, Width, Height), DecodeContext.For(new Composite(new FileInfo("rgb16.dng"))), CancellationToken.None, out facts);
     }
 
     private static Half[] Pixels(SKImage image)

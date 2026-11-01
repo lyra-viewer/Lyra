@@ -12,6 +12,9 @@ public sealed class RasterTileSource : ITileSource
     private SKImage?[] _tiles; // fixed slots; swapped for an empty array on dispose
     private volatile bool _disposed;
 
+    /// <summary>Kept as tiles come and go, so the total never reads an image another thread may be disposing.</summary>
+    private long _bytes;
+
     public RasterTileSource(int tilesX, int tilesY, float tileWidth, float tileHeight)
     {
         _tilesX = tilesX;
@@ -35,9 +38,11 @@ public sealed class RasterTileSource : ITileSource
         }
 
         var idx = y * _tilesX + x;
+        var bytes = ImageBytes.Of(image);
 
-        // atomic swap; dispose old if replaced
+        // Whoever takes an image out of its slot is the one that disposes it.
         var old = Interlocked.Exchange(ref tiles[idx], image);
+        Interlocked.Add(ref _bytes, bytes - (old is null ? 0 : ImageBytes.Of(old)));
         old?.Dispose();
 
         if (_disposed)
@@ -48,20 +53,9 @@ public sealed class RasterTileSource : ITileSource
     }
 
     /// <summary>Sum of the tiles decoded so far; slots not yet filled cost nothing.</summary>
-    public long ByteSize
-    {
-        get
-        {
-            var tiles = Volatile.Read(ref _tiles);
-            var total = 0L;
+    public long ByteSize => _disposed ? 0 : Interlocked.Read(ref _bytes);
 
-            for (var i = 0; i < tiles.Length; i++)
-                total += ImageBytes.Of(Volatile.Read(ref tiles[i]));
-
-            return total;
-        }
-    }
-
+    /// <summary>What the tiles this rect covers cost. Called on the thread that draws them.</summary>
     public long VisibleByteSize(SKRect visibleFullRect, SKSize imageSize, float pixelsPerFullUnit)
     {
         var total = 0L;
@@ -113,6 +107,7 @@ public sealed class RasterTileSource : ITileSource
     public void Dispose()
     {
         _disposed = true;
+        Interlocked.Exchange(ref _bytes, 0);
 
         var tiles = Interlocked.Exchange(ref _tiles, []);
         for (var i = 0; i < tiles.Length; i++)

@@ -1,21 +1,19 @@
 using Lyra.Common;
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Decoding.Decoders.Animation;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Metadata;
 using Lyra.ManagedCodecs.Raster.Webp;
-using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
 /// <summary>Still WebPs take the plain Skia path; an animated one is published frame by frame.</summary>
 internal sealed class WebpDecoder : SkiaDecoder
 {
-    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Webp;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Webp];
 
-    protected override bool TryDecodeAnimation(Composite composite, Stream stream, string path, CancellationToken ct)
+    protected override bool TryDecodeAnimation(DecodeContext context, Stream stream, string path, CancellationToken ct)
     {
         Span<byte> header = stackalloc byte[WebpChunkReader.HeaderLength];
 
@@ -28,28 +26,28 @@ internal sealed class WebpDecoder : SkiaDecoder
         var bytes = DecoderIO.ReadToEnd(stream, ct);
 
         using (var metadata = new MemoryStream(bytes, writable: false))
-            composite.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
+            context.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
 
         var chunks = WebpChunkReader.Read(bytes);
 
         using var memory = new MemoryStream(bytes, writable: false);
-        using var codec = SKCodec.Create(memory);
+        using var codec = SkiaStream.Codec(memory);
 
         if (codec is null)
         {
-            WebpFrameSet.Describe(composite, [], chunks);
+            WebpFrameSet.Describe(context, [], chunks);
             throw new LoadFailureException(LoadFailureKind.DecodeFailed, WebpFrameSet.WhyNoImage(chunks));
         }
 
         var (width, height) = (codec.Info.Width, codec.Info.Height);
 
-        composite.ReportPixelCount(width, height);
+        context.ReportPixelCount(width, height);
         DecoderValidation.RequireSaneDimensions(width, height);
         DecoderValidation.RequireAvailableMemory(width, height);
 
         var frames = codec.FrameInfo;
 
-        WebpFrameSet.Describe(composite, frames, chunks);
+        WebpFrameSet.Describe(context, frames, chunks);
 
         if (frames.Length == 0)
             throw new LoadFailureException(LoadFailureKind.DecodeFailed, WebpFrameSet.WhyNoImage(chunks));
@@ -57,8 +55,8 @@ internal sealed class WebpDecoder : SkiaDecoder
         ct.ThrowIfCancellationRequested();
 
         AnimatedContent.Publish(
-            composite, path, codec,
-            AnimatedContent.Opener(bytes, path),
+            context, path, codec,
+            AnimatedContent.Opener(bytes, context),
             () => WebpFrameSet.Describe(frames, chunks, width, height),
             explain: null,
             "WebP",

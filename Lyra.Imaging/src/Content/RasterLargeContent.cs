@@ -4,6 +4,11 @@ using SkiaSharp;
 
 namespace Lyra.Imaging.Content;
 
+/// <summary>
+/// A raster too large for one texture: a preview, plus tiles drawn where the view is close enough.
+/// Built before it is published, and <see cref="Seal">sealed</see> then: from that point only
+/// the tiles' progress changes.
+/// </summary>
 public sealed class RasterLargeContent : ICompositeContent
 {
     public RasterLargeContent(float fullWidth, float fullHeight, SKImage? previewImage = null)
@@ -13,12 +18,19 @@ public sealed class RasterLargeContent : ICompositeContent
 
         FullWidth = fullWidth;
         FullHeight = fullHeight;
-        PreviewImage = previewImage;
+
+        if (previewImage is not null)
+            SetPreview(previewImage);
     }
 
     public bool IsResolutionIndependent => false;
-    
-    public long ByteSize => ImageBytes.Of(PreviewImage) + (TileSource?.ByteSize ?? 0);
+
+    /// <summary>The preview's cost and size, read when it is set rather than from the image later.</summary>
+    private sealed record PreviewFacts(int Width, int Height, long Bytes);
+
+    private volatile PreviewFacts? _previewFacts;
+
+    public long ByteSize => IsDisposed ? 0 : (_previewFacts?.Bytes ?? 0) + (TileSource?.ByteSize ?? 0);
 
     public float FullWidth { get; }
     public float FullHeight { get; }
@@ -45,12 +57,22 @@ public sealed class RasterLargeContent : ICompositeContent
 
     public ITileSource? TileSource { get; private set; }
 
-    /// <summary>Where the light ends, when the format knows; set before the content is published.</summary>
-    public SceneRange Range { get; internal set; }
-    
-    public float? DecodedWidth => PreviewImage?.Width;
+    private SceneRange _range;
 
-    public float? DecodedHeight => PreviewImage?.Height;
+    /// <summary>Where the light ends, when the format knows; set before the content is published.</summary>
+    public SceneRange Range
+    {
+        get => _range;
+        internal set
+        {
+            ThrowIfSealed();
+            _range = value;
+        }
+    }
+
+    public float? DecodedWidth => _previewFacts?.Width;
+
+    public float? DecodedHeight => _previewFacts?.Height;
 
     public bool HasPreview => PreviewImage != null;
     public bool HasTiles => TileSource != null;
@@ -64,15 +86,34 @@ public sealed class RasterLargeContent : ICompositeContent
     private long _lastProgressTicks;
     private const long ProgressThrottleMs = 33;
 
-    public void SetTilesTotal(int total)
+    #region Building, before the content is published
+
+    private volatile bool _sealed;
+
+    /// <summary>Whether the content has been published, after which only tile progress changes.</summary>
+    public bool IsSealed => _sealed;
+
+    /// <summary>Ends building. Called when the content is published.</summary>
+    internal void Seal() => _sealed = true;
+
+    private void ThrowIfSealed()
     {
+        if (_sealed)
+            throw new InvalidOperationException("A large raster cannot be changed once it is published.");
+    }
+
+    internal void SetTilesTotal(int total)
+    {
+        ThrowIfSealed();
         ArgumentOutOfRangeException.ThrowIfNegative(total);
+
         TilesTotal = total;
         Interlocked.Exchange(ref _tilesReady, 0);
     }
-    
-    public void MarkAllTilesReady(int total)
+
+    internal void MarkAllTilesReady(int total)
     {
+        ThrowIfSealed();
         ArgumentOutOfRangeException.ThrowIfNegative(total);
 
         TilesTotal = total;
@@ -80,6 +121,54 @@ public sealed class RasterLargeContent : ICompositeContent
 
         TilesProgressChanged?.Invoke(this);
     }
+
+    /// <summary>
+    /// Replaces the preview with scene-referred half-float light, to be tone-mapped at draw time.
+    /// </summary>
+    internal void SetScenePreview(SKImage preview, float whitePoint)
+    {
+        ArgumentNullException.ThrowIfNull(preview);
+
+        SetPreview(preview);
+        PreviewWhitePoint = whitePoint;
+        PreviewEncoding = SceneEncoding.Linear;
+    }
+
+    internal void SetPreview(SKImage? preview)
+    {
+        ThrowIfSealed();
+
+        var previous = PreviewImage;
+
+        PreviewImage = preview;
+        _previewFacts = preview is null ? null : new PreviewFacts(preview.Width, preview.Height, ImageBytes.Of(preview));
+
+        previous?.Dispose();
+    }
+
+    /// <summary>
+    /// Marks preview and tiles alike as scene-referred light, to be tone-mapped at draw time.
+    /// </summary>
+    internal void MarkSceneReferred(float whitePoint, SceneEncoding encoding = SceneEncoding.Linear)
+    {
+        ThrowIfSealed();
+
+        PreviewWhitePoint = whitePoint;
+        TileWhitePoint = whitePoint;
+        PreviewEncoding = encoding;
+        TileEncoding = encoding;
+    }
+
+    internal void SetTiles(ITileSource tiles)
+    {
+        ThrowIfSealed();
+        ArgumentNullException.ThrowIfNull(tiles);
+
+        TileSource?.Dispose();
+        TileSource = tiles;
+    }
+
+    #endregion
 
     public void IncrementTileReady()
     {
@@ -97,49 +186,17 @@ public sealed class RasterLargeContent : ICompositeContent
         }
     }
 
-    /// <summary>
-    /// Replaces the preview with scene-referred half-float light, to be tone-mapped at draw time.
-    /// </summary>
-    public void SetScenePreview(SKImage preview, float whitePoint)
-    {
-        ArgumentNullException.ThrowIfNull(preview);
+    private int _disposed;
 
-        SetPreview(preview);
-        PreviewWhitePoint = whitePoint;
-        PreviewEncoding = SceneEncoding.Linear;
-    }
-
-    public void SetPreview(SKImage? preview)
-    {
-        if (PreviewImage != null && PreviewImage.Handle != IntPtr.Zero)
-            PreviewImage.Dispose();
-
-        PreviewImage = preview;
-    }
-
-    /// <summary>
-    /// Marks preview and tiles alike as scene-referred light, to be tone-mapped at draw time.
-    /// </summary>
-    public void MarkSceneReferred(float whitePoint, SceneEncoding encoding = SceneEncoding.Linear)
-    {
-        PreviewWhitePoint = whitePoint;
-        TileWhitePoint = whitePoint;
-        PreviewEncoding = encoding;
-        TileEncoding = encoding;
-    }
-
-    public void SetTiles(ITileSource tiles)
-    {
-        TileSource?.Dispose();
-        TileSource = tiles ?? throw new ArgumentNullException(nameof(tiles));
-    }
+    private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
     public void Dispose()
     {
-        if (PreviewImage != null && PreviewImage.Handle != IntPtr.Zero)
-            PreviewImage.Dispose();
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
 
+        PreviewImage?.Dispose();
         TileSource?.Dispose();
-        Range.Curve?.Dispose();
+        _range.Curve?.Dispose();
     }
 }

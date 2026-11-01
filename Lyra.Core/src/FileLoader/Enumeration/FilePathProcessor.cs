@@ -1,11 +1,18 @@
 using Lyra.Common;
 using Lyra.FileLoader.Store;
+using Lyra.Imaging.Detection;
 using static Lyra.PathUtils.PathUtils;
 
 namespace Lyra.FileLoader.Enumeration;
 
 public static class FilePathProcessor
 {
+    /// <summary>
+    /// How many files a scan opens to see whether a name that says nothing hides an image. Past it
+    /// they are skipped, so a folder full of extensionless files cannot stall the scan.
+    /// </summary>
+    internal const int MaxIdentifiedPerScan = 2000;
+
     public static FileLoaderRecursion FileLoaderRecursion { get; set; } = FileLoaderRecursion.AsDesigned;
     public static bool IncludeHidden { get; set; } = false;
     public static bool FollowSymlinks { get; set; } = false;
@@ -109,8 +116,9 @@ public static class FilePathProcessor
         if (ctx is { IsSingleFileOpen: true, ExplicitFiles.Count: 1 })
         {
             var parent = Path.GetDirectoryName(ctx.ExplicitFiles[0]);
+            // The file itself stays explicit, so it opens even when its name is not an image's.
             if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent))
-                return new EnumerationPlan([parent], []);
+                return new EnumerationPlan([parent], [ctx.ExplicitFiles[0]]);
 
             // Fallback: keep the explicit file.
             return new EnumerationPlan([], [ctx.ExplicitFiles[0]]);
@@ -134,10 +142,11 @@ public static class FilePathProcessor
         Action? onFileEnumerated,
         Action? onSupportedFileDiscovered)
     {
-        // Full path -> its normalized directory. Dedup is by path; the directory is
-        // captured at discovery time so records never have to recompute it.
-        var all = new Dictionary<string, string>(PathComparer.CommonPathComparer);
+        // Full path -> its normalized directory, and what its bytes say when its name does not.
+        // Dedup is by path; the directory is captured at discovery time.
+        var all = new Dictionary<string, Found>(PathComparer.CommonPathComparer);
         var dirSet = new HashSet<string>(PathComparer.CommonPathComparer);
+        var identified = 0;
 
         foreach (var f in plan.ExplicitFiles)
         {
@@ -154,7 +163,8 @@ public static class FilePathProcessor
             if (parentDir.Length > 0)
                 dirSet.Add(parentDir);
 
-            if (IsSupportedFile(f) && all.TryAdd(f, parentDir))
+            // Chosen explicitly, so any name is worth a look inside.
+            if (Recognise(f, parentDir, mayIdentify: true) is { } found && all.TryAdd(f, found))
                 onSupportedFileDiscovered?.Invoke();
         }
 
@@ -169,7 +179,7 @@ public static class FilePathProcessor
             {
                 onFileEnumerated?.Invoke();
 
-                if (IsSupportedFile(file) && all.TryAdd(file, normalizedDir))
+                if (!all.ContainsKey(file) && Recognise(file, normalizedDir, mayIdentify: ImageFormat.MayBeMisnamed(Path.GetExtension(file))) is { } found && all.TryAdd(file, found))
                     onSupportedFileDiscovered?.Invoke();
 
                 // Soft-cancel: stop after the current file.
@@ -183,12 +193,28 @@ public static class FilePathProcessor
 
         allDirectories = dirSet.OrderBy(d => d, StringComparer.Ordinal).ToList();
 
+        if (identified >= MaxIdentifiedPerScan)
+            Logger.Warning($"[FilePathProcessor] Looked inside {MaxIdentifiedPerScan} files whose names say nothing; skipped the rest.");
+
         return all
-            .Select(kv => new FileRecord(kv.Key, Path.GetFileName(kv.Key), kv.Value))
+            .Select(kv => new FileRecord(kv.Key, Path.GetFileName(kv.Key), kv.Value.Directory, Detected: kv.Value.Detected))
             .ToList();
 
-        static bool IsSupportedFile(string fullPath) => ImageFormat.IsSupported(Path.GetExtension(fullPath));
+        Found? Recognise(string fullPath, string directory, bool mayIdentify)
+        {
+            if (ImageFormat.IsSupported(Path.GetExtension(fullPath)))
+                return new Found(directory, ImageFormatType.Unknown);
+
+            if (!mayIdentify || identified >= MaxIdentifiedPerScan)
+                return null;
+
+            identified++;
+            return FormatDetector.Identify(fullPath) is { } format ? new Found(directory, format) : null;
+        }
     }
+
+    /// <param name="Detected">What the file's bytes say it is, when its name does not.</param>
+    private readonly record struct Found(string Directory, ImageFormatType Detected);
 
     private static List<string> GetUniqueDirectories(IReadOnlyList<FileRecord> supported)
     {

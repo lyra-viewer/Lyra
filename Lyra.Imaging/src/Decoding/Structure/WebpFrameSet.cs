@@ -1,4 +1,3 @@
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Variants;
 using Lyra.ManagedCodecs.Raster.Webp;
 using SkiaSharp;
@@ -22,29 +21,29 @@ internal static class WebpFrameSet
         ];
     }
     
-    public static void Describe(Composite composite, SKCodecFrameInfo[] frames, WebpChunks? chunks)
+    public static void Describe(DecodeContext context, SKCodecFrameInfo[] frames, WebpChunks? chunks)
     {
         var animated = frames.Length > 1;
 
         if (chunks is not null && DescribeCompression(chunks.Frames) is { } compression)
-            composite.AddFormatSpecific("Compression", compression);
+            context.AddFormatSpecific("Compression", compression);
 
         if (chunks is { Frames.Count: 0 })
-            composite.AddFormatSpecific("Frames", "none");
+            context.AddFormatSpecific("Frames", "none");
 
         if (animated)
         {
-            composite.AddFormatSpecific("Frames", frames.Length.ToString());
-            composite.AddFormatSpecific("Duration", FrameFacts.TotalDuration(frames));
+            context.AddFormatSpecific("Frames", frames.Length.ToString());
+            context.AddFormatSpecific("Duration", FrameFacts.TotalDuration(frames));
 
             if (chunks?.LoopCount is { } loop)
-                composite.AddFormatSpecific("Loop", FrameFacts.DescribePlays(loop));
+                context.AddFormatSpecific("Loop", FrameFacts.DescribePlays(loop));
         }
 
         if (chunks is { Truncated: true })
         {
             var where = chunks.CutFrame ? $"ends inside frame {chunks.Frames.Count + 1}, which is not shown" : "stops inside a chunk";
-            composite.AddFormatSpecific("Truncated", where);
+            context.AddFormatSpecific("Truncated", where);
         }
     }
 

@@ -61,8 +61,7 @@ public class LargeRasterDrawTests
         {
             using var composite = new Composite(new FileInfo("huge.exr"));
             composite.Content = content;
-            composite.FullWidth = FullSize;
-            composite.FullHeight = FullSize;
+            composite.SetFullSize(FullSize, FullSize);
 
             using var surface = SKSurface.Create(new SKImageInfo(64, 64, SKColorType.Rgba8888, SKAlphaType.Premul));
             var canvas = surface.Canvas;

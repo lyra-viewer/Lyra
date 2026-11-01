@@ -7,22 +7,30 @@ namespace Lyra.Imaging.Decoding.Decoders;
 
 internal abstract class DecoderBase : IImageDecoder
 {
-    public abstract bool CanDecode(ImageFormatType format);
+    public abstract IReadOnlyList<ImageFormatType> Formats { get; }
 
-    protected abstract void Decode(Composite composite, string path, CancellationToken ct);
+    public virtual DecoderCapabilities Capabilities => DecoderCapabilities.None;
+
+    protected abstract void Decode(DecodeContext context, CancellationToken ct);
 
     protected string Name => GetType().Name;
 
+    internal void TakeOver(DecodeContext context, CancellationToken ct)
+    {
+        context.DecoderName = Name;
+        Decode(context, ct);
+    }
+
     public Task DecodeAsync(Composite composite, CancellationToken ct)
     {
-        var path = composite.FileInfo.FullName;
+        var context = DecodeContext.For(composite);
+        context.DecoderName = Name;
 
-        composite.DecoderName = Name;
-        Logger.Debug($"[{Name}] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {path}");
+        Logger.Debug($"[{Name}] [Thread: {CurrentThread.GetNameOrId()}] Decoding: {context.Source.Label}");
 
         ct.ThrowIfCancellationRequested();
 
-        Decode(composite, path, ct);
+        Decode(context, ct);
 
         return Task.CompletedTask;
     }

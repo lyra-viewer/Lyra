@@ -11,7 +11,7 @@ namespace Lyra.Imaging.Decoding.Decoders.Animation;
 /// after the next, so the context stays positioned after the last frame decoded: the next one
 /// costs one decode, and going back means opening the file again and decoding up to it.
 /// </summary>
-internal sealed class HeifSequenceFrameSource(Func<Stream> open, uint colorTrackId, uint? alphaTrackId, int count, SKSizeI size, SKColorSpace? colorSpace, Composite composite) : ExclusiveResource, IFrameSource
+internal sealed class HeifSequenceFrameSource(Func<Stream> open, uint colorTrackId, uint? alphaTrackId, int count, SKSizeI size, SKColorSpace? colorSpace, DecodeContext context) : ExclusiveResource, IFrameSource
 {
     private Stream? _stream;
     private HeifFile? _file;
@@ -44,7 +44,7 @@ internal sealed class HeifSequenceFrameSource(Func<Stream> open, uint colorTrack
             ct.ThrowIfCancellationRequested();
 
             using var frame = Next();
-            return RasterContentBuilder.Build(Bitmap(frame, index, ct), composite);
+            return RasterContentBuilder.Build(Bitmap(frame, index, ct), context);
         }
         catch (OperationCanceledException) when (_file is null || _file.ReadsCancelled)
         {

@@ -11,7 +11,7 @@ public static class DuplicateFinder
 
     public static IReadOnlyList<DuplicateGroup> Scan(IProgress<DuplicateScanProgress>? progress = null, CancellationToken ct = default)
     {
-        var records = FileRecordDatabase.Records.ToArray();
+        var records = FileRecordDatabase.Records.Where(record => !ImageFormat.IsExcludedFromDuplicateScan(record.Format)).ToArray();
 
         EnsureSizes(records, progress, ct);
         var candidates = GatherSizeCandidates(records);

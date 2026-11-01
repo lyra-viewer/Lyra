@@ -61,6 +61,22 @@ public class Label : ComponentBase
         set => Set(ref _ellipsize, value);
     }
 
+    private EllipsisPlacement _ellipsisPlacement;
+
+    public EllipsisPlacement EllipsisPlacement
+    {
+        get => _ellipsisPlacement;
+        set
+        {
+            if (_ellipsisPlacement == value)
+                return;
+
+            _ellipsisPlacement = value;
+            _clippedFor = -1f;
+            Invalidate();
+        }
+    }
+
     // Font properties. GetFont notices a change and rebuilds, which also resets
     // the measure and clip caches - these only have to mark the frame dirty.
     private string _fontFamily = Fonts.MonospaceFamily;
@@ -113,6 +129,9 @@ public class Label : ComponentBase
     private float _clippedWidth;
     private float _clippedFor = -1f;
     private readonly List<TextRun> _clippedRuns = [];
+
+    /// <summary>The text as last drawn, cut or not.</summary>
+    internal string? DrawnText { get; private set; }
 
     public Label(string text)
     {
@@ -230,8 +249,13 @@ public class Label : ComponentBase
             runs = _clippedRuns;
 
             if (text.Length == 0)
+            {
+                DrawnText = "";
                 return;
+            }
         }
+
+        DrawnText = text;
 
         // Horizontal alignment within content bounds
         var textX = HorizontalAlign switch
@@ -289,6 +313,15 @@ public class Label : ComponentBase
 
         var budget = maxWidth - ellipsisWidth;
 
+        _clippedText = EllipsisPlacement == EllipsisPlacement.Middle ? CutMiddle(font, budget) : CutEnd(font, budget);
+        _clippedWidth = FontFallback.Layout(_clippedText, font, _clippedRuns);
+        _clippedFor = maxWidth;
+
+        return (_clippedText, _clippedWidth);
+    }
+
+    private string CutEnd(SKFont font, float budget)
+    {
         var low = 0;
         var high = Text.Length;
 
@@ -305,11 +338,41 @@ public class Label : ComponentBase
         if (low > 0 && char.IsHighSurrogate(Text[low - 1]))
             low--;
 
-        _clippedText = Text[..low] + Ellipsis;
-        _clippedWidth = FontFallback.Layout(_clippedText, font, _clippedRuns);
-        _clippedFor = maxWidth;
+        return Text[..low] + Ellipsis;
+    }
+    
+    private string CutMiddle(SKFont font, float budget)
+    {
+        var low = 0;
+        var high = Text.Length;
 
-        return (_clippedText, _clippedWidth);
+        while (low < high)
+        {
+            var mid = (low + high + 1) / 2;
+            var (head, tail) = Split(mid);
+
+            if (FontFallback.Layout(Text.AsSpan(0, head), font, null) + FontFallback.Layout(Text.AsSpan(Text.Length - tail), font, null) <= budget)
+                low = mid;
+            else
+                high = mid - 1;
+        }
+
+        var (keepHead, keepTail) = Split(low);
+        return Text[..keepHead] + Ellipsis + Text[(Text.Length - keepTail)..];
+    }
+
+    private (int Head, int Tail) Split(int keep)
+    {
+        var head = keep / 2;
+        var tail = keep - head;
+
+        if (head > 0 && char.IsHighSurrogate(Text[head - 1]))
+            head--;
+
+        if (tail > 0 && char.IsLowSurrogate(Text[Text.Length - tail]))
+            tail--;
+
+        return (head, tail);
     }
 
     // --------------------------------------------------------

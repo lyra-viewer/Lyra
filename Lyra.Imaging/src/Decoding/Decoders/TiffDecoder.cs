@@ -22,21 +22,23 @@ namespace Lyra.Imaging.Decoding.Decoders;
 /// </summary>
 internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
 {
-    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Tiff;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Tiff];
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
+        var path = context.Source.RequireFile();
+
         var directories = TiffNative.DescribeDirectories(path, IntPtr.Zero, 0, out var encodedBytes);
         var pages = TiffPageSet.Pages(directories);
 
         if (pages.Count > 0 && directories.Count > pages[0])
-            composite.ReportPixelCount(directories[pages[0]].Width, directories[pages[0]].Height);
+            context.ReportPixelCount(directories[pages[0]].Width, directories[pages[0]].Height);
 
-        TiffPageSet.Describe(composite, directories, pages, TiffDirectoryReader.IsBigTiff(path));
+        TiffPageSet.Describe(context, directories, pages, IsBigTiff(context.Source));
 
         if (pages.Count > 1)
         {
-            TiffDocument.Decode(path, composite, directories, encodedBytes, pages, ct);
+            TiffDocument.Decode(path, context, directories, encodedBytes, pages, ct);
             return;
         }
 
@@ -44,18 +46,24 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
         var info = directories.Count > page ? directories[page] : default;
 
         if (TiffRoute.For(info) is TiffReadPath.NativeLayout or TiffReadPath.RegionStreamed)
-            composite.ExifInfo = MetadataProcessor.ParseMetadata(path);
+            context.ExifInfo = MetadataProcessor.ParseMetadata(path);
 
-        composite.Content = TiffRoute.Decode(path, page, info, composite,
-            readWhole: () => TiffWholeImage.Read(path, composite, ct, out _),
+        context.Content = TiffRoute.Decode(path, page, info, context,
+            readWhole: () => TiffWholeImage.Read(path, context, ct, out _),
             ct: ct,
-            fetch: () => TiffFetch.IntoMemory(path, composite, ct));
+            fetch: () => TiffFetch.IntoMemory(path, context, ct));
 
-        if (composite.ExifInfo is null)
-            Interlocked.CompareExchange(ref composite.ExifInfo, MetadataProcessor.ParseMetadata(path), null);
+        if (context.ExifInfo is null)
+            context.SetExifInfoIfAbsent(MetadataProcessor.ParseMetadata(path));
 
         if (directories.Count > 1)
-            composite.Structure = [TiffPageSet.Summarise(directories, pages)];
+            context.Structure = [TiffPageSet.Summarise(directories, pages)];
+    }
+
+    private static bool IsBigTiff(DecodeSource source)
+    {
+        using var head = source.OpenHead();
+        return TiffDirectoryReader.IsBigTiff(head);
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)
@@ -67,6 +75,6 @@ internal sealed class TiffDecoder : DecoderBase, IThumbnailDecoder
         var page = pages.Count > 0 ? pages[0] : 0;
         var info = directories.Count > page ? directories[page] : default;
 
-        return TiffRoute.Thumbnail(path, page, info, maxDimension, () => TiffWholeImage.Read(path, composite: null, ct, out _), ct);
+        return TiffRoute.Thumbnail(path, page, info, maxDimension, () => TiffWholeImage.Read(path, context: null, ct, out _), ct);
     }
 }

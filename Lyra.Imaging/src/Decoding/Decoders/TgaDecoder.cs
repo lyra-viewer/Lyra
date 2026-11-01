@@ -1,6 +1,5 @@
 using System.Text;
 using Lyra.Common;
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Exif;
 using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Decoding.Support;
@@ -19,12 +18,16 @@ internal sealed class TgaDecoder : DecoderBase, IThumbnailDecoder
     // decoder, which auto-detects the real format (PNG/JPEG/BMP/WebP/...) regardless of extension.
     private static readonly SkiaDecoder Fallback = new();
 
-    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Tga;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Tga];
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    public override DecoderCapabilities Capabilities => DecoderCapabilities.ReadsFromMemory;
+
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
-        var bytes = composite.ReadAllBytes(ct);
-        composite.ExifInfo = ReadMetadata(bytes, path);
+        var path = context.Source.Label;
+
+        var bytes = context.ReadAllBytes(ct);
+        context.ExifInfo = ReadMetadata(bytes, path);
 
         // Some files under .tga are not TGA at all. Skia gets a turn before the file is refused,
         // and it renames the composite to itself on the way through. A TGA Skia cannot read either
@@ -33,7 +36,7 @@ internal sealed class TgaDecoder : DecoderBase, IThumbnailDecoder
         {
             try
             {
-                Fallback.DecodeAsync(composite, ct).GetAwaiter().GetResult();
+                Fallback.TakeOver(context, ct);
             }
             catch (Exception e) when (failure is not null && e is not OperationCanceledException)
             {
@@ -46,13 +49,13 @@ internal sealed class TgaDecoder : DecoderBase, IThumbnailDecoder
         ct.ThrowIfCancellationRequested();
         DecoderValidation.RequireSaneDimensions(decoded.Width, decoded.Height);
 
-        Describe(composite, bytes);
+        Describe(context, bytes);
 
         if (truncated)
-            composite.Warning = LoadWarning.PartiallyDecoded("The file ends before the image does");
+            context.Warning = LoadWarning.PartiallyDecoded("The file ends before the image does");
 
         var bitmap = ToSkBitmap(decoded);
-        composite.Content = RasterContentBuilder.Build(bitmap, composite);
+        context.Content = RasterContentBuilder.Build(bitmap, context);
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)
@@ -107,21 +110,21 @@ internal sealed class TgaDecoder : DecoderBase, IThumbnailDecoder
         return message.Length > 0 ? char.ToUpperInvariant(message[0]) + message[1..] : message;
     }
 
-    private static void Describe(Composite composite, ReadOnlySpan<byte> data)
+    private static void Describe(DecodeContext context, ReadOnlySpan<byte> data)
     {
         var header = TgaReader.ReadHeader(data);
         var type = header.ImageType;
 
-        composite.AddFormatSpecific("Format", TgaReader.IsVersion2(data) ? "TGA 2.0" : "TGA 1.0");
-        composite.AddFormatSpecific("Image Type", type.IsColorMapped() ? "Color-mapped" : type.IsGrayscale() ? "Grayscale" : "True color");
-        composite.AddFormatSpecific("Compression", type.IsRunLengthEncoded() ? "RLE" : "None");
-        composite.AddFormatSpecific("Bit Depth", type.IsColorMapped() ? $"{header.PixelDepth}-bit indices" : $"{header.PixelDepth}-bit");
+        context.AddFormatSpecific("Format", TgaReader.IsVersion2(data) ? "TGA 2.0" : "TGA 1.0");
+        context.AddFormatSpecific("Image Type", type.IsColorMapped() ? "Color-mapped" : type.IsGrayscale() ? "Grayscale" : "True color");
+        context.AddFormatSpecific("Compression", type.IsRunLengthEncoded() ? "RLE" : "None");
+        context.AddFormatSpecific("Bit Depth", type.IsColorMapped() ? $"{header.PixelDepth}-bit indices" : $"{header.PixelDepth}-bit");
 
         if (type.IsColorMapped())
-            composite.AddFormatSpecific("Palette", $"{header.CMapLength} colors, {header.CMapDepth}-bit");
+            context.AddFormatSpecific("Palette", $"{header.CMapLength} colors, {header.CMapDepth}-bit");
 
-        composite.AddFormatSpecific("Has Alpha", header.HasAlpha);
-        composite.AddFormatSpecific("Origin", header.Origin switch
+        context.AddFormatSpecific("Has Alpha", header.HasAlpha);
+        context.AddFormatSpecific("Origin", header.Origin switch
         {
             TgaImageOrigin.BottomLeft => "Bottom left",
             TgaImageOrigin.BottomRight => "Bottom right",
@@ -130,7 +133,7 @@ internal sealed class TgaDecoder : DecoderBase, IThumbnailDecoder
         });
 
         if (ImageId(data, header) is { } id)
-            composite.AddFormatSpecific("Image ID", id);
+            context.AddFormatSpecific("Image ID", id);
     }
 
     /// <summary>The optional ID field after the header, when it is text; encoders also use it for binary data.</summary>

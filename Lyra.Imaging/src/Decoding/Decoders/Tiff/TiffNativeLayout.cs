@@ -36,8 +36,11 @@ internal static class TiffNativeLayout
     /// </summary>
     internal static void RequireWithinBudget(string path, TiffNative.DirectoryInfo info, bool isFloat)
     {
-        if (info.Width == 0 || info.Height == 0 || info.Width > int.MaxValue || info.Height > int.MaxValue)
-            throw new InvalidOperationException($"{Path.GetFileName(path)} declares dimensions this path cannot read: {info.Width}x{info.Height}.");
+        if (info.Width == 0 || info.Height == 0)
+            throw new LoadFailureException(LoadFailureKind.DecodeFailed, $"{Path.GetFileName(path)} declares dimensions this path cannot read: {info.Width}x{info.Height}.");
+
+        if (info.Width > int.MaxValue || info.Height > int.MaxValue)
+            throw new LoadFailureException(LoadFailureKind.TooLarge, $"{Path.GetFileName(path)} declares dimensions this path cannot read: {info.Width}x{info.Height}.");
 
         DecoderValidation.RequireSaneDimensions((int)info.Width, (int)info.Height);
 
@@ -54,12 +57,12 @@ internal static class TiffNativeLayout
             "Layouts read this way are held whole; nothing streams them.");
     }
 
-    public static ICompositeContent Decode(string path, int directory, TiffNative.DirectoryInfo info, Composite composite, CancellationToken ct)
+    public static ICompositeContent Decode(string path, int directory, TiffNative.DirectoryInfo info, DecodeContext context, CancellationToken ct)
     {
-        var transfer = new IoTally(composite);
+        var transfer = new IoTally(context);
         var (read, kind) = Read(path, directory, info, ct, transfer);
 
-        transfer.ReportTo(composite);
+        transfer.ReportTo(context);
 
         try
         {
@@ -72,14 +75,14 @@ internal static class TiffNativeLayout
                 unsafe
                 {
                     var floats = new Span<float>((void*)read.Pixels, checked(read.Width * read.Height * 4));
-                    var content = HdrImageBuilder.Build(floats, read.Width, read.Height, composite, ct, out var facts);
+                    var content = HdrImageBuilder.Build(floats, read.Width, read.Height, context, ct, out var facts);
 
-                    facts.Describe(composite);
+                    facts.Describe(context);
                     return content;
                 }
             }
 
-            return RasterContentBuilder.Build(IntegerBitmap(read, kind), composite);
+            return RasterContentBuilder.Build(IntegerBitmap(read, kind), context);
         }
         finally
         {

@@ -3,6 +3,7 @@ using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
 using Lyra.ManagedCodecs.Texture.Ktx;
 using SkiaSharp;
+using Lyra.Imaging.Content.Status;
 
 namespace Lyra.Imaging.Decoding.Decoders.Ktx;
 
@@ -45,13 +46,13 @@ internal static class BasisTranscoder
         var depth = bytes.Length >= PixelDepthOffset + 4 ? BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(PixelDepthOffset, 4)) : 0;
         if (depth > 0)
         {
-            throw new InvalidOperationException($"Basis Universal does not support 3D textures (pixelDepth={depth}).");
+            throw new LoadFailureException(LoadFailureKind.DecodeFailed, $"Basis Universal does not support 3D textures (pixelDepth={depth}).");
         }
 
         if (!BasisNative.basis_decode_ktx2_rgba(bytes, bytes.Length, level, layer, face, out var ptr, out var width, out var height) || ptr == IntPtr.Zero)
         {
             var error = NativeErrors.GetUtf8ZOrAnsiZ(BasisNative.get_last_basis_error());
-            throw new InvalidOperationException($"Failed to transcode Basis KTX2. {error}");
+            throw new LoadFailureException(LoadFailureKind.DecodeFailed, $"Failed to transcode Basis KTX2. {error}");
         }
 
         try

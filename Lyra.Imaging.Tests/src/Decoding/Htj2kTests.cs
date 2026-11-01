@@ -17,9 +17,9 @@ public class Htj2kTests
 
     // 16x12 RGB, red on the left half and blue on the right, coded reversibly with HT code blocks
     // (cblksty 0x40): ojph_compress -reversible true, OpenJPH 0.32.
-    private const string Codestream = "/0//UQAvQAAAAAAQAAAADAAAAAAAAAAAAAAAEAAAAAwAAAAAAAAAAAADBwEBBwEBBwEB/1AACAACAAAAA/9SAAwAAgABAQUEBEAB/1wAEyBQWFhYWFhYWFhYWFhYUFBQ" +
-                                      "/2QAFwABT3BlbkpQSCBWZXIgMC4zMi4wLv+QAAoAAAAAAJMAAf+TwBKAgQEHdADAEoDsAId0AMASgJABh3QAAAAAAMAJQN4Bh3QAwAlA4QGHdAAAwAqABQsMDQBhlADA" +
-                                      "CoAGDQ4PAGGUAADACtAdHe4d/gjgLjDD0ngAwArQHh7/Hv4I4C4ww9J4AADAFaD9fr/f77wBTlOBAngAwBWgfr/f7/e8AU5TgQJ4AP/Z";
+    internal const string Codestream = "/0//UQAvQAAAAAAQAAAADAAAAAAAAAAAAAAAEAAAAAwAAAAAAAAAAAADBwEBBwEBBwEB/1AACAACAAAAA/9SAAwAAgABAQUEBEAB/1wAEyBQWFhYWFhYWFhYWFhYUFBQ" +
+                                       "/2QAFwABT3BlbkpQSCBWZXIgMC4zMi4wLv+QAAoAAAAAAJMAAf+TwBKAgQEHdADAEoDsAId0AMASgJABh3QAAAAAAMAJQN4Bh3QAwAlA4QGHdAAAwAqABQsMDQBhlADA" +
+                                       "CoAGDQ4PAGGUAADACtAdHe4d/gjgLjDD0ngAwArQHh7/Hv4I4C4ww9J4AADAFaD9fr/f77wBTlOBAngAwBWgfr/f7/e8AU5TgQJ4AP/Z";
 
     private static readonly Lazy<bool> NativeJ2KReady = new(() => NativeWrapper.TryLoad("libj2k_native", typeof(J2KDecoder).Assembly));
 

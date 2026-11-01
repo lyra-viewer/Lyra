@@ -13,19 +13,19 @@ namespace Lyra.Imaging.Decoding.Support;
 /// </summary>
 internal static class RasterContentBuilder
 {
-    public static ICompositeContent Build(SKBitmap bitmap, Composite composite, float? sceneWhitePoint = null, SceneEncoding encoding = SceneEncoding.Linear)
+    public static ICompositeContent Build(SKBitmap bitmap, DecodeContext context, float? sceneWhitePoint = null, SceneEncoding encoding = SceneEncoding.Linear)
     {
         ArgumentNullException.ThrowIfNull(bitmap);
-        ArgumentNullException.ThrowIfNull(composite);
+        ArgumentNullException.ThrowIfNull(context);
 
         bitmap.SetImmutable();
 
-        if (ImageBytes.Of(bitmap) <= DecodePolicy.SingleTextureCeilingBytes)
+        if (DecodePolicy.FitsOneTexture(bitmap.Width, bitmap.Height, ImageBytes.PerPixel(bitmap.ColorType)))
             return Single(bitmap, sceneWhitePoint, encoding);
 
         try
         {
-            var large = BuildLarge(bitmap, composite);
+            var large = BuildLarge(bitmap, context);
 
             if (sceneWhitePoint is { } whitePoint)
                 large.MarkSceneReferred(whitePoint, encoding);
@@ -49,26 +49,26 @@ internal static class RasterContentBuilder
             : new RasterContent(bitmap, image);
     }
 
-    private static RasterLargeContent BuildLarge(SKBitmap bitmap, Composite composite)
+    private static RasterLargeContent BuildLarge(SKBitmap bitmap, DecodeContext context)
     {
         var width = bitmap.Width;
         var height = bitmap.Height;
 
         var content = new RasterLargeContent(width, height);
 
-        composite.FullWidth = width;
-        composite.FullHeight = height;
+        context.SetFullSize(width, height);
 
         try
         {
-            content.SetPreview(CreatePreview(bitmap));
+            content.SetPreview(CreatePreview(bitmap, context.Options));
             content.SetTiles(CreateTiles(bitmap, out var tileCount));
 
             content.MarkAllTilesReady(tileCount);
         }
         catch
         {
-            content.SetPreview(null);
+            // The preview and any tiles cut so far; the bitmap stays for the single-texture fallback.
+            content.Dispose();
             throw;
         }
 
@@ -83,9 +83,9 @@ internal static class RasterContentBuilder
     /// <summary>
     /// A display-sized copy, drawn whenever it is sharp enough for the current zoom.
     /// </summary>
-    private static SKImage? CreatePreview(SKBitmap bitmap)
+    private static SKImage? CreatePreview(SKBitmap bitmap, DecodeOptions options)
     {
-        var (targetWidth, targetHeight) = PreviewSize(bitmap.Width, bitmap.Height);
+        var (targetWidth, targetHeight) = options.PreviewSize(bitmap.Width, bitmap.Height);
 
         var info = new SKImageInfo(targetWidth, targetHeight, bitmap.ColorType, bitmap.AlphaType, bitmap.ColorSpace);
         var preview = bitmap.Resize(info, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
@@ -100,10 +100,8 @@ internal static class RasterContentBuilder
         return SKImage.FromBitmap(preview);
     }
 
-    internal static (int Width, int Height) PreviewSize(int width, int height)
+    internal static (int Width, int Height) PreviewSize(int width, int height, int maxWidth, int maxHeight)
     {
-        var (maxWidth, maxHeight) = PreviewBounds();
-
         var scale = MathF.Min(1f, MathF.Min(maxWidth / (float)width, maxHeight / (float)height));
 
         return (Math.Max(1, (int)(width * scale)), Math.Max(1, (int)(height * scale)));

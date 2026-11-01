@@ -1,5 +1,4 @@
 using Lyra.Common;
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders.Ktx;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
@@ -11,30 +10,32 @@ namespace Lyra.Imaging.Decoding.Decoders;
 
 internal sealed class KtxDecoder : DecoderBase, IThumbnailDecoder
 {
-    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Ktx;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Ktx];
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    public override DecoderCapabilities Capabilities => DecoderCapabilities.ReadsFromMemory;
+
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
-        var bytes = composite.ReadAllBytes(ct);
+        var bytes = context.ReadAllBytes(ct);
 
         // Basis Universal (ETC1S / UASTC) can't go through the managed reader; the native transcoder
         // decodes the base image straight to RGBA.
         if (BasisTranscoder.IsBasis(bytes))
         {
-            DecodeBasis(composite, bytes);
+            DecodeBasis(context, bytes);
             return;
         }
 
         var texture = ReadTexture(bytes);
         var surface = texture.Subresources[0]; // mip 0, face 0, layer 0
 
-        TextureBitmap.PopulateMetadata(composite, texture);
-        composite.Structure = KtxStructure.Describe(bytes, texture);
+        TextureBitmap.PopulateMetadata(context, texture);
+        context.Structure = KtxStructure.Describe(bytes, texture);
 
         ct.ThrowIfCancellationRequested();
         DecoderValidation.RequireSaneDimensions(surface.Width, surface.Height, TextureBitmap.BytesPerDecodedPixel(texture));
 
-        composite.Content = TextureBitmap.DecodeToContent(texture, surface, composite, ct, flipVertical: texture.Origin == TextureOrigin.BottomLeft);
+        context.Content = TextureBitmap.DecodeToContent(texture, surface, context, ct, flipVertical: texture.Origin == TextureOrigin.BottomLeft);
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)
@@ -52,19 +53,19 @@ internal sealed class KtxDecoder : DecoderBase, IThumbnailDecoder
 
         ct.ThrowIfCancellationRequested();
 
-        return ThumbnailScaler.ResizeToThumbnail(DecodeToBitmap(texture, surface, ct), maxDimension);
+        return ThumbnailScaler.ResizeToThumbnail(DecodeToBitmap(texture, surface, HdrDecodeSettings.Curve, ct), maxDimension);
     }
 
     /// <summary>Decodes a Basis Universal KTX2's base image via the native transcoder and fills the composite.</summary>
-    private static void DecodeBasis(Composite composite, byte[] bytes)
+    private static void DecodeBasis(DecodeContext context, byte[] bytes)
     {
         var bitmap = BasisTranscoder.Decode(bytes);
         DecoderValidation.RequireSaneDimensions(bitmap.Width, bitmap.Height);
 
-        composite.AddFormatSpecific("Format", BasisTranscoder.CodecName(bytes));
-        composite.AddFormatSpecific("Has Alpha", HasTranslucentPixels(bitmap));
+        context.AddFormatSpecific("Format", BasisTranscoder.CodecName(bytes));
+        context.AddFormatSpecific("Has Alpha", HasTranslucentPixels(bitmap));
 
-        composite.Content = RasterContentBuilder.Build(bitmap, composite);
+        context.Content = RasterContentBuilder.Build(bitmap, context);
     }
 
     /// <summary>Dispatches to the KTX 1.x or KTX 2.0 reader by the file's leading identifier bytes.</summary>
@@ -79,9 +80,9 @@ internal sealed class KtxDecoder : DecoderBase, IThumbnailDecoder
         throw new InvalidDataException("Missing or unrecognized Khronos Texture identifier.");
     }
 
-    private static SKBitmap DecodeToBitmap(TextureData texture, in Subresource surface, CancellationToken ct)
+    private static SKBitmap DecodeToBitmap(TextureData texture, in Subresource surface, ToneCurve curve, CancellationToken ct)
     {
-        var bitmap = TextureBitmap.DecodeToBitmap(texture, surface, ct);
+        var bitmap = TextureBitmap.DecodeToBitmap(texture, surface, curve, ct);
 
         // Decoders emit top-left RGBA; flip a bottom-up (OpenGL-convention) source into place.
         if (texture.Origin == TextureOrigin.BottomLeft)
