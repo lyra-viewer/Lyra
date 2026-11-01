@@ -3,6 +3,7 @@ using Lyra.Common.SystemExtensions;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Exif;
 using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Textures;
 using Lyra.Imaging.Content.Variants;
 using Lyra.SdlCore;
 using Lyra.UI.Components;
@@ -122,7 +123,7 @@ public sealed class InfoSection : IUISection
             _errorPrefixLabel = DimPrefix(ErrorPrefix),
             _errorMessageLabel = new Label("").Color(Palette.Danger).Transient(),
             Separator(),
-            _errorDetailLabel = ForegroundLabel());
+            _errorDetailLabel = ForegroundLabel().Ellipsize().ExpandH());
 
         _root = new VStack()
             .ExpandH()
@@ -247,9 +248,19 @@ public sealed class InfoSection : IUISection
         // Error row
         if (ProblemOf(composite) is { } problem)
         {
-            _errorPrefixLabel.Text = problem.IsError ? ErrorPrefix : WarningPrefix;
+            _errorPrefixLabel.Text = problem.Level switch
+            {
+                ProblemLevel.Error => ErrorPrefix,
+                ProblemLevel.Warning => WarningPrefix,
+                _ => NotePrefix
+            };
             _errorMessageLabel.Text = problem.Message;
-            _errorMessageLabel.Color = problem.IsError ? Palette.Danger : Palette.Warning;
+            _errorMessageLabel.Color = problem.Level switch
+            {
+                ProblemLevel.Error => Palette.Danger,
+                ProblemLevel.Warning => Palette.Warning,
+                _ => Palette.Foreground
+            };
             _errorDetailLabel.Text = problem.Detail;
             _errorRow.Present = true;
         }
@@ -265,24 +276,27 @@ public sealed class InfoSection : IUISection
 
     private const string ErrorPrefix   = "[Error]       ";
     private const string WarningPrefix = "[Warning]     ";
+    private const string NotePrefix    = "[Note]        ";
 
-    internal readonly record struct Problem(bool IsError, string Message, string Detail);
+    internal enum ProblemLevel { Error, Warning, Note }
+
+    internal readonly record struct Problem(ProblemLevel Level, string Message, string Detail);
     
     internal static Problem? ProblemOf(Composite composite)
     {
         if (composite is { State: CompositeState.Failed, Failure: { } failure })
-            return new Problem(true, failure.Message, failure.Description);
+            return new Problem(failure.Kind == LoadFailureKind.NothingToShow ? ProblemLevel.Note : ProblemLevel.Error, failure.Message, failure.Description);
 
         var set = composite.Content as VariantContainer;
 
         if (set?.LastFailure is { } page)
-            return new Problem(true, $"{set.Variants[page.Index].Label}: {page.Failure.Message}", page.Failure.Description);
+            return new Problem(ProblemLevel.Error, $"{set.Variants[page.Index].Label}: {page.Failure.Message}", page.Failure.Description);
 
         if (composite.Warning is { } warning)
-            return new Problem(false, warning.Message, warning.Detail);
+            return new Problem(ProblemLevel.Warning, warning.Message, warning.Detail);
 
         if (set is not null && set.WarningOf(set.ShownIndex) is { } shown)
-            return new Problem(false, $"{set.Variants[set.ShownIndex].Label}: {shown.Message}", shown.Detail);
+            return new Problem(ProblemLevel.Warning, $"{set.Variants[set.ShownIndex].Label}: {shown.Message}", shown.Detail);
 
         return null;
     }
@@ -295,10 +309,26 @@ public sealed class InfoSection : IUISection
             .ExpandH()
             .Align(HAlign.Left);
 
-    /// <summary>Where <c>[</c> and <c>]</c> are among the file's pages, frames or sizes; null when there is only one.</summary>
+    /// <summary>What the contact sheet on screen holds: a material's textures, or every material.</summary>
+    private static string SheetNav(VariantContainer set, TextureLayout layout)
+    {
+        if (set.Active is not ContactSheetContent sheet)
+            return "[Contact sheet]";
+
+        var unit = set.ActiveIndex == layout.Overview ? "materials" : "textures";
+        return $"[Contact sheet {sheet.Cells.Count} {unit}]";
+    }
+
+    /// <summary>Where <c>[</c> and <c>]</c> are among the file's pages, frames, sizes or textures; null when there is only one.</summary>
     internal static string? VariantNav(VariantContainer? set)
     {
-        if (set is null || set.StepOrder.Count < 2)
+        if (set is null)
+            return null;
+
+        if (set.Textures is { } layout && layout.SourceOf(set.ActiveIndex) is null)
+            return SheetNav(set, layout);
+
+        if (set.StepOrder.Count < 2)
             return null;
 
         var position = 0;
@@ -312,6 +342,7 @@ public sealed class InfoSection : IUISection
         {
             VariantKind.Pages => "Page",
             VariantKind.Frames => "Frame",
+            VariantKind.Textures => "Texture",
             _ => "Size"
         };
 

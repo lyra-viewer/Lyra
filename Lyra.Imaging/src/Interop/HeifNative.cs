@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Lyra.Common;
+using Lyra.Imaging.Content.Status;
 
 namespace Lyra.Imaging.Interop;
 
@@ -196,5 +197,4 @@ internal static class HeifNative
     }
 }
 
-/// <summary>A libheif call that failed, with libheif's own reason. Counts as a decode failure.</summary>
-internal sealed class HeifException(string message) : InvalidOperationException(message);
+internal sealed class HeifException(string message) : LoadFailureException(LoadFailureKind.DecodeFailed, message);

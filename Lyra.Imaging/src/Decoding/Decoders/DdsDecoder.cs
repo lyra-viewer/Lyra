@@ -1,5 +1,4 @@
 using Lyra.Common;
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Structure;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.ManagedCodecs.Texture.Dds;
@@ -15,21 +14,23 @@ namespace Lyra.Imaging.Decoding.Decoders;
 /// </summary>
 internal sealed class DdsDecoder : DecoderBase, IThumbnailDecoder
 {
-    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Dds;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Dds];
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    public override DecoderCapabilities Capabilities => DecoderCapabilities.ReadsFromMemory;
+
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
-        var bytes = composite.ReadAllBytes(ct);
+        var bytes = context.ReadAllBytes(ct);
         var texture = DdsReader.Read(bytes);
         var surface = texture.Subresources[0]; // mip 0, face 0, layer 0
 
-        TextureBitmap.PopulateMetadata(composite, texture);
-        composite.Structure = DdsStructure.Describe(bytes, texture);
+        TextureBitmap.PopulateMetadata(context, texture);
+        context.Structure = DdsStructure.Describe(bytes, texture);
 
         ct.ThrowIfCancellationRequested();
         DecoderValidation.RequireSaneDimensions(surface.Width, surface.Height, TextureBitmap.BytesPerDecodedPixel(texture));
 
-        composite.Content = TextureBitmap.DecodeToContent(texture, surface, composite, ct, flipVertical: false);
+        context.Content = TextureBitmap.DecodeToContent(texture, surface, context, ct, flipVertical: false);
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)
@@ -41,6 +42,6 @@ internal sealed class DdsDecoder : DecoderBase, IThumbnailDecoder
 
         ct.ThrowIfCancellationRequested();
 
-        return ThumbnailScaler.ResizeToThumbnail(TextureBitmap.DecodeToBitmap(texture, surface, ct), maxDimension);
+        return ThumbnailScaler.ResizeToThumbnail(TextureBitmap.DecodeToBitmap(texture, surface, HdrDecodeSettings.Curve, ct), maxDimension);
     }
 }

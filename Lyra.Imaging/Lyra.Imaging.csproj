@@ -22,6 +22,7 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="Lyra.Imaging.Tests" />
+        <InternalsVisibleTo Include="Lyra.Core.Tests" />
     </ItemGroup>
 
 </Project>

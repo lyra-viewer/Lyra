@@ -112,9 +112,13 @@ public class LabelEllipsisTests
     [Fact]
     public void AWidthTooSmallForEvenTheMarkerDrawsNothing()
     {
-        var painted = PaintedWidth(Wide(), 1f);
+        var label = Wide();
+        PaintedWidth(label, 120f);
+
+        var painted = PaintedWidth(label, 1f);
 
         Assert.Equal(0f, painted);
+        Assert.Equal("", label.DrawnText);
     }
 
     [Fact]
@@ -140,6 +144,19 @@ public class LabelEllipsisTests
         var second = PaintedWidth(label, 100f);
 
         Assert.True(second < first, "a shorter string should paint less");
+    }
+
+    [Fact]
+    public void ACutInTheMiddleKeepsBothEnds()
+    {
+        var label = new Label("Wooden_Chair_wjglai2s_Raw_8K_albedo.jpeg") { Ellipsize = true, EllipsisPlacement = EllipsisPlacement.Middle };
+
+        var painted = PaintedWidth(label, 150f);
+
+        Assert.True(painted <= 151f, $"painted {painted}px, bounds are 150px");
+        Assert.StartsWith("Wood", label.DrawnText);
+        Assert.EndsWith(".jpeg", label.DrawnText);
+        Assert.Contains("…", label.DrawnText);
     }
 
     [Fact]

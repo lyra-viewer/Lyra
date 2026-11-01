@@ -1,5 +1,4 @@
 using Lyra.Common;
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Exif;
 using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Decoding.Decoders.Animation;
@@ -14,38 +13,40 @@ namespace Lyra.Imaging.Decoding.Decoders;
 
 internal sealed class HeifDecoder : DecoderBase, IThumbnailDecoder
 {
-    public override bool CanDecode(ImageFormatType format) => format == ImageFormatType.Heif;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Heif];
     
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
-        using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), composite.ReportTransferred, composite.CompleteTransfer);
+        var path = context.Source.RequireFile();
+
+        using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), context.ReportTransferred, context.CompleteTransfer);
         using var file = HeifFile.Open(stream, ct);
         using var still = file.HasPrimaryImage ? file.PrimaryImage() : null;
 
-        Describe(composite, file, still, stream);
+        Describe(context, file, still, stream);
 
-        if (TryPublishSequence(composite, file, still, stream, path, ct))
+        if (TryPublishSequence(context, file, still, stream, path, ct))
             return;
 
         if (still is null)
             throw new LoadFailureException(LoadFailureKind.DecodeFailed, "The file has no image to show");
 
-        composite.ReportPixelCount(still.Width, still.Height);
+        context.ReportPixelCount(still.Width, still.Height);
 
         var bitmap = still.DecodeRgba(ResolveColorSpace(still), ct);
 
         // A sequence that could not be shown may have read the metadata already.
-        composite.ExifInfo ??= ParseMetadata(still, stream, path);
-        composite.AppliedOrientation = composite.ExifInfo.ContainerRotation;
+        context.ExifInfo ??= ParseMetadata(still, stream, path);
+        context.AppliedOrientation = context.ExifInfo.ContainerRotation;
 
-        composite.Content = RasterContentBuilder.Build(bitmap, composite);
+        context.Content = RasterContentBuilder.Build(bitmap, context);
     }
 
     /// <summary>
     /// Publishes the file's image sequence frame by frame. False when it has none, or none that
     /// can be shown faithfully; the still image is then decoded instead.
     /// </summary>
-    private static bool TryPublishSequence(Composite composite, HeifFile file, HeifImageHandle? still, Stream stream, string path, CancellationToken ct)
+    private static bool TryPublishSequence(DecodeContext context, HeifFile file, HeifImageHandle? still, Stream stream, string path, CancellationToken ct)
     {
         var movie = IsoTrackReader.ReadMovie(stream);
 
@@ -67,13 +68,13 @@ internal sealed class HeifDecoder : DecoderBase, IThumbnailDecoder
             DecoderValidation.RequireSaneDimensions(size.Width, size.Height);
             DecoderValidation.RequireAvailableMemory(size.Width, size.Height);
         }
-        catch (InvalidOperationException e) when (still is not null)
+        catch (LoadFailureException e) when (still is not null)
         {
             return Unshown(still, path, $"The file's image sequence cannot be shown: {e.Message}");
         }
 
-        composite.ReportPixelCount(size.Width, size.Height);
-        composite.ExifInfo = ParseMetadata(still, stream, path);
+        context.ReportPixelCount(size.Width, size.Height);
+        context.ExifInfo = ParseMetadata(still, stream, path);
 
         var durations = color.SampleDurations.Select(ticks => TicksToMs(ticks, color.Timescale)).ToArray();
         var alpha = sequence.AlphaTrack;
@@ -82,12 +83,12 @@ internal sealed class HeifDecoder : DecoderBase, IThumbnailDecoder
 
         // The frames share the still image's color space; a sequence-only file has none to share.
         var colorSpace = still is null ? null : ResolveColorSpace(still);
-        var source = new HeifSequenceFrameSource(() => DecoderIO.OpenHeldRead(path), color.Id, alpha?.Id, color.SampleCount, size, colorSpace, composite);
+        var source = new HeifSequenceFrameSource(() => DecoderIO.OpenHeldRead(path), color.Id, alpha?.Id, color.SampleCount, size, colorSpace, context);
 
         try
         {
             AnimatedContent.Publish(
-                composite, path, source, damage: null,
+                context, path, source, damage: null,
                 () => FrameFacts.WholeFrames(durations, size.Width, size.Height, EncodedBytes(color, alpha)),
                 "HEIF",
                 ct);
@@ -96,15 +97,15 @@ internal sealed class HeifDecoder : DecoderBase, IThumbnailDecoder
         {
             // The sequence's first frame is broken, but the file's still image may not be.
             Logger.Warning(typeof(HeifDecoder), $"{Path.GetFileName(path)}'s sequence could not be decoded ({e.Message}); showing its still image.");
-            composite.AddFormatSpecific("Sequence", $"unreadable: {e.Message}");
+            context.AddFormatSpecific("Sequence", $"unreadable: {e.Message}");
             return false;
         }
 
-        composite.AddFormatSpecific("Frames", color.SampleCount.ToString());
-        composite.AddFormatSpecific("Duration", FrameFacts.TotalDuration(durations));
+        context.AddFormatSpecific("Frames", color.SampleCount.ToString());
+        context.AddFormatSpecific("Duration", FrameFacts.TotalDuration(durations));
 
         if (sequence.Track.Repetitions is { } repetitions)
-            composite.AddFormatSpecific("Loop", DescribeRepetitions(repetitions));
+            context.AddFormatSpecific("Loop", DescribeRepetitions(repetitions));
 
         return true;
     }
@@ -270,21 +271,21 @@ internal sealed class HeifDecoder : DecoderBase, IThumbnailDecoder
         return gamut is { } g && curve is { } t ? SKColorSpace.CreateRgb(t, g) : null;
     }
 
-    private static void Describe(Composite composite, HeifFile file, HeifImageHandle? image, Stream stream)
+    private static void Describe(DecodeContext context, HeifFile file, HeifImageHandle? image, Stream stream)
     {
-        composite.AddFormatSpecific("Codec", DetectHeifBrand(stream));
+        context.AddFormatSpecific("Codec", DetectHeifBrand(stream));
 
         if (image is not null)
         {
-            composite.AddFormatSpecific("Has Alpha", image.HasAlphaChannel);
-            composite.AddFormatSpecific("Depth Map", image.HasDepthImage);
+            context.AddFormatSpecific("Has Alpha", image.HasAlphaChannel);
+            context.AddFormatSpecific("Depth Map", image.HasDepthImage);
 
             if (image.ThumbnailIds() is { Length: > 0 } thumbnails)
-                composite.AddFormatSpecific("Thumbnails", thumbnails.Length.ToString());
+                context.AddFormatSpecific("Thumbnails", thumbnails.Length.ToString());
         }
 
         if (file.TopLevelImageCount is > 1 and var count)
-            composite.AddFormatSpecific("Top-level Images", count.ToString());
+            context.AddFormatSpecific("Top-level Images", count.ToString());
     }
 
     private static string DetectHeifBrand(Stream stream)

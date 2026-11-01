@@ -16,33 +16,36 @@ internal static class AnimatedContent
     /// <summary>Up to this size a file's bytes stay in memory for later frames.</summary>
     private const long RetainedBytesCeiling = 64L * 1024 * 1024;
 
-    /// <summary>Reopens the file for a later frame: from memory when small, else from disk.</summary>
-    public static Func<Stream> Opener(byte[] bytes, string path) =>
-        bytes.LongLength <= RetainedBytesCeiling
+    /// <summary>
+    /// Reopens the source for a later frame: from the bytes already read when they are small,
+    /// else from the source itself.
+    /// </summary>
+    public static Func<Stream> Opener(byte[] bytes, DecodeContext context) =>
+        bytes.LongLength <= RetainedBytesCeiling || context.Source.InMemory
             ? () => new MemoryStream(bytes, writable: false)
-            : () => DecoderIO.OpenRandomAccessRead(path);
+            : context.Source.OpenRandomAccess;
 
     public static SKImageInfo CanvasInfo(int width, int height, SKColorSpace? colorSpace) =>
         new(width, height, SKColorType.Rgba8888, SKAlphaType.Premul, colorSpace ?? SKColorSpace.CreateSrgb());
 
     /// <summary>An animation Skia composites itself, as it does GIF and WebP.</summary>
     /// <param name="explain">Why a frame Skia rejected is damaged, or null when nothing can say.</param>
-    public static void Publish(Composite composite, string path, SKCodec codec, Func<Stream> open, Func<IReadOnlyList<ImageVariant>> describe, Func<int, string?>? explain, string format, CancellationToken ct)
+    public static void Publish(DecodeContext context, string path, SKCodec codec, Func<Stream> open, Func<IReadOnlyList<ImageVariant>> describe, Func<int, string?>? explain, string format, CancellationToken ct)
     {
         var damage = new FrameDamageLog();
         var renderer = new AnimationFrameRenderer(CanvasInfo(codec.Info.Width, codec.Info.Height, codec.Info.ColorSpace), explain, damage.Report);
 
         var frameCount = codec.FrameInfo.Length;
-        var source = new RasterFrameSource(frameCount, (index, token) => RenderFresh(open, frameCount, renderer, format, index, token), renderer, composite);
+        var source = new RasterFrameSource(frameCount, (index, token) => RenderFresh(open, frameCount, renderer, format, index, token), renderer, context);
 
-        Publish(composite, path, source, damage, describe, format, ct);
+        Publish(context, path, source, damage, describe, format, ct);
     }
 
     /// <param name="source">Owned from here on, and disposed with the content.</param>
     /// <param name="damage">The log the source reports damaged frames to, when it reports any.</param>
     /// <param name="describe">The frame list, built only when there is more than one frame.</param>
     /// <param name="format">The format's name, for messages.</param>
-    public static void Publish(Composite composite, string path, IFrameSource source, FrameDamageLog? damage, Func<IReadOnlyList<ImageVariant>> describe, string format, CancellationToken ct)
+    public static void Publish(DecodeContext context, string path, IFrameSource source, FrameDamageLog? damage, Func<IReadOnlyList<ImageVariant>> describe, string format, CancellationToken ct)
     {
         ICompositeContent? first = null;
 
@@ -53,8 +56,8 @@ internal static class AnimatedContent
             if (source.Count <= 1)
             {
                 source.Dispose();
-                composite.Warning = damage?.WarningOf(0);
-                composite.Content = first;
+                context.Warning = damage?.WarningOf(0);
+                context.Content = first;
                 return;
             }
 
@@ -71,7 +74,7 @@ internal static class AnimatedContent
             };
 
             damage?.Attach(set);
-            composite.Content = set;
+            context.Content = set;
         }
         catch
         {
@@ -91,7 +94,7 @@ internal static class AnimatedContent
     private static SKBitmap RenderFresh(Func<Stream> open, int frameCount, AnimationFrameRenderer renderer, string format, int index, CancellationToken ct)
     {
         using var stream = open();
-        using var codec = SKCodec.Create(stream)
+        using var codec = SkiaStream.Codec(stream)
                           ?? throw new LoadFailureException(LoadFailureKind.DecodeFailed, $"The file can no longer be read as a {format}");
 
         if (codec.FrameCount != frameCount || codec.Info.Width != renderer.Info.Width || codec.Info.Height != renderer.Info.Height)

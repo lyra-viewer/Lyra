@@ -4,5 +4,6 @@ public enum VariantKind
 {
     Variants,
     Pages,
-    Frames
+    Frames,
+    Textures
 }

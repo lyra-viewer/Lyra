@@ -21,19 +21,19 @@ internal static class HdrToneMap
     /// textures, grayscale JXL) all replicate into RGB before reaching this point, so no
     /// broadcast happens here.
     /// </summary>
-    public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, CancellationToken ct, out bool isGrayscale) =>
-        Convert(rgba, bitmap, HdrDecodeSettings.ToneMapMode, HdrDecodeSettings.ExposureScale, null, ct, out isGrayscale);
+    public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, ToneCurve curve, CancellationToken ct, out bool isGrayscale) =>
+        Convert(rgba, bitmap, curve.Mode, curve.ExposureScale, null, ct, out isGrayscale);
     
-    public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, float sceneWhitePoint, CancellationToken ct, out bool isGrayscale) =>
-        Convert(rgba, bitmap, HdrDecodeSettings.ToneMapMode, HdrDecodeSettings.ExposureScale, sceneWhitePoint, ct, out isGrayscale);
+    public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, float sceneWhitePoint, ToneCurve curve, CancellationToken ct, out bool isGrayscale) =>
+        Convert(rgba, bitmap, curve.Mode, curve.ExposureScale, sceneWhitePoint, ct, out isGrayscale);
 
     /// <summary>Overload taking explicit settings, so tests do not depend on the user's.</summary>
     public static void ToBitmap(Span<float> rgba, SKBitmap bitmap, ToneMapMode mode, float exposureScale, CancellationToken ct, out bool isGrayscale) =>
         Convert(rgba, bitmap, mode, exposureScale, null, ct, out isGrayscale);
 
     /// <summary>The same, from linear rows of any layout, landing <paramref name="range"/>'s scene white on white.</summary>
-    public static void ToBitmap(LinearRows rows, SKBitmap bitmap, float sceneWhitePoint, SceneRange range, CancellationToken ct, out bool isGrayscale) =>
-        Convert(rows, bitmap, HdrDecodeSettings.ToneMapMode, HdrDecodeSettings.ExposureScale, sceneWhitePoint, ct, out isGrayscale, range);
+    public static void ToBitmap(LinearRows rows, SKBitmap bitmap, float sceneWhitePoint, SceneRange range, ToneCurve curve, CancellationToken ct, out bool isGrayscale) =>
+        Convert(rows, bitmap, curve.Mode, curve.ExposureScale, sceneWhitePoint, ct, out isGrayscale, range);
 
     /// <summary>Overload taking explicit settings, so tests do not depend on the user's.</summary>
     internal static void ToBitmap(LinearRows rows, SKBitmap bitmap, ToneMapMode mode, float exposureScale, SceneRange range, CancellationToken ct, out bool isGrayscale) =>

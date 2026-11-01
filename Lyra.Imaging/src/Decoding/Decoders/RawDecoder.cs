@@ -23,52 +23,46 @@ namespace Lyra.Imaging.Decoding.Decoders;
 /// </summary>
 internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
 {
-    public override bool CanDecode(ImageFormatType format) => format == ImageFormatType.Raw;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Raw];
+
+    public override DecoderCapabilities Capabilities => DecoderCapabilities.OpensOnlyDirectly;
 
     /// <summary>How far the preview's shape may stray from the raw's before it is not shown in its place.</summary>
     private const double PreviewAspectTolerance = 0.03;
 
     private const string StageLabel = "Raw";
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
+        var path = context.Source.RequireFile();
+
         var clock = Stopwatch.StartNew();
-        composite.Structure = DescribeStructure(path);
+        context.Structure = DescribeStructure(path);
 
         // From the start, so no other develop gets under way while this image is on screen.
-        IDisposable? announced = RawDevelopQueue.Shared.Announce(() => composite.IsCurrent);
+        IDisposable? announced = RawDevelopQueue.Shared.Announce(() => context.IsCurrent);
 
         try
         {
-            if (TryShowPreview(composite, path, ct) is not { } renditions)
+            if (TryShowPreview(context, path, ct) is not { } renditions)
             {
-                var developed = DevelopFile(composite, path, warning => composite.Warning = warning, ct);
-                composite.Content = RawRenditions.Around(composite, path, developed);
-                composite.Stage = Developed(clock);
+                var developed = DevelopFile(context, path, warning => context.Warning = warning, ct);
+                context.Content = RawRenditions.Around(context, path, developed);
+                context.Stage = Developed(clock);
                 return;
             }
 
             clock.Restart();
 
-            try
-            {
-                // Reading and opening the file run on the scheduler's thread; the wait for LibRaw holds none.
-                var handedOver = announced;
-                var start = Task.Factory.StartNew(async () =>
-                    {
-                        using (handedOver)
-                            await DevelopBehindPreviewAsync(composite, path, renditions, clock, ct).ConfigureAwait(false);
-                    },
-                    CancellationToken.None, TaskCreationOptions.DenyChildAttach, TaskScheduler.Current);
+            // Reading and opening the file run on the load's thread; the wait for LibRaw holds none.
+            var handedOver = announced;
+            announced = null;
 
-                composite.BackgroundDecodeStart = start;
-                composite.BackgroundDecodeTask = start.Unwrap();
-                announced = null;
-            }
-            catch (Exception e) when (e is InvalidOperationException or TaskSchedulerException)
+            context.ContinueInBackground(async token =>
             {
-                DevelopBehindPreviewAsync(composite, path, renditions, clock, ct).GetAwaiter().GetResult();
-            }
+                using (handedOver)
+                    await DevelopBehindPreviewAsync(context, path, renditions, clock, token).ConfigureAwait(false);
+            }, BackgroundSchedule.WithLoad, ct);
         }
         finally
         {
@@ -91,13 +85,13 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
 
     private static LoadStage Developed(Stopwatch clock) => new(StageLabel, $"Developed in {clock.Elapsed.TotalSeconds:0.0} s");
     
-    private static VariantContainer? TryShowPreview(Composite composite, string path, CancellationToken ct)
+    private static VariantContainer? TryShowPreview(DecodeContext context, string path, CancellationToken ct)
     {
         using var image = RawNative.OpenFile(path, out var info);
         if (image is null || info.Width <= 0 || info.Height <= 0)
             return null;
 
-        var (maxWidth, maxHeight) = RasterContentBuilder.PreviewBounds();
+        var (maxWidth, maxHeight) = (context.Options.PreviewWidth, context.Options.PreviewHeight);
 
         SKBitmap? preview;
         try
@@ -133,11 +127,10 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
             throw;
         }
 
-        composite.FullWidth = info.Width;
-        composite.FullHeight = info.Height;
-        composite.ReportPixelCount(info.Width, info.Height);
-        composite.AppliedOrientation = OrientationOf(info.Flip);
-        Describe(composite, info);
+        context.SetFullSize(info.Width, info.Height);
+        context.ReportPixelCount(info.Width, info.Height);
+        context.AppliedOrientation = OrientationOf(info.Flip);
+        Describe(context, info);
 
         preview.SetImmutable();
         var standIn = new RasterContent(preview, SKImage.FromBitmap(preview));
@@ -145,7 +138,7 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
         VariantContainer renditions;
         try
         {
-            renditions = RawRenditions.WithStandIn(composite, path, image, info, standIn);
+            renditions = RawRenditions.WithStandIn(context, path, image, info, standIn);
         }
         catch
         {
@@ -153,67 +146,60 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
             throw;
         }
 
-        composite.Content = renditions;
-        composite.Stage = new LoadStage(StageLabel, "Showing camera preview, developing raw.");
-        composite.HdrPending = true;
-        composite.SignalReady();
+        context.Content = renditions;
+        context.Stage = new LoadStage(StageLabel, "Showing camera preview, developing raw.");
+        context.HdrPending = true;
+        context.SignalReady();
 
         return renditions;
     }
 
     /// <summary>
     /// Develops the raw data and puts it in place of the stand-in. On failure the preview stays,
-    /// marked as all there is; completion is signaled either way unless the load was canceled.
+    /// marked as all there is. A cancellation is left to the caller.
     /// </summary>
-    private static async Task DevelopBehindPreviewAsync(Composite composite, string path, VariantContainer renditions, Stopwatch clock, CancellationToken ct)
+    private static async Task DevelopBehindPreviewAsync(DecodeContext context, string path, VariantContainer renditions, Stopwatch clock, CancellationToken ct)
     {
         try
         {
             ct.ThrowIfCancellationRequested();
 
-            var developed = await DevelopFileAsync(composite, path, warning => renditions.RecordWarning(RawRenditions.Developed, warning), ct).ConfigureAwait(false);
-            renditions.ReplaceVariant(RawRenditions.Developed, developed.Content, RawRenditions.DescribeDeveloped(composite, developed));
-            composite.Stage = Developed(clock);
+            var developed = await DevelopFileAsync(context, path, warning => renditions.RecordWarning(RawRenditions.Developed, warning), ct).ConfigureAwait(false);
+            renditions.ReplaceVariant(RawRenditions.Developed, developed.Content, RawRenditions.DescribeDeveloped(context, developed));
+            context.Stage = Developed(clock);
         }
-        catch (OperationCanceledException)
-        {
-            composite.State = CompositeState.Cancelled;
-            return;
-        }
-        catch (Exception e)
+        catch (Exception e) when (e is not OperationCanceledException)
         {
             Logger.Warning(typeof(RawDecoder), $"Showing only the embedded preview of {path}: {e.Message}");
             renditions.RecordWarning(RawRenditions.Developed, LoadWarning.PartiallyDecoded($"The raw data could not be developed, so this is the camera's preview ({e.Message})"));
-            composite.Stage = null;
+            context.Stage = null;
         }
         finally
         {
-            composite.HdrPending = false;
+            context.HdrPending = false;
         }
-
-        composite.SignalComplete();
     }
 
     internal readonly record struct DevelopedImage(ICompositeContent Content, int Width, int Height);
     
-    internal static DevelopedImage DevelopFile(Composite composite, string path, Action<LoadWarning> warn, CancellationToken ct) => DevelopFileAsync(composite, path, warn, ct).GetAwaiter().GetResult();
+    internal static DevelopedImage DevelopFile(DecodeContext context, string path, Action<LoadWarning> warn, CancellationToken ct) => DevelopFileAsync(context, path, warn, ct).GetAwaiter().GetResult();
 
     /// <summary>Every await here resumes off the caller's scheduler, so a caller may block on it.</summary>
-    private static async Task<DevelopedImage> DevelopFileAsync(Composite composite, string path, Action<LoadWarning> warn, CancellationToken ct)
+    private static async Task<DevelopedImage> DevelopFileAsync(DecodeContext context, string path, Action<LoadWarning> warn, CancellationToken ct)
     {
-        if (!NativeFileBuffer.ShouldBuffer(composite.FileSizeBytes ?? 0))
+        if (!NativeFileBuffer.ShouldBuffer(context.Source.Length ?? 0))
         {
             using var opened = RawNative.OpenFile(path, out var fileInfo) ?? throw NativeErrors.DecodeFailed(RawNative.get_last_raw_error(), path);
-            return await DevelopAsync(composite, opened, fileInfo, () => DecoderIO.OpenRandomAccessRead(path), path, warn, ct).ConfigureAwait(false);
+            return await DevelopAsync(context, opened, fileInfo, () => DecoderIO.OpenRandomAccessRead(path), path, warn, ct).ConfigureAwait(false);
         }
 
-        using var data = NativeFileBuffer.Read(path, ct, out var readMs, composite.ReportTransferred);
-        composite.CompleteTransfer((long)data.Length, readMs);
+        using var data = NativeFileBuffer.Read(path, ct, out var readMs, context.ReportTransferred);
+        context.CompleteTransfer((long)data.Length, readMs);
         ct.ThrowIfCancellationRequested();
 
         // LibRaw reads the buffer in place, so it is disposed only after the handle.
         using var image = RawNative.OpenMemory(data.Data, data.Length, out var info) ?? throw NativeErrors.DecodeFailed(RawNative.get_last_raw_error(), path);
-        return await DevelopAsync(composite, image, info, data.AsStream, path, warn, ct).ConfigureAwait(false);
+        return await DevelopAsync(context, image, info, data.AsStream, path, warn, ct).ConfigureAwait(false);
     }
 
     /// <summary>The DNG's own tone curve and local tone map, when it carries them; null otherwise or on any trouble.</summary>
@@ -235,48 +221,47 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
     }
 
     /// <summary>Develops an opened file; <paramref name="open"/> reads it again for its EXIF and DNG profile.</summary>
-    private static async Task<DevelopedImage> DevelopAsync(Composite composite, RawNative.ImageHandle image, RawNative.RawInfo info, Func<Stream> open, string path, Action<LoadWarning> warn, CancellationToken ct)
+    private static async Task<DevelopedImage> DevelopAsync(DecodeContext context, RawNative.ImageHandle image, RawNative.RawInfo info, Func<Stream> open, string path, Action<LoadWarning> warn, CancellationToken ct)
     {
         using (var stream = open())
-            composite.ExifInfo = MetadataProcessor.ParseRawMetadata(stream, path, RawCapture.From(info));
+            context.ExifInfo = MetadataProcessor.ParseRawMetadata(stream, path, RawCapture.From(info));
 
         // Behind a preview the image is already on screen, and the panel only redraws when told.
-        composite.SignalProgress();
+        context.SignalProgress();
         var profile = ReadProfile(info, open, path);
 
         DecoderValidation.RequireSaneDimensions(info.Width, info.Height, bytesPerPixel: 8);
-        composite.ReportPixelCount(info.Width, info.Height);
-        Describe(composite, info);
+        context.ReportPixelCount(info.Width, info.Height);
+        Describe(context, info);
 
         ct.ThrowIfCancellationRequested();
 
         var previewMedian = PreviewMedian(image, info, ct);
 
-        var result = await TryDevelopAsync(image, new RawNative.DevelopOptions { Demosaic = RawNative.DemosaicAhd }, () => composite.IsCurrent, ct).ConfigureAwait(false);
+        var result = await TryDevelopAsync(image, new RawNative.DevelopOptions { Demosaic = RawNative.DemosaicAhd }, () => context.IsCurrent, ct).ConfigureAwait(false);
         if (!result.Developed)
         {
             ct.ThrowIfCancellationRequested();
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(result.Error) ? $"Failed to decode: {path}" : result.Error);
+            throw new LoadFailureException(LoadFailureKind.DecodeFailed, string.IsNullOrWhiteSpace(result.Error) ? $"Failed to decode: {path}" : result.Error);
         }
 
-        return Render(composite, result.Pixels, info, profile, previewMedian, path, warn, ct);
+        return Render(context, result.Pixels, info, profile, previewMedian, path, warn, ct);
     }
 
     /// <summary>Turns developed pixels into the composite's content, and frees them.</summary>
-    private static DevelopedImage Render(Composite composite, RawNative.Pixels pixels, RawNative.RawInfo info, DngRenderingProfile? profile, float? previewMedian, string path, Action<LoadWarning> warn, CancellationToken ct)
+    private static DevelopedImage Render(DecodeContext context, RawNative.Pixels pixels, RawNative.RawInfo info, DngRenderingProfile? profile, float? previewMedian, string path, Action<LoadWarning> warn, CancellationToken ct)
     {
         try
         {
             DecoderValidation.RequireSaneDimensions(pixels.Width, pixels.Height, bytesPerPixel: 8);
 
             if (pixels.Width != info.Width || pixels.Height != info.Height)
-                composite.ReportPixelCount(pixels.Width, pixels.Height);
+                context.ReportPixelCount(pixels.Width, pixels.Height);
 
-            composite.FullWidth = pixels.Width;
-            composite.FullHeight = pixels.Height;
+            context.SetFullSize(pixels.Width, pixels.Height);
 
-            composite.AppliedOrientation = OrientationOf(info.Flip);
-            ReportDevelopment(composite, pixels, path, warn);
+            context.AppliedOrientation = OrientationOf(info.Flip);
+            ReportDevelopment(context, pixels, path, warn);
 
             unsafe
             {
@@ -294,15 +279,15 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
                     ? new Exposure(Math.Clamp(info.BaselineExposure, RawExposure.MinStops, RawExposure.MaxStops), "from the DNG")
                     : MatchedExposure(previewMedian, RawExposure.MedianLuminance(Shaped(1f)), info);
 
-                DescribeRendering(composite, exposure, curve, map);
+                DescribeRendering(context, exposure, curve, map);
 
                 var range = RawExposure.RangeFor(exposure.Stops) with { Curve = curve is null ? null : new CameraToneCurve(curve.Table) };
 
                 ICompositeContent content;
                 try
                 {
-                    content = HdrImageBuilder.Build(Shaped(MathF.Pow(2f, exposure.Stops)), composite, ct, out var facts, range);
-                    facts.Describe(composite);
+                    content = HdrImageBuilder.Build(Shaped(MathF.Pow(2f, exposure.Stops)), context, ct, out var facts, range);
+                    facts.Describe(context);
                 }
                 catch
                 {
@@ -351,7 +336,7 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
     }
 
     /// <summary>What developing found: damage as a warning on the developed rendition, the levels as a fact.</summary>
-    private static void ReportDevelopment(Composite composite, RawNative.Pixels pixels, string path, Action<LoadWarning> warn)
+    private static void ReportDevelopment(DecodeContext context, RawNative.Pixels pixels, string path, Action<LoadWarning> warn)
     {
         if (pixels.Damage != RawNative.DamageNone)
         {
@@ -366,17 +351,17 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
         if (pixels.WhiteLevel > 0)
         {
             var black = pixels.BlackLevelMin == pixels.BlackLevelMax ? $"{pixels.BlackLevelMin}" : $"{pixels.BlackLevelMin}-{pixels.BlackLevelMax}";
-            composite.AddFormatSpecific("Black / White Level", $"{black} / {pixels.WhiteLevel}");
+            context.AddFormatSpecific("Black / White Level", $"{black} / {pixels.WhiteLevel}");
         }
     }
 
-    private static void DescribeRendering(Composite composite, Exposure exposure, DngToneCurve? curve, DngGainTableMap? map)
+    private static void DescribeRendering(DecodeContext context, Exposure exposure, DngToneCurve? curve, DngGainTableMap? map)
     {
-        composite.AddFormatSpecific("Exposure Baseline", $"{exposure.Stops:+0.0;-0.0;0.0} EV ({exposure.Source})");
-        composite.AddFormatSpecific("Tone Curve", curve is null ? "Default" : $"The camera's own ({curve.PointCount} points)");
+        context.AddFormatSpecific("Exposure Baseline", $"{exposure.Stops:+0.0;-0.0;0.0} EV ({exposure.Source})");
+        context.AddFormatSpecific("Tone Curve", curve is null ? "Default" : $"The camera's own ({curve.PointCount} points)");
 
         if (map is not null)
-            composite.AddFormatSpecific("Local Tone Map", $"{map.PointsV} x {map.PointsH} tables of {map.PointsN}");
+            context.AddFormatSpecific("Local Tone Map", $"{map.PointsV} x {map.PointsH} tables of {map.PointsN}");
     }
     
     private static Task<DevelopResult> TryDevelopAsync(RawNative.ImageHandle image, RawNative.DevelopOptions options, Func<bool> foreground, CancellationToken ct)
@@ -450,15 +435,15 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
         return false;
     }
 
-    private static void Describe(Composite composite, RawNative.RawInfo info)
+    private static void Describe(DecodeContext context, RawNative.RawInfo info)
     {
         var make = info.MakeText;
         var model = info.ModelText;
         var camera = model.StartsWith(make, StringComparison.OrdinalIgnoreCase) ? model : $"{make} {model}".Trim();
         if (camera.Length > 0)
-            composite.AddFormatSpecific("Camera", camera);
+            context.AddFormatSpecific("Camera", camera);
 
-        composite.AddFormatSpecific("Sensor", info.Sensor switch
+        context.AddFormatSpecific("Sensor", info.Sensor switch
         {
             RawNative.SensorBayer => info.CfaPatternText is { Length: > 0 } cfa ? $"Bayer ({cfa})" : "Bayer",
             RawNative.SensorXTrans => "X-Trans",
@@ -468,24 +453,24 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
         });
 
         if (info.RawBits > 0)
-            composite.AddFormatSpecific("Raw Bit Depth", $"{info.RawBits}-bit");
+            context.AddFormatSpecific("Raw Bit Depth", $"{info.RawBits}-bit");
 
         var green = info.Multiplier(1);
         if (green > 0f && info.Multiplier(0) > 0f && info.Multiplier(2) > 0f)
-            composite.AddFormatSpecific("As-Shot White Balance", $"R {info.Multiplier(0) / green:0.00}, B {info.Multiplier(2) / green:0.00}");
+            context.AddFormatSpecific("As-Shot White Balance", $"R {info.Multiplier(0) / green:0.00}, B {info.Multiplier(2) / green:0.00}");
 
         if (info.DngVersion != 0)
         {
             var v = info.DngVersion;
-            composite.AddFormatSpecific("DNG Version", $"{v >> 24}.{(v >> 16) & 0xFF}.{(v >> 8) & 0xFF}.{v & 0xFF}");
+            context.AddFormatSpecific("DNG Version", $"{v >> 24}.{(v >> 16) & 0xFF}.{(v >> 8) & 0xFF}.{v & 0xFF}");
         }
 
-        composite.AddFormatSpecific("Embedded Preview", info.PreviewFormat == RawNative.PreviewNone
+        context.AddFormatSpecific("Embedded Preview", info.PreviewFormat == RawNative.PreviewNone
             ? "None"
             : $"{info.PreviewWidth}x{info.PreviewHeight} {(info.PreviewFormat == RawNative.PreviewJpeg ? "JPEG" : "RGB")}");
 
-        composite.AddFormatSpecific("Demosaic", info.Sensor is RawNative.SensorBayer or RawNative.SensorXTrans ? "AHD" : "None");
-        composite.AddFormatSpecific("Decoder", $"LibRaw {RawNative.LibRawShortVersion}");
+        context.AddFormatSpecific("Demosaic", info.Sensor is RawNative.SensorBayer or RawNative.SensorXTrans ? "AHD" : "None");
+        context.AddFormatSpecific("Decoder", $"LibRaw {RawNative.LibRawShortVersion}");
     }
 
     public SKBitmap? DecodeThumbnail(string path, int maxDimension, CancellationToken ct)
@@ -496,7 +481,7 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
         if (image is null)
             return null;
 
-        var bitmap = DecodePreview(image, info, maxDimension, ct) ?? DevelopSmall(image, info, ct);
+        var bitmap = DecodePreview(image, info, maxDimension, ct) ?? DevelopSmall(image, info, HdrDecodeSettings.Curve, ct);
         return bitmap is null ? null : ThumbnailScaler.ResizeToThumbnail(bitmap, maxDimension);
     }
 
@@ -596,7 +581,7 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
     }
 
     /// <summary>A half-size development, tone-mapped, for files without a usable preview.</summary>
-    private static SKBitmap? DevelopSmall(RawNative.ImageHandle image, RawNative.RawInfo info, CancellationToken ct)
+    private static SKBitmap? DevelopSmall(RawNative.ImageHandle image, RawNative.RawInfo info, ToneCurve curve, CancellationToken ct)
     {
         var result = TryDevelopAsync(image, new RawNative.DevelopOptions { HalfSize = 1 }, static () => false, ct).GetAwaiter().GetResult();
         if (!result.Developed)
@@ -617,7 +602,7 @@ internal sealed class RawDecoder : DecoderBase, IThumbnailDecoder
                 {
                     var stops = Math.Clamp(RawExposure.FallbackStops + info.BaselineExposure, RawExposure.MinStops, RawExposure.MaxStops);
                     var rows = new Rgb16Rows((ushort*)pixels.Data, pixels.Width, pixels.Height, MathF.Pow(2f, stops));
-                    HdrToneMap.ToBitmap(rows, bitmap, HdrToneMap.MeasureWhitePoint(rows), RawExposure.RangeFor(stops), ct, out _);
+                    HdrToneMap.ToBitmap(rows, bitmap, HdrToneMap.MeasureWhitePoint(rows), RawExposure.RangeFor(stops), curve, ct, out _);
                 }
             }
             catch

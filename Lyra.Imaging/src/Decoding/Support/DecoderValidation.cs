@@ -9,7 +9,7 @@ internal static class DecoderValidation
     public static void RequireSaneDimensions(int width, int height, int bytesPerPixel = 4)
     {
         if (width <= 0 || height <= 0)
-            throw new InvalidOperationException($"Invalid dimensions: {width}x{height}");
+            throw new LoadFailureException(LoadFailureKind.DecodeFailed, $"Invalid dimensions: {width}x{height}");
 
         if (width > MaxDimension || height > MaxDimension)
             throw new LoadFailureException(LoadFailureKind.TooLarge, $"Dimensions exceed limit ({MaxDimension}): {width}x{height}");
@@ -37,10 +37,10 @@ internal static class DecoderValidation
     public static void RequireValidStride(int stride, int width, int bytesPerPixel = 4)
     {
         if (stride <= 0)
-            throw new InvalidOperationException($"Invalid stride: {stride}");
+            throw new LoadFailureException(LoadFailureKind.DecodeFailed, $"Invalid stride: {stride}");
 
         var minStride = checked(width * bytesPerPixel);
         if (stride < minStride)
-            throw new InvalidOperationException($"Stride {stride} is smaller than width×bpp ({minStride})");
+            throw new LoadFailureException(LoadFailureKind.DecodeFailed, $"Stride {stride} is smaller than width×bpp ({minStride})");
     }
 }

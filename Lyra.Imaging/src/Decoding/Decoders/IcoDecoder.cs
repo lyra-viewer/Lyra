@@ -1,5 +1,4 @@
 using Lyra.Common;
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Metadata;
@@ -14,7 +13,7 @@ namespace Lyra.Imaging.Decoding.Decoders;
 /// </summary>
 internal sealed class IcoDecoder : IconContainerDecoder<IcoEntry>, IThumbnailDecoder
 {
-    public override bool CanDecode(ImageFormatType format) => format == ImageFormatType.Ico;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Ico];
 
     protected override string EntryNoun => "entry";
 
@@ -22,10 +21,10 @@ internal sealed class IcoDecoder : IconContainerDecoder<IcoEntry>, IThumbnailDec
 
     protected override IReadOnlyList<IcoEntry> ReadEntries(byte[] data) => IcoReader.ReadEntries(data);
 
-    protected override void ReadMetadata(Composite composite, byte[] data, string path)
+    protected override void ReadMetadata(DecodeContext context, byte[] data, string path)
     {
         using var stream = new MemoryStream(data, writable: false);
-        composite.ExifInfo = MetadataProcessor.ParseMetadata(stream, path);
+        context.ExifInfo = MetadataProcessor.ParseMetadata(stream, path);
     }
 
     protected override SKBitmap? DecodeEntry(byte[] data, IcoEntry entry)
@@ -60,7 +59,7 @@ internal sealed class IcoDecoder : IconContainerDecoder<IcoEntry>, IThumbnailDec
             .ThenByDescending(icon => icon.Entry.PayloadLength)
             .ThenBy(icon => icon.Entry.PayloadOffset);
 
-    protected override void ReportFormatSpecific(Composite composite, IReadOnlyList<DecodedIcon> icons)
+    protected override void ReportFormatSpecific(DecodeContext context, IReadOnlyList<DecodedIcon> icons)
     {
         var depths = icons
             .Where(icon => icon.Entry.BitCount > 0)
@@ -71,9 +70,9 @@ internal sealed class IcoDecoder : IconContainerDecoder<IcoEntry>, IThumbnailDec
             .ToList();
 
         if (depths.Count > 0)
-            composite.AddFormatSpecific("Depths", string.Join(", ", depths));
+            context.AddFormatSpecific("Depths", string.Join(", ", depths));
 
-        AddEncodings(composite, icons);
+        AddEncodings(context, icons);
     }
 
     /// <summary>

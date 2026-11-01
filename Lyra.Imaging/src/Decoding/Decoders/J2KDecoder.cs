@@ -1,5 +1,4 @@
 using Lyra.Common;
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders.J2K;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
@@ -11,17 +10,18 @@ namespace Lyra.Imaging.Decoding.Decoders;
 
 internal class J2KDecoder : DecoderBase
 {
-    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Jp2 or ImageFormatType.J2k;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Jp2, ImageFormatType.J2k];
     
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
-        var data = composite.ReadAllBytes(ct);
+        var path = context.Source.Label;
+        var data = context.ReadAllBytes(ct);
 
         J2KHeader.RequireDeclaredSizeFits(data);
 
         // OpenJPEG hands back pixels only; JP2 keeps EXIF and XMP in top-level uuid boxes.
         if (Jp2Container.Read(data) is { IsEmpty: false } metadata)
-            composite.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
+            context.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
 
         ct.ThrowIfCancellationRequested();
 
@@ -59,7 +59,7 @@ internal class J2KDecoder : DecoderBase
                     DecoderValidation.RequireSaneDimensions(width, height);
                     DecoderValidation.RequireValidStride(nativeStrideBytes, width);
 
-                    composite.ReportPixelCount(width, height);
+                    context.ReportPixelCount(width, height);
 
                     ct.ThrowIfCancellationRequested();
 
@@ -78,9 +78,9 @@ internal class J2KDecoder : DecoderBase
                         throw;
                     }
 
-                    composite.AddFormatSpecific("Grayscale", isGrayscale);
+                    context.AddFormatSpecific("Grayscale", isGrayscale);
 
-                    composite.Content = RasterContentBuilder.Build(bitmap, composite);
+                    context.Content = RasterContentBuilder.Build(bitmap, context);
                 }
             }
         }

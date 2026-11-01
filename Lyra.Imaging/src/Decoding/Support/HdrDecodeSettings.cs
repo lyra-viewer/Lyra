@@ -3,16 +3,19 @@ using Lyra.Common.Settings.Enums;
 
 namespace Lyra.Imaging.Decoding.Support;
 
+internal readonly record struct ToneCurve(ToneMapMode Mode, float ExposureScale);
+
 public static class HdrDecodeSettings
 {
-    private static volatile int _toneMapMode = (int)ToneMapMode.Aces;
-    private static volatile int _exposureStops;
+    private sealed record Setting(ToneMapMode Mode, int Stops);
+
+    private static volatile Setting _setting = new(ToneMapMode.Aces, 0);
 
     /// <summary>Curve applied to scene-referred float pixels.</summary>
     public static ToneMapMode ToneMapMode
     {
-        get => (ToneMapMode)_toneMapMode;
-        set => _toneMapMode = (int)value;
+        get => _setting.Mode;
+        set => _setting = _setting with { Mode = value };
     }
 
     /// <summary>
@@ -21,12 +24,22 @@ public static class HdrDecodeSettings
     /// </summary>
     public static int ExposureStops
     {
-        get => _exposureStops;
-        set => _exposureStops = value;
+        get => _setting.Stops;
+        set => _setting = _setting with { Stops = value };
     }
 
     /// <summary>Linear multiplier for the current exposure.</summary>
-    public static float ExposureScale => MathF.Pow(2f, _exposureStops);
+    public static float ExposureScale => MathF.Pow(2f, _setting.Stops);
+
+    /// <summary>Both settings, read together.</summary>
+    internal static ToneCurve Curve
+    {
+        get
+        {
+            var setting = _setting;
+            return new ToneCurve(setting.Mode, MathF.Pow(2f, setting.Stops));
+        }
+    }
 
     public static void InitializeFromSettings()
     {

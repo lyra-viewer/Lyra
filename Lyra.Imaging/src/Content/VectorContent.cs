@@ -2,14 +2,27 @@ using SkiaSharp;
 
 namespace Lyra.Imaging.Content;
 
-public sealed class VectorContent(SKPicture picture) : ICompositeContent
+public sealed class VectorContent : ICompositeContent
 {
+    public VectorContent(SKPicture picture)
+    {
+        Picture = picture ?? throw new ArgumentNullException(nameof(picture));
+        _bounds = picture.CullRect;
+    }
+
     public bool IsResolutionIndependent => true;
 
-    public SKPicture Picture { get; } = picture ?? throw new ArgumentNullException(nameof(picture));
+    public SKPicture Picture { get; }
 
-    public float? DecodedWidth => Picture.CullRect.Width;
-    public float? DecodedHeight => Picture.CullRect.Height;
+    private readonly SKRect _bounds;
+    private int _disposed;
 
-    public void Dispose() => Picture.Dispose();
+    public float? DecodedWidth => _bounds.Width;
+    public float? DecodedHeight => _bounds.Height;
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            Picture.Dispose();
+    }
 }

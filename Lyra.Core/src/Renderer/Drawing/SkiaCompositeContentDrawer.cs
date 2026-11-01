@@ -1,13 +1,15 @@
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Textures;
 using Lyra.Imaging.Content.Tiling;
 using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Renderer.Backends;
+using Lyra.UI.Components.Controls;
 using SkiaSharp;
 
 namespace Lyra.Renderer.Drawing;
 
-public class SkiaCompositeContentDrawer : ICompositeContentDrawer
+public class SkiaCompositeContentDrawer : ICompositeContentDrawer, IDisposable
 {
     public void Draw(SKCanvas canvas, Composite composite, SKRect destFullRect, SKRect visibleFullRect, SKSamplingOptions sampling, float zoomScale, float displayScale, SurfaceProfile surface)
     {
@@ -22,6 +24,9 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
             content = variants.Active;
         }
 
+        if (content is not ContactSheetContent)
+            ReleaseSheet();
+
         switch (content)
         {
             case HdrRasterContent hdr:
@@ -34,6 +39,10 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
 
             case VectorContent vector:
                 DrawPictureScaled(canvas, vector.Picture, destFullRect);
+                break;
+
+            case ContactSheetContent sheet:
+                DrawSheet(canvas, sheet, destFullRect, sampling, surface);
                 break;
 
             case RasterLargeContent large:
@@ -111,6 +120,73 @@ public class SkiaCompositeContentDrawer : ICompositeContentDrawer
 
         canvas.DrawRect(destFullRect, paint);
     }
+
+    internal static readonly SheetMetrics SheetMetrics = new(ContactSheetContent.CellSize, ContactSheetContent.Gap, ContactSheetContent.CaptionHeight);
+
+    private ContactSheetContent? _sheetFor;
+    private Sheet? _sheet;
+
+    private SKSamplingOptions _cellSampling;
+    private SurfaceProfile _cellSurface;
+
+    private void DrawSheet(SKCanvas canvas, ContactSheetContent sheet, SKRect destFullRect, SKSamplingOptions sampling, SurfaceProfile surface)
+    {
+        if (sheet.DecodedWidth is not > 0 || sheet.DecodedHeight is not > 0 || sheet.Cells.Count == 0)
+            return;
+
+        if (!ReferenceEquals(sheet, _sheetFor) || _sheet is null)
+        {
+            ReleaseSheet();
+            _sheet = BuildSheet(sheet);
+            _sheet.DrawImage = DrawSheetCell;
+            _sheetFor = sheet;
+        }
+
+        _cellSampling = sampling;
+        _cellSurface = surface;
+
+        canvas.Save();
+        canvas.Translate(destFullRect.Left, destFullRect.Top);
+        canvas.Scale(destFullRect.Width / sheet.DecodedWidth.Value, destFullRect.Height / sheet.DecodedHeight.Value);
+        _sheet.Render(canvas);
+        canvas.Restore();
+    }
+
+    private void DrawSheetCell(SKCanvas canvas, int index, SKRect box)
+    {
+        if (_sheetFor is { } sheet && index < sheet.Cells.Count)
+            DrawCell(canvas, sheet.Cells[index].Content, box, _cellSampling, _cellSurface);
+    }
+
+    internal static Sheet BuildSheet(ContactSheetContent sheet)
+    {
+        var tiles = sheet.Cells
+            .Select(cell => cell.Content is { DecodedWidth: > 0, DecodedHeight: > 0 } content
+                ? new SheetTile(cell.Caption, content.DecodedWidth!.Value, content.DecodedHeight!.Value, null)
+                : new SheetTile(cell.Caption, 0, 0, cell.Failure ?? ""))
+            .ToList();
+
+        var view = new Sheet(tiles, sheet.Columns, SheetMetrics);
+        view.Layout();
+        return view;
+    }
+
+    private static void DrawCell(SKCanvas canvas, ICompositeContent? content, SKRect box, SKSamplingOptions sampling, SurfaceProfile surface)
+    {
+        if (content is HdrRasterContent hdr)
+            DrawHdr(canvas, hdr, box, sampling, surface);
+        else if (content is RasterContent raster)
+            canvas.DrawImage(raster.Image, box, sampling);
+    }
+
+    private void ReleaseSheet()
+    {
+        _sheet?.Dispose();
+        _sheet = null;
+        _sheetFor = null;
+    }
+
+    public void Dispose() => ReleaseSheet();
 
     private static void DrawPictureScaled(SKCanvas canvas, SKPicture picture, SKRect destFullRect)
     {

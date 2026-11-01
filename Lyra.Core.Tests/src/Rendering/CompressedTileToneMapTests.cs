@@ -126,8 +126,7 @@ public class CompressedTileToneMapTests : IDisposable
         {
             using var composite = new Composite(new FileInfo("huge.exr"));
             composite.Content = content;
-            composite.FullWidth = Light.Length;
-            composite.FullHeight = 1;
+            composite.SetFullSize(Light.Length, 1);
 
             var info = new SKImageInfo(Light.Length, 1, SKColorType.Rgba8888, SKAlphaType.Unpremul, SKColorSpace.CreateSrgb());
             using var surface = SKSurface.Create(info);

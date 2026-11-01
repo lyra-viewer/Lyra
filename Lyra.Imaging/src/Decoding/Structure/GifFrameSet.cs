@@ -1,4 +1,3 @@
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Variants;
 using Lyra.ManagedCodecs.Raster.Gif;
 using SkiaSharp;
@@ -30,37 +29,37 @@ internal static class GifFrameSet
     /// The file's facts, for the format panel. A GIF has no structure beyond its frames, which the
     /// frame list already shows, so everything worth knowing about the stream goes here.
     /// </summary>
-    public static void Describe(Composite composite, SKCodecFrameInfo[] frames, GifBlocks? blocks)
+    public static void Describe(DecodeContext context, SKCodecFrameInfo[] frames, GifBlocks? blocks)
     {
         var animated = frames.Length > 1;
 
-        composite.AddFormatSpecific("Format", blocks?.Version ?? "GIF");
+        context.AddFormatSpecific("Format", blocks?.Version ?? "GIF");
 
         if (blocks is { Frames.Count: 0 })
-            composite.AddFormatSpecific("Frames", "none");
+            context.AddFormatSpecific("Frames", "none");
 
         if (animated)
         {
-            composite.AddFormatSpecific("Frames", frames.Length.ToString());
-            composite.AddFormatSpecific("Duration", FrameFacts.TotalDuration(frames));
+            context.AddFormatSpecific("Frames", frames.Length.ToString());
+            context.AddFormatSpecific("Duration", FrameFacts.TotalDuration(frames));
         }
 
         if (blocks is null)
             return;
 
         if (animated)
-            composite.AddFormatSpecific("Loop", DescribeLoop(blocks.LoopCount));
+            context.AddFormatSpecific("Loop", DescribeLoop(blocks.LoopCount));
 
-        composite.AddFormatSpecific("Palette", DescribePalette(blocks));
+        context.AddFormatSpecific("Palette", DescribePalette(blocks));
 
-        AddWhenAny(composite, "Interlaced", blocks, f => f.Interlaced);
-        AddWhenAny(composite, "Transparency", blocks, f => f.Transparent);
+        AddWhenAny(context, "Interlaced", blocks, f => f.Interlaced);
+        AddWhenAny(context, "Transparency", blocks, f => f.Transparent);
 
         if (blocks.CommentCount > 0)
-            composite.AddFormatSpecific("Comments", blocks.CommentCount.ToString());
+            context.AddFormatSpecific("Comments", blocks.CommentCount.ToString());
 
         if (blocks.Truncated)
-            composite.AddFormatSpecific("Truncated", "stops before the trailer");
+            context.AddFormatSpecific("Truncated", "stops before the trailer");
     }
 
     /// <summary>Why frame <paramref name="index"/> cannot be decoded whole, or null when it can.</summary>
@@ -79,13 +78,13 @@ internal static class GifFrameSet
     }
 
     /// <summary>A row only when some frame has it, saying how many.</summary>
-    private static void AddWhenAny(Composite composite, string key, GifBlocks blocks, Func<GifFrameBlock, bool> has)
+    private static void AddWhenAny(DecodeContext context, string key, GifBlocks blocks, Func<GifFrameBlock, bool> has)
     {
         var count = blocks.Frames.Count(has);
         if (count == 0)
             return;
 
-        composite.AddFormatSpecific(key, FrameFacts.Proportion(count, blocks.Frames.Count));
+        context.AddFormatSpecific(key, FrameFacts.Proportion(count, blocks.Frames.Count));
     }
 
     private static string DescribePalette(GifBlocks blocks)

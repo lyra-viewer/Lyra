@@ -1,5 +1,7 @@
+using System.Xml;
 using Lyra.Common;
 using Lyra.Imaging.Content;
+using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Decoding.Support;
 using SkiaSharp;
 using Svg.Skia;
@@ -8,16 +10,30 @@ namespace Lyra.Imaging.Decoding.Decoders;
 
 internal sealed class SvgDecoder : DecoderBase, IThumbnailDecoder
 {
-    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Svg;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Svg];
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
+        var path = context.Source.Label;
+
         ct.ThrowIfCancellationRequested();
 
         var svg = new SKSvg();
-        using (var stream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer))
+        using (var stream = new MeasuredReadStream(context.OpenSequentialRead(), context.ReportTransferred, context.CompleteTransfer))
         {
-            svg.Load(stream);
+            try
+            {
+                svg.Load(stream);
+            }
+            catch (XmlException e)
+            {
+                throw new LoadFailureException(LoadFailureKind.DecodeFailed, $"The SVG is not well-formed XML: {e.Message}", e);
+            }
+            catch (Exception e) when (e is not (OperationCanceledException or OutOfMemoryException or IOException or UnauthorizedAccessException))
+            {
+                Logger.Warning(typeof(SvgDecoder), $"The SVG library could not read {path}: {e}");
+                throw new LoadFailureException(LoadFailureKind.DecodeFailed, $"The SVG could not be read ({e.Message})", e);
+            }
         }
 
         ct.ThrowIfCancellationRequested();
@@ -33,7 +49,7 @@ internal sealed class SvgDecoder : DecoderBase, IThumbnailDecoder
         if (originalBounds.IsEmpty || originalBounds.Width < 1 || originalBounds.Height < 1)
             Logger.Debug($"[SvgDecoder] Detected empty or invalid CullRect: {path}");
 
-        composite.Content = new VectorContent(picture);
+        context.Content = new VectorContent(picture);
     
     }
 

@@ -41,6 +41,15 @@ public class SvgImage : ImageBase
         LoadSvg(svgStream);
     }
 
+    private SKColor? _tint;
+
+    /// Draws every visible pixel of the picture in this colour, keeping its alpha.
+    public SKColor? Tint
+    {
+        get => _tint;
+        set => Set(ref _tint, value);
+    }
+
     private void LoadSvg(Stream stream)
     {
         try
@@ -71,7 +80,17 @@ public class SvgImage : ImageBase
         canvas.Translate(contentBounds.Left, contentBounds.Top);
         canvas.Scale(scaleX, scaleY);
         canvas.Translate(-cull.Left, -cull.Top);
-        canvas.DrawPicture(_picture);
+        if (Tint is { } tint)
+        {
+            using var paint = new SKPaint();
+            paint.ColorFilter = SKColorFilter.CreateBlendMode(tint, SKBlendMode.SrcIn);
+            canvas.DrawPicture(_picture, paint);
+        }
+        else
+        {
+            canvas.DrawPicture(_picture);
+        }
+
         canvas.Restore();
     }
 

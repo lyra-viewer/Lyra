@@ -46,6 +46,7 @@ public class MainLayer : IUIEvents, IDisposable
     private readonly StructureSection _structureSection;
     private readonly LayersSection _layersSection;
     private readonly VariantsSection _variantsSection;
+    private readonly TexturesSection _texturesSection;
     private readonly HdrDecodeSection _hdrDecodeSection;
     private readonly HelpSection _helpSection;
     private readonly DebugSection _debugSection;
@@ -97,6 +98,7 @@ public class MainLayer : IUIEvents, IDisposable
         _structureSection = new StructureSection();
         _layersSection = new LayersSection();
         _variantsSection = new VariantsSection();
+        _texturesSection = new TexturesSection();
         _hdrDecodeSection = new HdrDecodeSection();
         _helpSection = new HelpSection();
         _debugSection = new DebugSection();
@@ -123,6 +125,7 @@ public class MainLayer : IUIEvents, IDisposable
         _contextMenu.InitDisplayModeChanged += mode => OnMenu("INIT DISPLAY MODE", InitDisplayModeChanged, mode);
         _directoryTreeSection.DirectoryPicked += path => DirectoryPicked?.Invoke(path);
         _variantsSection.VariantSelected += index => OnMenu("SIZE", VariantSelected, index);
+        _texturesSection.VariantSelected += index => OnMenu("TEXTURE", VariantSelected, index);
 
         _duplicatesFinderSection.FindClicked += () => OnMenu("FIND DUPLICATES", FindDuplicatesRequested);
         _duplicatesFinderSection.GoBackClicked += () => OnMenu("DUPLICATES BACK", DuplicatesGoBackRequested);
@@ -140,6 +143,7 @@ public class MainLayer : IUIEvents, IDisposable
             new SectionEntry(_directoryTreeSection, SectionPlacement.Sidebar, _directoryTreeSection.Collapsible),
             new SectionEntry(_exifSection, SectionPlacement.Sidebar, _exifSection.Collapsible),
             new SectionEntry(_variantsSection, SectionPlacement.Sidebar, _variantsSection.Collapsible),
+            new SectionEntry(_texturesSection, SectionPlacement.Sidebar, _texturesSection.Collapsible),
             new SectionEntry(_hdrDecodeSection, SectionPlacement.Sidebar, _hdrDecodeSection.Collapsible),
             new SectionEntry(_formatSection, SectionPlacement.Sidebar, _formatSection.Collapsible),
             new SectionEntry(_structureSection, SectionPlacement.Sidebar, _structureSection.Collapsible),

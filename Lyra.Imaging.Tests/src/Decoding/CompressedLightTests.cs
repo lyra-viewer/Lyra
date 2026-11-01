@@ -1,3 +1,4 @@
+using Lyra.Imaging.Decoding;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Hdr;
 using Lyra.Imaging.Decoding.Support;
@@ -72,7 +73,7 @@ public class CompressedLightTests
         unsafe
         {
             fixed (float* p = floats)
-                content = HdrImageBuilder.Build(new FloatRgbaRows(p, light.Length, 1), composite, CancellationToken.None, out _, default, new HdrBudgets(LivePixels: 1, TiledSceneBytes: 1));
+                content = HdrImageBuilder.Build(new FloatRgbaRows(p, light.Length, 1), DecodeContext.For(composite), CancellationToken.None, out _, default, new HdrBudgets(LivePixels: 1, TiledSceneBytes: 1));
         }
 
         using (content)

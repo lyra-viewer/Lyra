@@ -208,5 +208,5 @@ public sealed class PerceptualDuplicateFinder(IThumbnailSource thumbnails)
         }
     }
 
-    private static bool IsEligible(FileRecord record) => ImageFormat.IsPerceptualHashSupported(record.Extension);
+    private static bool IsEligible(FileRecord record) => ImageFormat.IsPerceptualHashSupported(record.Format);
 }

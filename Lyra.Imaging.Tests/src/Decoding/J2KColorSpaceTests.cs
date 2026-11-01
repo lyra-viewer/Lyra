@@ -16,7 +16,7 @@ public class J2KColorSpaceTests
     // 2x2 sYCC JP2 (opj_compress -F 2,2,3,8,u -n 1 -mct 0, which tags EnumCS 18). Components are
     // stored, not derived: the left column is Y=128 Cb=128 Cr=128 (neutral), the right column is
     // Y=76 Cb=85 Cr=255, which is red once converted and a mid-blue if it is not.
-    private const string SyccJp2Base64 =
+    internal const string SyccJp2Base64 =
         "AAAADGpQICANCocKAAAAFGZ0eXBqcDIgAAAAAGpwMiAAAAAtanAyaAAAABZpaGRyAAAAAgAAAAIAAwcHAAAAAAAP" +
         "Y29scgEAAAAAABIAAACYanAyY/9P/1EALwAAAAAAAgAAAAIAAAAAAAAAAAAAAAIAAAACAAAAAAAAAAAAAwcBAQcB" +
         "AQcBAf9SAAwAAAABAAAEBAAB/1wABEBA/2QAJQABQ3JlYXRlZCBieSBPcGVuSlBFRyB2ZXJzaW9uIDIuNS40/5AA" +

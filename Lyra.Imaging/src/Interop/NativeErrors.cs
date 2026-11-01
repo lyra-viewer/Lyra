@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Lyra.Imaging.Content.Status;
 
 namespace Lyra.Imaging.Interop;
 
@@ -8,9 +9,9 @@ internal static class NativeErrors
         => ptr == IntPtr.Zero ? string.Empty : Marshal.PtrToStringAnsi(ptr) ?? string.Empty;
 
     /// <summary>A failed native decode, described by the library's own reason when it gave one.</summary>
-    public static InvalidOperationException DecodeFailed(IntPtr lastError, string path)
+    public static LoadFailureException DecodeFailed(IntPtr lastError, string path)
     {
         var reason = GetUtf8ZOrAnsiZ(lastError);
-        return new InvalidOperationException(string.IsNullOrWhiteSpace(reason) ? $"Failed to decode: {path}" : reason);
+        return new LoadFailureException(LoadFailureKind.DecodeFailed, string.IsNullOrWhiteSpace(reason) ? $"Failed to decode: {path}" : reason);
     }
 }

@@ -93,7 +93,7 @@ internal static class TiffPageSet
         };
     }
     
-    public static void Describe(Composite composite, IReadOnlyList<TiffNative.DirectoryInfo> directories,
+    public static void Describe(DecodeContext context, IReadOnlyList<TiffNative.DirectoryInfo> directories,
         List<int> pages, bool bigTiff)
     {
         if (directories.Count == 0)
@@ -101,31 +101,31 @@ internal static class TiffPageSet
 
         var first = directories[pages.Count > 0 ? pages[0] : 0];
 
-        composite.AddFormatSpecific("Format", bigTiff ? "BigTIFF (64-bit offsets)" : "TIFF");
-        composite.AddFormatSpecific("Compression", DescribeCompression(first.Compression));
-        composite.AddFormatSpecific("Photometric", DescribePhotometric(first.Photometric));
+        context.AddFormatSpecific("Format", bigTiff ? "BigTIFF (64-bit offsets)" : "TIFF");
+        context.AddFormatSpecific("Compression", DescribeCompression(first.Compression));
+        context.AddFormatSpecific("Photometric", DescribePhotometric(first.Photometric));
 
-        composite.AddFormatSpecific("Sample Depth", first.SamplesPerPixel > 1
+        context.AddFormatSpecific("Sample Depth", first.SamplesPerPixel > 1
             ? $"{first.BitsPerSample}-bit x{first.SamplesPerPixel} ({DescribeSampleFormat(first.SampleFormat)})"
             : $"{first.BitsPerSample}-bit ({DescribeSampleFormat(first.SampleFormat)})");
 
-        composite.AddFormatSpecific("Layout", first.IsTiled != 0
+        context.AddFormatSpecific("Layout", first.IsTiled != 0
             ? $"tiled {first.TileWidth}x{first.TileHeight}"
             : $"stripped, {first.RowsPerStrip} row{(first.RowsPerStrip == 1 ? "" : "s")} per strip");
 
         if (first.PlanarConfig == 2)
-            composite.AddFormatSpecific("Planar", "separate planes");
+            context.AddFormatSpecific("Planar", "separate planes");
 
         if (pages.Count > 1)
-            composite.AddFormatSpecific("Pages", pages.Count.ToString());
+            context.AddFormatSpecific("Pages", pages.Count.ToString());
 
         var levels = directories.Count - pages.Count;
         if (levels > 0)
-            composite.AddFormatSpecific("Reduced Levels", levels.ToString());
+            context.AddFormatSpecific("Reduced Levels", levels.ToString());
 
         var compressions = directories.Select(d => DescribeCompression(d.Compression)).Distinct().ToList();
         if (compressions.Count > 1)
-            composite.AddFormatSpecific("Mixed Compression", string.Join(", ", compressions));
+            context.AddFormatSpecific("Mixed Compression", string.Join(", ", compressions));
     }
 
     private static string DescribePhotometric(ushort photometric) => photometric switch

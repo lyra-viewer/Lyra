@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.ManagedCodecs.Raster.Png;
+using Lyra.Imaging.Decoding.Support;
 using SkiaSharp;
 
 namespace Lyra.Imaging.Decoding.Decoders.Animation;
@@ -146,7 +147,7 @@ internal sealed class ApngFrameRenderer(Func<Stream> open, ApngChunks chunks, SK
         }
 
         using var png = new MemoryStream(ApngFramePng.Build(stream, chunks, frame), writable: false);
-        using var codec = SKCodec.Create(png);
+        using var codec = SkiaStream.Codec(png);
 
         if (codec is null || codec.Info.Width != frame.Width || codec.Info.Height != frame.Height)
         {

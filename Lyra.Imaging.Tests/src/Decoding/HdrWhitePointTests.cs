@@ -1,3 +1,4 @@
+using Lyra.Imaging.Decoding;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Support;
 using Xunit;
@@ -43,8 +44,8 @@ public class HdrWhitePointTests(ITestOutputHelper output)
     {
         var composite = new Composite(new FileInfo("bright.exr"));
 
-        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 12f), 8, 8, composite, CancellationToken.None, out var facts);
-        facts.Describe(composite);
+        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 12f), 8, 8, DecodeContext.For(composite), CancellationToken.None, out var facts);
+        facts.Describe(DecodeContext.For(composite));
 
         var measured = Assert.IsType<HdrRasterContent>(content).WhitePoint;
         var row = Row(composite, "Dynamic Range");
@@ -58,7 +59,7 @@ public class HdrWhitePointTests(ITestOutputHelper output)
     {
         var composite = new Composite(new FileInfo("frame.exr"));
 
-        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 12f), 8, 8, composite, CancellationToken.None, out _);
+        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 12f), 8, 8, DecodeContext.For(composite), CancellationToken.None, out _);
 
         Assert.Empty(composite.FormatSpecificSnapshot());
     }
@@ -68,7 +69,7 @@ public class HdrWhitePointTests(ITestOutputHelper output)
     {
         var composite = new Composite(new FileInfo("dim.exr"));
 
-        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 0.9f), 8, 8, composite, CancellationToken.None, out var facts);
+        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 0.9f), 8, 8, DecodeContext.For(composite), CancellationToken.None, out var facts);
 
         Assert.Equal("Within SDR white", facts.DynamicRange);
     }
@@ -78,7 +79,7 @@ public class HdrWhitePointTests(ITestOutputHelper output)
     {
         var composite = new Composite(new FileInfo("sun.exr"));
 
-        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 40_000f), 8, 8, composite, CancellationToken.None, out var facts);
+        using var content = HdrImageBuilder.Build(Ramp(8, 8, top: 40_000f), 8, 8, DecodeContext.For(composite), CancellationToken.None, out var facts);
 
         var row = facts.DynamicRange!;
 

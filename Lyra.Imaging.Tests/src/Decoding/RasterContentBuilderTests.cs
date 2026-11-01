@@ -1,3 +1,4 @@
+using Lyra.Imaging.Decoding;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Tiling;
 using Lyra.Imaging.Decoding.Support;
@@ -17,7 +18,7 @@ public class RasterContentBuilderTests
         using var bitmap = Filled(64, 64, SKColors.CornflowerBlue);
         var composite = NewComposite();
 
-        using var content = RasterContentBuilder.Build(bitmap, composite);
+        using var content = RasterContentBuilder.Build(bitmap, DecodeContext.For(composite));
 
         Assert.IsType<RasterContent>(content);
     }
@@ -28,7 +29,7 @@ public class RasterContentBuilderTests
         using var bitmap = Filled(64, 32, SKColors.CornflowerBlue);
         var composite = NewComposite();
 
-        using var content = RasterContentBuilder.Build(bitmap, composite);
+        using var content = RasterContentBuilder.Build(bitmap, DecodeContext.For(composite));
 
         Assert.Null(composite.FullWidth);
         Assert.Null(composite.FullHeight);
@@ -42,7 +43,7 @@ public class RasterContentBuilderTests
         using var bitmap = Filled(AtBudgetEdge, AtBudgetEdge, SKColors.DimGray);
         var composite = NewComposite();
 
-        using var content = RasterContentBuilder.Build(bitmap, composite);
+        using var content = RasterContentBuilder.Build(bitmap, DecodeContext.For(composite));
 
         Assert.IsType<RasterContent>(content);
     }
@@ -53,7 +54,7 @@ public class RasterContentBuilderTests
         using var bitmap = Filled(AtBudgetEdge, AtBudgetEdge + 1, SKColors.DimGray);
         var composite = NewComposite();
 
-        using var content = RasterContentBuilder.Build(bitmap, composite);
+        using var content = RasterContentBuilder.Build(bitmap, DecodeContext.For(composite));
 
         var large = Assert.IsType<RasterLargeContent>(content);
         
@@ -67,7 +68,7 @@ public class RasterContentBuilderTests
         using var bitmap = Filled(AtBudgetEdge, AtBudgetEdge + 1, SKColors.DimGray);
         var composite = NewComposite();
 
-        using var content = RasterContentBuilder.Build(bitmap, composite);
+        using var content = RasterContentBuilder.Build(bitmap, DecodeContext.For(composite));
 
         Assert.Equal(AtBudgetEdge, composite.FullWidth);
         Assert.Equal(AtBudgetEdge + 1, composite.FullHeight);
@@ -93,7 +94,7 @@ public class RasterContentBuilderTests
         }
 
         var composite = NewComposite();
-        using var content = RasterContentBuilder.Build(bitmap, composite);
+        using var content = RasterContentBuilder.Build(bitmap, DecodeContext.For(composite));
         var large = (RasterLargeContent)content;
 
         var imageSize = new SKSize(width, height);
@@ -110,7 +111,7 @@ public class RasterContentBuilderTests
         using var bitmap = Filled(AtBudgetEdge, AtBudgetEdge + 1, SKColors.DimGray);
         var composite = NewComposite();
 
-        using var content = RasterContentBuilder.Build(bitmap, composite);
+        using var content = RasterContentBuilder.Build(bitmap, DecodeContext.For(composite));
         var large = (RasterLargeContent)content;
         var imageSize = new SKSize(AtBudgetEdge, AtBudgetEdge + 1);
 
@@ -127,7 +128,7 @@ public class RasterContentBuilderTests
         using var bitmap = Filled(AtBudgetEdge, AtBudgetEdge + 1, SKColors.DimGray);
         var composite = NewComposite();
 
-        using var content = RasterContentBuilder.Build(bitmap, composite);
+        using var content = RasterContentBuilder.Build(bitmap, DecodeContext.For(composite));
         var large = (RasterLargeContent)content;
 
         Assert.NotNull(large.TilesTotal);
@@ -151,7 +152,7 @@ public class RasterContentBuilderTests
         using var bitmap = Filled(width, height, SKColors.DimGray);
         var composite = NewComposite();
 
-        using var content = RasterContentBuilder.Build(bitmap, composite);
+        using var content = RasterContentBuilder.Build(bitmap, DecodeContext.For(composite));
         var large = (RasterLargeContent)content;
 
         var previewBytes = (long)large.PreviewImage!.Width * large.PreviewImage.Height * 4;
@@ -170,7 +171,7 @@ public class RasterContentBuilderTests
         using var bitmap = Filled(64, 32, SKColors.CornflowerBlue);
         var composite = NewComposite();
 
-        using var content = RasterContentBuilder.Build(bitmap, composite);
+        using var content = RasterContentBuilder.Build(bitmap, DecodeContext.For(composite));
 
         Assert.Equal(64L * 32 * 4, content.ByteSize);
     }

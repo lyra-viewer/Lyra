@@ -1,3 +1,4 @@
+using Lyra.Imaging.Decoding;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Decoding.Decoders.Tiff;
 using Lyra.Imaging.Interop;
@@ -19,7 +20,7 @@ public class TiffTransferProgressTests
         using var composite = new Composite(new FileInfo(file.Path));
         composite.BeginLoadTiming();
 
-        var tally = new IoTally(composite);
+        var tally = new IoTally(DecodeContext.For(composite));
 
         tally.Add(1_000_000, 90);
         Assert.Equal(1_000_000, composite.Timing.TransferBytesRead);
@@ -36,11 +37,11 @@ public class TiffTransferProgressTests
         using var composite = new Composite(new FileInfo(file.Path));
         composite.BeginLoadTiming();
 
-        var tally = new IoTally(composite);
+        var tally = new IoTally(DecodeContext.For(composite));
 
         tally.Add(1_000_000, 90);
         tally.Add(500_000, 45);
-        tally.ReportTo(composite);
+        tally.ReportTo(DecodeContext.For(composite));
 
         Assert.True(composite.Timing.TransferMeasured);
         Assert.Equal(1_500_000, composite.Timing.TransferBytesRead);
@@ -94,7 +95,7 @@ public class TiffTransferProgressTests
         using var composite = new Composite(new FileInfo(file.Path));
         composite.BeginLoadTiming();
 
-        tally.ReportTo(composite);
+        tally.ReportTo(DecodeContext.For(composite));
 
         Assert.Equal(1_000, composite.Timing.TransferBytesRead);
     }

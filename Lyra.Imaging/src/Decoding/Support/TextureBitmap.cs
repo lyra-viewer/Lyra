@@ -31,20 +31,20 @@ internal static class TextureBitmap
         return chosen;
     }
 
-    public static void PopulateMetadata(Composite composite, TextureData texture)
+    public static void PopulateMetadata(DecodeContext context, TextureData texture)
     {
         var info = TextureFormats.Info(texture.Format);
 
-        composite.AddFormatSpecific("Format", texture.FormatName);
-        composite.AddFormatSpecific("Has Alpha", info.HasAlpha);
-        composite.AddFormatSpecific("Is Cubemap", texture.Kind == TextureKind.Cube);
-        composite.AddFormatSpecific("Is Volume", texture.Kind == TextureKind.Volume);
+        context.AddFormatSpecific("Format", texture.FormatName);
+        context.AddFormatSpecific("Has Alpha", info.HasAlpha);
+        context.AddFormatSpecific("Is Cubemap", texture.Kind == TextureKind.Cube);
+        context.AddFormatSpecific("Is Volume", texture.Kind == TextureKind.Volume);
 
         if (texture.Kind == TextureKind.Volume)
-            composite.AddFormatSpecific("Depth", $"{texture.Depth}");
+            context.AddFormatSpecific("Depth", $"{texture.Depth}");
 
-        composite.AddFormatSpecific("Mipmap Count", $"{texture.MipLevels}");
-        composite.AddFormatSpecific("Bits/Pixel", $"{info.BitsPerPixel} bpp");
+        context.AddFormatSpecific("Mipmap Count", $"{texture.MipLevels}");
+        context.AddFormatSpecific("Bits/Pixel", $"{info.BitsPerPixel} bpp");
     }
 
     /// <summary>
@@ -56,7 +56,7 @@ internal static class TextureBitmap
     /// here rather than by the caller because the HDR path never materializes an 8-bit bitmap for
     /// the caller to flip.
     /// </summary>
-    public static ICompositeContent DecodeToContent(TextureData texture, in Subresource surface, Composite composite, CancellationToken ct, bool flipVertical)
+    public static ICompositeContent DecodeToContent(TextureData texture, in Subresource surface, DecodeContext context, CancellationToken ct, bool flipVertical)
     {
         if (texture.IsHdr)
         {
@@ -66,18 +66,18 @@ internal static class TextureBitmap
             if (flipVertical)
                 FlipFloatRows(floats, surface.Width, surface.Height);
 
-            var content = HdrImageBuilder.Build(floats, surface.Width, surface.Height, composite, ct, out var facts);
-            composite.AddFormatSpecific("Dynamic Range", facts.DynamicRange!);
+            var content = HdrImageBuilder.Build(floats, surface.Width, surface.Height, context, ct, out var facts);
+            context.AddFormatSpecific("Dynamic Range", facts.DynamicRange!);
 
             return content;
         }
 
-        var bitmap = DecodeToBitmap(texture, surface, ct);
+        var bitmap = DecodeToBitmap(texture, surface, context.Options.Curve, ct);
 
         if (flipVertical)
             FlipBitmapRows(bitmap);
 
-        return RasterContentBuilder.Build(bitmap, composite);
+        return RasterContentBuilder.Build(bitmap, context);
     }
 
     private static void FlipFloatRows(float[] pixels, int width, int height)
@@ -118,14 +118,14 @@ internal static class TextureBitmap
         }
     }
 
-    public static SKBitmap DecodeToBitmap(TextureData texture, in Subresource surface, CancellationToken ct)
+    public static SKBitmap DecodeToBitmap(TextureData texture, in Subresource surface, ToneCurve curve, CancellationToken ct)
     {
         var info = new SKImageInfo(surface.Width, surface.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
         var bitmap = new SKBitmap(info);
 
         try
         {
-            Fill(texture, surface, bitmap, ct);
+            Fill(texture, surface, bitmap, curve, ct);
         }
         catch
         {
@@ -136,13 +136,13 @@ internal static class TextureBitmap
         return bitmap;
     }
 
-    private static void Fill(TextureData texture, in Subresource surface, SKBitmap bitmap, CancellationToken ct)
+    private static void Fill(TextureData texture, in Subresource surface, SKBitmap bitmap, ToneCurve curve, CancellationToken ct)
     {
         if (texture.IsHdr)
         {
             var floats = new float[HdrFloatCount(surface)];
             texture.DecodeHdr(surface, floats);
-            HdrToneMap.ToBitmap(floats, bitmap, ct, out _);
+            HdrToneMap.ToBitmap(floats, bitmap, curve, ct, out _);
             return;
         }
 

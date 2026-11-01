@@ -4,6 +4,7 @@ using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.ManagedCodecs.Raster;
 using SkiaSharp;
+using Lyra.Imaging.Content.Status;
 
 namespace Lyra.Imaging.Decoding.Decoders;
 
@@ -37,39 +38,40 @@ internal abstract class IconContainerDecoder<TEntry> : DecoderBase
     
     protected abstract IEnumerable<DecodedIcon> InPresentationOrder(IEnumerable<DecodedIcon> icons);
     
-    protected abstract void ReportFormatSpecific(Composite composite, IReadOnlyList<DecodedIcon> icons);
+    protected abstract void ReportFormatSpecific(DecodeContext context, IReadOnlyList<DecodedIcon> icons);
 
-    protected virtual void ReadMetadata(Composite composite, byte[] data, string path) { }
+    protected virtual void ReadMetadata(DecodeContext context, byte[] data, string path) { }
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
-        var data = composite.ReadAllBytes(ct);
+        var path = context.Source.Label;
+        var data = context.ReadAllBytes(ct);
 
-        ReadMetadata(composite, data, path);
+        ReadMetadata(context, data, path);
 
         ct.ThrowIfCancellationRequested();
 
         var entries = ReadEntries(data);
         if (entries.Count == 0)
         {
-            DecodeAsPlainImage(composite, data, path);
+            DecodeAsPlainImage(context, data, path);
             return;
         }
 
         var icons = DecodeEntries(data, entries, path, ct);
 
         if (icons.Count == 0)
-            throw new InvalidOperationException($"[{Name}] Every {EntryNoun} failed to decode in: {path}");
+            throw new LoadFailureException(LoadFailureKind.DecodeFailed, $"[{Name}] Every {EntryNoun} failed to decode in: {path}");
 
         var ordered = InPresentationOrder(icons).ToList();
 
-        composite.Content = new VariantContainer(
+        context.Content = new VariantContainer(
             [.. ordered.Select(icon => icon.Variant)],
             [.. ordered.Select(icon => icon.Content)],
             active: 0
         );
 
-        Report(composite, data, ordered);
+        Report(context, data, ordered);
     }
     
     private List<DecodedIcon> DecodeEntries(byte[] data, IReadOnlyList<TEntry> entries, string path, CancellationToken ct)
@@ -121,20 +123,20 @@ internal abstract class IconContainerDecoder<TEntry> : DecoderBase
         return icons;
     }
 
-    private void Report(Composite composite, byte[] data, IReadOnlyList<DecodedIcon> icons)
+    private void Report(DecodeContext context, byte[] data, IReadOnlyList<DecodedIcon> icons)
     {
-        composite.AddFormatSpecific(CountLabel, icons.Count.ToString());
-        composite.AddFormatSpecific("Size Range", icons.Count == 1
+        context.AddFormatSpecific(CountLabel, icons.Count.ToString());
+        context.AddFormatSpecific("Size Range", icons.Count == 1
             ? icons[0].Variant.Label
             : $"{icons[^1].Variant.Label} to {icons[0].Variant.Label}");
 
-        ReportFormatSpecific(composite, icons);
+        ReportFormatSpecific(context, icons);
 
         var iconBytes = icons.Sum(icon => icon.Variant.ByteSize);
-        composite.AddFormatSpecific("Icon Data", $"{Formatters.SizeToStr(iconBytes)} of {Formatters.SizeToStr(data.Length)}");
+        context.AddFormatSpecific("Icon Data", $"{Formatters.SizeToStr(iconBytes)} of {Formatters.SizeToStr(data.Length)}");
     }
 
-    protected static void AddEncodings(Composite composite, IReadOnlyList<DecodedIcon> icons)
+    protected static void AddEncodings(DecodeContext context, IReadOnlyList<DecodedIcon> icons)
     {
         var encodings = icons
             .GroupBy(icon => icon.Encoding, StringComparer.Ordinal)
@@ -142,19 +144,19 @@ internal abstract class IconContainerDecoder<TEntry> : DecoderBase
             .ThenBy(group => group.Key, StringComparer.Ordinal)
             .Select(group => group.Count() == 1 ? group.Key : $"{group.Key} x{group.Count()}");
 
-        composite.AddFormatSpecific("Encodings", string.Join(", ", encodings));
+        context.AddFormatSpecific("Encodings", string.Join(", ", encodings));
     }
 
-    private void DecodeAsPlainImage(Composite composite, byte[] data, string path)
+    private void DecodeAsPlainImage(DecodeContext context, byte[] data, string path)
     {
         using var skData = SKData.CreateCopy(data);
         var bitmap = SKBitmap.Decode(skData)
-                     ?? throw new InvalidOperationException($"[{Name}] No readable {EntryNoun}s in: {path}");
+                     ?? throw new LoadFailureException(LoadFailureKind.DecodeFailed, $"[{Name}] No readable {EntryNoun}s in: {path}");
 
         Logger.Debug($"[{Name}] {Path.GetFileName(path)} is not a container; decoded as a plain image.");
 
         bitmap.SetImmutable();
-        composite.Content = new RasterContent(bitmap, SKImage.FromBitmap(bitmap));
+        context.Content = new RasterContent(bitmap, SKImage.FromBitmap(bitmap));
     }
     
     protected static SKBitmap FromDecodedImage(DecodedImage image)

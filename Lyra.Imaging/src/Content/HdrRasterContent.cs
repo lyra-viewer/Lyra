@@ -34,9 +34,9 @@ public sealed class HdrRasterContent(SKBitmap backingBitmap, SKImage image, floa
     /// <summary>Where the light ends, when the format knows; set before the content is published.</summary>
     public SceneRange Range { get; internal set; }
 
-    public override void Dispose()
+    protected override void DisposeCore()
     {
-        base.Dispose();
+        base.DisposeCore();
         Range.Curve?.Dispose();
     }
 }

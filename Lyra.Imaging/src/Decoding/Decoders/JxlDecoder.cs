@@ -15,18 +15,19 @@ internal class JxlDecoder : DecoderBase
     private static readonly SKColorSpace SdrColorSpace =
         SKColorSpace.CreateRgb(SKColorSpaceTransferFn.Srgb, SKColorSpaceXyz.DisplayP3);
 
-    public override bool CanDecode(ImageFormatType format) => format == ImageFormatType.Jxl;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Jxl];
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
-        var data = composite.ReadAllBytes(ct);
+        var path = context.Source.Label;
+        var data = context.ReadAllBytes(ct);
 
         if (JxlContainer.Read(data) is { IsEmpty: false } metadata)
-            composite.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
+            context.ExifInfo = MetadataProcessor.ParseMetadata(metadata, path);
 
         ct.ThrowIfCancellationRequested();
 
-        if (TryDecodeAnimation(composite, path, data, ct))
+        if (TryDecodeAnimation(context, path, data, ct))
             return;
 
         var nativePixels = IntPtr.Zero;
@@ -55,17 +56,17 @@ internal class JxlDecoder : DecoderBase
 
                     DecoderValidation.RequireSaneDimensions(width, height);
 
-                    composite.ReportPixelCount(width, height);
+                    context.ReportPixelCount(width, height);
 
                     ct.ThrowIfCancellationRequested();
 
-                    composite.AddFormatSpecific("Bit Depth", $"{bitsPerSample}-bit");
-                    composite.AddFormatSpecific("HDR", isHdr != 0);
-                    composite.AddFormatSpecific("Has Alpha", hasAlpha != 0);
-                    composite.AddFormatSpecific("Animated", hasAnimation != 0);
+                    context.AddFormatSpecific("Bit Depth", $"{bitsPerSample}-bit");
+                    context.AddFormatSpecific("HDR", isHdr != 0);
+                    context.AddFormatSpecific("Has Alpha", hasAlpha != 0);
+                    context.AddFormatSpecific("Animated", hasAnimation != 0);
 
-                    composite.Content = BuildContent(nativePixels, width, height, isHdr != 0, SdrColorSpace, composite, ct, out var facts);
-                    facts.Describe(composite);
+                    context.Content = BuildContent(nativePixels, width, height, isHdr != 0, SdrColorSpace, context, ct, out var facts);
+                    facts.Describe(context);
                 }
             }
         }
@@ -80,7 +81,7 @@ internal class JxlDecoder : DecoderBase
     /// Publishes an animation frame by frame. False for a still image, and when the native
     /// library cannot open the stream as an animation; the first-frame path then decodes it.
     /// </summary>
-    private static bool TryDecodeAnimation(Composite composite, string path, byte[] data, CancellationToken ct)
+    private static bool TryDecodeAnimation(DecodeContext context, string path, byte[] data, CancellationToken ct)
     {
         JxlNative.AnimationHandle? handle;
         JxlNative.AnimationInfo info;
@@ -112,23 +113,23 @@ internal class JxlDecoder : DecoderBase
         try
         {
             DecoderValidation.RequireSaneDimensions(info.Width, info.Height);
-            composite.ReportPixelCount(info.Width, info.Height);
+            context.ReportPixelCount(info.Width, info.Height);
 
             durations = new int[info.FrameCount];
             if (!JxlNative.jxl_animation_frame_durations(handle, durations, durations.Length))
                 Array.Clear(durations);
 
-            composite.AddFormatSpecific("Bit Depth", $"{info.BitsPerSample}-bit");
-            composite.AddFormatSpecific("HDR", info.IsHdr != 0);
-            composite.AddFormatSpecific("Has Alpha", info.HasAlpha != 0);
-            composite.AddFormatSpecific("Frames", info.FrameCount.ToString());
-            composite.AddFormatSpecific("Duration", FrameFacts.TotalDuration(durations));
-            composite.AddFormatSpecific("Loop", FrameFacts.DescribePlays(info.LoopCount));
+            context.AddFormatSpecific("Bit Depth", $"{info.BitsPerSample}-bit");
+            context.AddFormatSpecific("HDR", info.IsHdr != 0);
+            context.AddFormatSpecific("Has Alpha", info.HasAlpha != 0);
+            context.AddFormatSpecific("Frames", info.FrameCount.ToString());
+            context.AddFormatSpecific("Duration", FrameFacts.TotalDuration(durations));
+            context.AddFormatSpecific("Loop", FrameFacts.DescribePlays(info.LoopCount));
 
             if (info.Incomplete == JxlNative.AnimationTruncated)
-                composite.AddFormatSpecific("Truncated", "stops before the animation ends");
+                context.AddFormatSpecific("Truncated", "stops before the animation ends");
             else if (info.Incomplete == JxlNative.AnimationBroken)
-                composite.AddFormatSpecific("Damaged", $"the stream breaks after frame {info.FrameCount}");
+                context.AddFormatSpecific("Damaged", $"the stream breaks after frame {info.FrameCount}");
 
             ct.ThrowIfCancellationRequested();
         }
@@ -141,8 +142,8 @@ internal class JxlDecoder : DecoderBase
         var damage = new FrameDamageLog();
 
         AnimatedContent.Publish(
-            composite, path,
-            new JxlFrameSource(handle, info, colorSpace, composite, damage.Report),
+            context, path,
+            new JxlFrameSource(handle, info, colorSpace, context, damage.Report),
             damage,
             () => FrameFacts.WholeFrames(durations, info.Width, info.Height),
             "JPEG XL",
@@ -191,11 +192,11 @@ internal class JxlDecoder : DecoderBase
     }
 
     /// <summary>Content from the native RGBA pixels: linear float for HDR, straight-alpha 8-bit otherwise.</summary>
-    internal static unsafe ICompositeContent BuildContent(IntPtr pixels, int width, int height, bool isHdr, SKColorSpace sdrColorSpace, Composite composite, CancellationToken ct, out PixelFacts facts) =>
-        isHdr ? HdrImageBuilder.Build(new Span<float>((byte*)pixels, checked(width * height * 4)), width, height, composite, ct, out facts)
-              : BuildSdr((byte*)pixels, width, height, sdrColorSpace, composite, ct, out facts);
+    internal static unsafe ICompositeContent BuildContent(IntPtr pixels, int width, int height, bool isHdr, SKColorSpace sdrColorSpace, DecodeContext context, CancellationToken ct, out PixelFacts facts) =>
+        isHdr ? HdrImageBuilder.Build(new Span<float>((byte*)pixels, checked(width * height * 4)), width, height, context, ct, out facts)
+              : BuildSdr((byte*)pixels, width, height, sdrColorSpace, context, ct, out facts);
 
-    private static unsafe ICompositeContent BuildSdr(byte* src, int width, int height, SKColorSpace colorSpace, Composite composite, CancellationToken ct, out PixelFacts facts)
+    private static unsafe ICompositeContent BuildSdr(byte* src, int width, int height, SKColorSpace colorSpace, DecodeContext context, CancellationToken ct, out PixelFacts facts)
     {
         // Native hands back tightly packed, straight-alpha RGBA8.
         var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul, colorSpace);
@@ -212,6 +213,6 @@ internal class JxlDecoder : DecoderBase
             throw;
         }
 
-        return RasterContentBuilder.Build(bitmap, composite);
+        return RasterContentBuilder.Build(bitmap, context);
     }
 }

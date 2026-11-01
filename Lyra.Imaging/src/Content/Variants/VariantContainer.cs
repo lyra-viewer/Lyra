@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Lyra.Common;
 using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Textures;
 
 namespace Lyra.Imaging.Content.Variants;
 
@@ -36,6 +37,8 @@ public sealed partial class VariantContainer : ICompositeContent
     private readonly Dictionary<int, LoadWarning> _warnings = new();
     private int _warningVersion;
 
+    private int _version;
+
     /// <summary>
     /// Every rendition decoded up front. For containers small enough that laziness would only add
     /// failure modes.
@@ -52,6 +55,7 @@ public sealed partial class VariantContainer : ICompositeContent
         _contents = [.. contents];
         ActiveIndex = Math.Clamp(active, 0, variants.Count - 1);
         _shownIndex = ActiveIndex;
+        _wholeIndex = ActiveIndex;
     }
 
     /// <summary>
@@ -75,6 +79,7 @@ public sealed partial class VariantContainer : ICompositeContent
 
         ActiveIndex = Math.Clamp(active, 0, variants.Count - 1);
         _shownIndex = ActiveIndex;
+        _wholeIndex = ActiveIndex;
 
         _contents[ActiveIndex] = first;
         _recent.Add(ActiveIndex);
@@ -84,6 +89,9 @@ public sealed partial class VariantContainer : ICompositeContent
 
     /// <summary>What the renditions are. Defaults to the icon case: sizes of one image.</summary>
     public VariantKind Kind { get; init; } = VariantKind.Variants;
+
+    /// <summary>For a 3D model's textures, how they are organised into materials and slots.</summary>
+    public TextureLayout? Textures { get; init; }
 
     private IReadOnlyList<int>? _stepOrder;
 
@@ -140,7 +148,8 @@ public sealed partial class VariantContainer : ICompositeContent
 
     /// <summary>
     /// The rendition currently on screen. Follows <see cref="ActiveIndex"/> as soon as that one is
-    /// decoded, and until then stays on the last one that was - so the view never goes blank.
+    /// decoded or has a stand-in, and until then stays on the last one that was - so the view never
+    /// goes blank.
     /// </summary>
     public ICompositeContent? Active
     {
@@ -148,8 +157,18 @@ public sealed partial class VariantContainer : ICompositeContent
         {
             lock (_gate)
                 return _shownIndex < _contents.Count
-                    ? _contents[_shownIndex] ?? _contents.FirstOrDefault(c => c is not null)
+                    ? _contents[_shownIndex] ?? _standIns.GetValueOrDefault(_shownIndex) ?? _contents.FirstOrDefault(c => c is not null)
                     : null;
+        }
+    }
+
+    /// <summary>Whether the rendition on screen is a reduced stand-in while its full decode runs.</summary>
+    public bool IsShowingStandIn
+    {
+        get
+        {
+            lock (_gate)
+                return _shownIndex < _contents.Count && _contents[_shownIndex] is null && _standIns.ContainsKey(_shownIndex);
         }
     }
 
@@ -207,6 +226,24 @@ public sealed partial class VariantContainer : ICompositeContent
     public int WarningVersion => Volatile.Read(ref _warningVersion);
 
     /// <summary>
+    /// Changes whenever anything a list of the renditions shows changes: a description, a failure
+    /// or a warning. One number to compare, so a view cannot miss one of them.
+    /// </summary>
+    public int Version => Volatile.Read(ref _version);
+
+    private void FailuresChanged()
+    {
+        Interlocked.Increment(ref _failureVersion);
+        Interlocked.Increment(ref _version);
+    }
+
+    private void WarningsChanged()
+    {
+        Interlocked.Increment(ref _warningVersion);
+        Interlocked.Increment(ref _version);
+    }
+
+    /// <summary>
     /// Records that a rendition is shown, but not whole. Unlike a failure it stays when the
     /// rendition is shown, since that is exactly when it applies. Safe from any thread.
     /// </summary>
@@ -221,7 +258,7 @@ public sealed partial class VariantContainer : ICompositeContent
                 return;
 
             _warnings[index] = warning;
-            Interlocked.Increment(ref _warningVersion);
+            WarningsChanged();
         }
     }
 
@@ -237,7 +274,7 @@ public sealed partial class VariantContainer : ICompositeContent
         lock (_gate)
         {
             _failures[index] = failure;
-            Interlocked.Increment(ref _failureVersion);
+            FailuresChanged();
         }
     }
 
@@ -255,6 +292,7 @@ public sealed partial class VariantContainer : ICompositeContent
                 return;
 
             Variants = [.. Variants.Select((existing, i) => i == index ? variant : existing)];
+            Interlocked.Increment(ref _version);
         }
     }
 
@@ -285,7 +323,7 @@ public sealed partial class VariantContainer : ICompositeContent
         get
         {
             lock (_gate)
-                return _contents.Sum(c => c?.ByteSize ?? 0);
+                return _contents.Sum(c => c?.ByteSize ?? 0) + _standIns.Values.Sum(c => c.ByteSize);
         }
     }
 
@@ -321,6 +359,13 @@ public sealed partial class VariantContainer : ICompositeContent
             _pendingIndex = index;
             _pendingSince = Stopwatch.GetTimestamp();
 
+            // Shown reduced at once; the full decode replaces it.
+            if (_standIns.ContainsKey(index))
+            {
+                _shownIndex = index;
+                TouchStandIn(index);
+            }
+
             // Already on its way: wait for that rather than start again.
             if (_preloadIndex == index && _preload is { } preload)
             {
@@ -342,6 +387,7 @@ public sealed partial class VariantContainer : ICompositeContent
     {
         ICompositeContent? decoded = null;
         LoadFailure? failure = null;
+        var started = Stopwatch.GetTimestamp();
 
         try
         {
@@ -363,6 +409,8 @@ public sealed partial class VariantContainer : ICompositeContent
 
         var publish = false;
         var failed = false;
+        var kept = false;
+        List<Dropped>? dropped = null;
 
         lock (_gate)
         {
@@ -385,6 +433,13 @@ public sealed partial class VariantContainer : ICompositeContent
 
                     if (!_disposed)
                     {
+                        // A stand-in left on screen with nothing coming to replace it goes back to the last whole one.
+                        if (_contents[_shownIndex] is null)
+                            _shownIndex = _wholeIndex;
+
+                        if (failure is not null)
+                            DropStandIn(index);
+
                         ActiveIndex = _shownIndex;
                         failed = true;
 
@@ -396,7 +451,7 @@ public sealed partial class VariantContainer : ICompositeContent
                 {
                     // Listed as failed, but not reported as the last failure: nobody asked for it.
                     _failures[index] = failure;
-                    Interlocked.Increment(ref _failureVersion);
+                    FailuresChanged();
                 }
             }
             else if (requested)
@@ -404,19 +459,28 @@ public sealed partial class VariantContainer : ICompositeContent
                 _contents[index] = decoded;
                 _pendingIndex = -1;
                 Show(index);
-                Trim();
+                dropped = LeaseForStandIns(Trim());
                 publish = true;
+                kept = true;
             }
             else if (_contents[index] is null && _contents.Sum(c => c?.ByteSize ?? 0) + decoded.ByteSize <= _residentByteBudget)
             {
                 // Not yet seen, so first to go when room is needed.
                 _contents[index] = decoded;
                 _recent.Insert(0, index);
+                DropStandIn(index);
+                kept = true;
             }
             else
             {
                 decoded.Dispose();
             }
+
+            if (kept)
+                Logger.Debug(typeof(VariantContainer),
+                    $"{Variants[index].Label} decoded in {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0} ms ({(requested ? "asked for" : "preloaded")}); " +
+                    $"resident {_contents.Sum(c => c?.ByteSize ?? 0) / (1024 * 1024)} of {_residentByteBudget / (1024 * 1024)} MB, " +
+                    $"{_standIns.Count} stand-ins, {dropped?.Count ?? 0} dropped.");
 
             SchedulePreload();
         }
@@ -425,11 +489,14 @@ public sealed partial class VariantContainer : ICompositeContent
             VariantReady?.Invoke(this);
         else if (failed)
             VariantFailed?.Invoke(this);
+
+        KeepStandIns(dropped);
     }
 
     public void ReplaceVariant(int index, ICompositeContent content, ImageVariant? variant = null)
     {
         ArgumentNullException.ThrowIfNull(content);
+        List<Dropped>? dropped;
 
         lock (_gate)
         {
@@ -443,12 +510,16 @@ public sealed partial class VariantContainer : ICompositeContent
                 _retired.Add(old);
 
             _contents[index] = content;
+            DropStandIn(index);
 
             if (variant is not null)
+            {
                 Variants = [.. Variants.Select((existing, i) => i == index ? variant : existing)];
+                Interlocked.Increment(ref _version);
+            }
 
             if (_failures.Remove(index))
-                Interlocked.Increment(ref _failureVersion);
+                FailuresChanged();
 
             // A fetch of the same rendition, asked for while the stand-in was trimmed, is now moot.
             if (_pendingIndex == index)
@@ -461,21 +532,24 @@ public sealed partial class VariantContainer : ICompositeContent
             _recent.Remove(index);
             _recent.Add(index);
 
-            Trim();
+            dropped = LeaseForStandIns(Trim());
         }
 
         VariantReady?.Invoke(this);
+        KeepStandIns(dropped);
     }
 
     /// <summary>Marks a rendition as the one on screen and the most recently used. Call under the lock.</summary>
     private void Show(int index)
     {
         _shownIndex = index;
+        _wholeIndex = index;
         _pendingIndex = -1;
+        DropStandIn(index);
         _lastFailedIndex = -1;
 
         if (_failures.Remove(index))
-            Interlocked.Increment(ref _failureVersion);
+            FailuresChanged();
 
         _recent.Remove(index);
         _recent.Add(index);
@@ -487,17 +561,19 @@ public sealed partial class VariantContainer : ICompositeContent
     {
         _failures[index] = failure;
         _lastFailedIndex = index;
-        Interlocked.Increment(ref _failureVersion);
+        FailuresChanged();
     }
 
     /// <summary>
     /// Drops the least recently shown renditions until the resident total is inside the budget.
-    /// Never drops the one on screen, whatever the budget says.
+    /// Never drops the one on screen, whatever the budget says. Returns what was dropped.
     /// </summary>
-    private void Trim()
+    private List<Dropped>? Trim()
     {
         if (_provider is null)
-            return;
+            return null;
+
+        List<Dropped>? dropped = null;
 
         var resident = _contents.Sum(c => c?.ByteSize ?? 0);
         for (var i = 0; i < _recent.Count && resident > _residentByteBudget; i++)
@@ -509,10 +585,13 @@ public sealed partial class VariantContainer : ICompositeContent
             resident -= content.ByteSize;
             _retired.Add(content);
             _contents[index] = null;
+            (dropped ??= []).Add(new Dropped(index, content));
 
             _recent.RemoveAt(i);
             i--;
         }
+
+        return dropped;
     }
     
     public void ReleaseRetired()
@@ -544,6 +623,10 @@ public sealed partial class VariantContainer : ICompositeContent
 
             foreach (var content in _contents.OfType<ICompositeContent>())
                 _retired.Add(content);
+
+            _retired.AddRange(_standIns.Values);
+            _standIns.Clear();
+            _standInRecent.Clear();
 
             _contents.Clear();
             _contents.AddRange(Enumerable.Repeat<ICompositeContent?>(null, Variants.Count));

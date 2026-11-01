@@ -19,11 +19,11 @@ internal static class TiffRegion
         if (info.RegionCapable == 0 || info.Width == 0 || info.Height == 0)
             return false;
 
-        return (long)info.Width * info.Height * 4 > DecodePolicy.RgbaFormCeilingBytes;
+        return !DecodePolicy.FitsOneTexture(info.Width, info.Height, bytesPerPixel: 4);
     }
 
     internal static bool WantsStreaming(TiffNative.DirectoryInfo info) =>
-        (long)info.Width * info.Height * info.RegionSamples > DecodePolicy.SingleTextureCeilingBytes;
+        !DecodePolicy.FitsOneTexture(info.Width, info.Height, info.RegionSamples);
 
     internal static bool IsColour(TiffNative.DirectoryInfo info) => info.RegionSamples == 4;
 
@@ -37,11 +37,10 @@ internal static class TiffRegion
     /// <param name="path">The TIFF file.</param>
     /// <param name="directory">Index of the directory (page) to decode.</param>
     /// <param name="info">What <see cref="TiffNative.DescribeDirectories(string, IntPtr, ulong)"/> reported for that directory.</param>
-    /// <param name="composite">Receives the byte and timing tally when the file is read from disk.</param>
+    /// <param name="context">Receives the byte and timing tally when the file is read from disk.</param>
     /// <param name="ct">Cancels the decode.</param>
     /// <param name="fetched">The file already in memory; read from the path when null.</param>
-    public static SKBitmap DecodeWhole(string path, int directory, TiffNative.DirectoryInfo info, Composite composite, CancellationToken ct,
-        NativeFileBuffer? fetched = null)
+    public static SKBitmap DecodeWhole(string path, int directory, TiffNative.DirectoryInfo info, DecodeContext context, CancellationToken ct, NativeFileBuffer? fetched = null)
     {
         ct.ThrowIfCancellationRequested();
 
@@ -68,10 +67,10 @@ internal static class TiffRegion
         }
         else
         {
-            var transfer = new IoTally(composite);
+            var transfer = new IoTally(context);
             read = TiffReads.Region(path, directory, IsColour(info), 0, 0, info.Width, info.Height, $"Full region of {Path.GetFileName(path)}", ct, transfer);
 
-            transfer.ReportTo(composite);
+            transfer.ReportTo(context);
         }
 
         if (!read.HasPixels)
@@ -97,7 +96,7 @@ internal static class TiffRegion
 
     #region Streamed
 
-    public static ICompositeContent Stream(string path, int directory, TiffNative.DirectoryInfo info, Composite composite, CancellationToken ct)
+    public static ICompositeContent Stream(string path, int directory, TiffNative.DirectoryInfo info, DecodeContext context, CancellationToken ct)
     {
         var width = (int)info.Width;
         var height = (int)info.Height;
@@ -112,18 +111,17 @@ internal static class TiffRegion
 
         var content = new RasterLargeContent(width, height);
 
-        composite.FullWidth = width;
-        composite.FullHeight = height;
+        context.SetFullSize(width, height);
 
         try
         {
-            var (maxWidth, maxHeight) = RasterContentBuilder.PreviewBounds();
+            var (maxWidth, maxHeight) = (context.Options.PreviewWidth, context.Options.PreviewHeight);
 
             var colour = IsColour(info);
             var premultiplied = info.RegionPremultiplied != 0;
             var bandRows = BandRowsFor(path, info);
 
-            var transfer = new IoTally(composite);
+            var transfer = new IoTally(context);
 
             var preview = StreamingPreview.Build(
                 width, height, maxWidth, maxHeight,
@@ -135,7 +133,7 @@ internal static class TiffRegion
                 premultiplied
             );
 
-            transfer.ReportTo(composite);
+            transfer.ReportTo(context);
 
             if (preview is not null)
                 content.SetPreview(SKImage.FromBitmap(preview));

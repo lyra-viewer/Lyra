@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using Lyra.Common;
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Exif;
 using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Decoding.Support;
@@ -11,29 +10,29 @@ namespace Lyra.Imaging.Decoding.Decoders;
 
 internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
 {
-    public override bool CanDecode(ImageFormatType format) => format
-        is ImageFormatType.Bmp
-        or ImageFormatType.Jfif
-        or ImageFormatType.Jpeg;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Bmp, ImageFormatType.Jfif, ImageFormatType.Jpeg];
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    public override DecoderCapabilities Capabilities => DecoderCapabilities.ReadsFromMemory;
+
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
-        using var stream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer);
+        var path = context.Source.Label;
 
-        if (TryDecodeAnimation(composite, stream, path, ct))
+        using var stream = new MeasuredReadStream(context.OpenSequentialRead(),context.ReportTransferred, context.CompleteTransfer);
+
+        if (TryDecodeAnimation(context, stream, path, ct))
             return;
 
         stream.Position = 0;
-        composite.ExifInfo = MetadataProcessor.ParseMetadata(stream, path);
+        context.ExifInfo = MetadataProcessor.ParseMetadata(stream, path);
         stream.Position = 0;
 
-        // Skia takes the stream over, and closes it when it finds no image in it.
         var length = stream.Length;
 
-        using var codec = SKCodec.Create(stream, out var opened)
+        using var codec = SkiaStream.Codec(stream, out var opened)
                           ?? throw new LoadFailureException(LoadFailureKind.DecodeFailed, WhyNoCodec(opened, length));
 
-        composite.ReportPixelCount(codec.Info.Width, codec.Info.Height);
+        context.ReportPixelCount(codec.Info.Width, codec.Info.Height);
 
         DecoderValidation.RequireSaneDimensions(codec.Info.Width, codec.Info.Height);
         DecoderValidation.RequireAvailableMemory(codec.Info.Width, codec.Info.Height);
@@ -67,7 +66,7 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
                 };
 
                 Logger.Warning(typeof(SkiaDecoder), $"{damage}: {path}");
-                composite.Warning = LoadWarning.PartiallyDecoded(damage);
+                context.Warning = LoadWarning.PartiallyDecoded(damage);
             }
 
             ct.ThrowIfCancellationRequested();
@@ -75,7 +74,7 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
             var upright = OrientationTransform.Apply(bitmap, codec.EncodedOrigin);
 
             if (!ReferenceEquals(upright, bitmap))
-                composite.AppliedOrientation = (ExifOrientation)codec.EncodedOrigin;
+                context.AppliedOrientation = (ExifOrientation)codec.EncodedOrigin;
 
             bitmap = upright;
         }
@@ -86,10 +85,10 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
         }
 
         // The builder takes ownership of the bitmap and keeps it alive for the image it makes.
-        composite.Content = RasterContentBuilder.Build(bitmap, composite);
+        context.Content = RasterContentBuilder.Build(bitmap, context);
     }
     
-    protected virtual bool TryDecodeAnimation(Composite composite, Stream stream, string path, CancellationToken ct) => false;
+    protected virtual bool TryDecodeAnimation(DecodeContext context, Stream stream, string path, CancellationToken ct) => false;
 
     private static string WhyNoCodec(SKCodecResult result, long length) => result switch
     {
@@ -148,7 +147,7 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
         ct.ThrowIfCancellationRequested();
 
         using var memory = new MemoryStream([.. data, .. filler, .. EndMarker], writable: false);
-        using var codec = SKCodec.Create(memory);
+        using var codec = SkiaStream.Codec(memory);
         if (codec is null)
             return SKCodecResult.InvalidInput;
 
@@ -194,7 +193,7 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
         ct.ThrowIfCancellationRequested();
 
         using var stream = DecoderIO.OpenSequentialRead(path);
-        using var codec = SKCodec.Create(stream);
+        using var codec = SkiaStream.Codec(stream);
         if (codec is null)
             return null;
 

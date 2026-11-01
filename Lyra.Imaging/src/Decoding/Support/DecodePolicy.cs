@@ -16,11 +16,12 @@ internal static class DecodePolicy
     public const long SingleTextureCeilingBytes = 256L * 1024 * 1024;
 
     /// <summary>
-    /// The same ceiling, asked of a form that does not exist yet: when a TIFF's gray directory
-    /// <em>would</em> cross it as RGBA8, it is read at its own depth instead and never pays the
-    /// four bytes a pixel.
+    /// Whether a raster this size is held as one texture rather than a preview plus tiles: the one
+    /// place every format asks, including of a form not yet decoded - a TIFF's gray directory that
+    /// would not fit as RGBA8 is read at its own depth instead.
     /// </summary>
-    public const long RgbaFormCeilingBytes = SingleTextureCeilingBytes;
+    public static bool FitsOneTexture(long width, long height, int bytesPerPixel) =>
+        (Int128)Math.Max(0, width) * Math.Max(0, height) * Math.Max(1, bytesPerPixel) <= SingleTextureCeilingBytes;
 
     /// <summary>
     /// Tile edge in pixels, for every grid cut here. 2048 costs 16 MiB per RGBA8 tile, so the
@@ -46,6 +47,20 @@ internal static class DecodePolicy
     /// pages before the least recently shown are dropped.
     /// </summary>
     public const long ResidentPageBudgetBytes = 256L * 1024 * 1024;
+
+    /// <summary>What a 3D model may hold resident as decoded textures.</summary>
+    public static long ResidentTextureBudgetBytes => ResidentTextureBudget(Loading.ImageLoader.CacheBudgetBytes);
+
+    internal static long ResidentTextureBudget(long cacheBudgetBytes) => Math.Clamp(cacheBudgetBytes / 4, ResidentPageBudgetBytes, 2L * 1024 * 1024 * 1024);
+
+    /// <summary>
+    /// The longest side of the reduced copy kept of a dropped rendition, shown while it decodes
+    /// again. Sharp enough at fit-to-window on most displays, and at 16 MiB a copy, cheap to keep.
+    /// </summary>
+    public const int StandInEdge = 2048;
+
+    /// <summary>What one container may hold in reduced copies of dropped renditions.</summary>
+    public const long StandInBudgetBytes = 160L * 1024 * 1024;
 
     /// <summary>
     /// What one band of a streaming preview pass may cost. Larger than a tile budget because the

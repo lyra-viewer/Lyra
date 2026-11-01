@@ -1,5 +1,6 @@
 using Lyra.Common;
 using Lyra.Imaging.Decoding;
+using Lyra.Imaging.Detection;
 using Lyra.Imaging.Loading;
 using SkiaSharp;
 
@@ -20,8 +21,8 @@ public static class GrayscaleThumbnail
         if (width <= 0 || height <= 0)
             return null;
 
-        var format = ImageFormat.GetImageFormat(Path.GetExtension(path));
-        if (DecoderManager.GetDecoder(format) is not IThumbnailDecoder thumbnailDecoder)
+        var format = FormatDetector.Detect(path).Format;
+        if (DecoderManager.Find(format) is not IThumbnailDecoder thumbnailDecoder)
             return null;
 
         SKBitmap? bitmap = null;

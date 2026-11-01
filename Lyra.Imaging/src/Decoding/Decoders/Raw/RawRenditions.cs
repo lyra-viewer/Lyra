@@ -3,6 +3,7 @@ using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
 using Lyra.Imaging.Loading;
+using Lyra.Imaging.Content.Status;
 
 namespace Lyra.Imaging.Decoding.Decoders.Raw;
 
@@ -17,14 +18,14 @@ internal sealed class RawRenditions : IVariantProvider
     /// <summary>Below this on its longer side, a preview is called a thumbnail.</summary>
     private const int ThumbnailEdge = 640;
 
-    private readonly Composite _composite;
+    private readonly DecodeContext _context;
     private readonly string _path;
     private readonly RawNative.PreviewEntry[] _previews;
     private VariantContainer? _set;
 
-    private RawRenditions(Composite composite, string path, RawNative.PreviewEntry[] previews)
+    private RawRenditions(DecodeContext context, string path, RawNative.PreviewEntry[] previews)
     {
-        _composite = composite;
+        _context = context;
         _path = path;
         _previews = previews;
     }
@@ -33,38 +34,38 @@ internal sealed class RawRenditions : IVariantProvider
     private static long Budget => ImageLoader.CacheBudgetBytes / 2;
 
     /// <summary>The renditions, with <paramref name="standIn"/> in the developed image's place until it arrives.</summary>
-    public static VariantContainer WithStandIn(Composite composite, string path, RawNative.ImageHandle image, RawNative.RawInfo info, ICompositeContent standIn)
+    public static VariantContainer WithStandIn(DecodeContext context, string path, RawNative.ImageHandle image, RawNative.RawInfo info, ICompositeContent standIn)
     {
         var previews = RawNative.ListPreviews(image);
-        return Build(composite, path, previews, info.Flip, DevelopedVariant(composite, info.Width, info.Height), standIn);
+        return Build(context, path, previews, info.Flip, DevelopedVariant(context, info.Width, info.Height), standIn);
     }
 
     /// <summary>
     /// The renditions around an image developed without a stand-in, or the developed image alone
     /// when the camera embedded nothing else to pick.
     /// </summary>
-    public static ICompositeContent Around(Composite composite, string path, RawDecoder.DevelopedImage developed)
+    public static ICompositeContent Around(DecodeContext context, string path, RawDecoder.DevelopedImage developed)
     {
         using var image = RawNative.OpenFile(path, out var info);
         var previews = image is null ? [] : RawNative.ListPreviews(image);
 
         return previews.Length == 0
             ? developed.Content
-            : Build(composite, path, previews, info.Flip, DescribeDeveloped(composite, developed), developed.Content);
+            : Build(context, path, previews, info.Flip, DescribeDeveloped(context, developed), developed.Content);
     }
 
-    public static ImageVariant DescribeDeveloped(Composite composite, RawDecoder.DevelopedImage developed) => DevelopedVariant(composite, developed.Width, developed.Height);
+    public static ImageVariant DescribeDeveloped(DecodeContext context, RawDecoder.DevelopedImage developed) => DevelopedVariant(context, developed.Width, developed.Height);
 
-    private static VariantContainer Build(Composite composite, string path, RawNative.PreviewEntry[] previews, int flip, ImageVariant developed, ICompositeContent first)
+    private static VariantContainer Build(DecodeContext context, string path, RawNative.PreviewEntry[] previews, int flip, ImageVariant developed, ICompositeContent first)
     {
-        var provider = new RawRenditions(composite, path, previews);
+        var provider = new RawRenditions(context, path, previews);
         var set = new VariantContainer([developed, .. previews.Select(preview => PreviewVariant(preview, flip))], Developed, first, provider, Budget);
 
         provider._set = set;
         return set;
     }
 
-    private static ImageVariant DevelopedVariant(Composite composite, int width, int height) => new("Developed", width, height, $"{width} x {height}", composite.FileSizeBytes);
+    private static ImageVariant DevelopedVariant(DecodeContext context, int width, int height) => new("Developed", width, height, $"{width} x {height}", context.Source.Length);
 
     private static ImageVariant PreviewVariant(RawNative.PreviewEntry preview, int flip)
     {
@@ -82,16 +83,16 @@ internal sealed class RawRenditions : IVariantProvider
     public ICompositeContent Decode(int index, CancellationToken ct)
     {
         if (index == Developed)
-            return RawDecoder.DevelopFile(_composite, _path, warning => _set?.RecordWarning(Developed, warning), ct).Content;
+            return RawDecoder.DevelopFile(_context, _path, warning => _set?.RecordWarning(Developed, warning), ct).Content;
 
         var entry = _previews[index - 1];
 
         using var image = RawNative.OpenFile(_path, out var info) ?? throw NativeErrors.DecodeFailed(RawNative.get_last_raw_error(), _path);
 
         var bitmap = RawDecoder.DecodePreviewAt(image, info, entry.Index, ct)
-                     ?? throw new InvalidOperationException("The camera's preview could not be decoded");
+                     ?? throw new LoadFailureException(LoadFailureKind.DecodeFailed, "The camera's preview could not be decoded");
 
         // The builder takes ownership of the bitmap.
-        return RasterContentBuilder.Build(bitmap, _composite);
+        return RasterContentBuilder.Build(bitmap, _context);
     }
 }

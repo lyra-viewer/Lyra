@@ -31,24 +31,24 @@ internal static class HdrImageBuilder
     /// Builds HDR content from interleaved RGBA float pixels. <paramref name="facts"/> says whether
     /// every pixel has R == G == B and how far above SDR white they reach, for the caller to publish.
     /// </summary>
-    public static unsafe ICompositeContent Build(Span<float> rgba, int width, int height, Composite composite, CancellationToken ct, out PixelFacts facts)
+    public static unsafe ICompositeContent Build(Span<float> rgba, int width, int height, DecodeContext context, CancellationToken ct, out PixelFacts facts)
     {
         if (rgba.Length < (long)width * height * 4)
             throw new ArgumentException("Fewer pixels than the dimensions say.", nameof(rgba));
 
         fixed (float* pin = rgba)
-            return Build(new FloatRgbaRows(pin, width, height), composite, ct, out facts);
+            return Build(new FloatRgbaRows(pin, width, height), context, ct, out facts);
     }
 
     /// <summary>The same, from linear rows of any layout, carrying what is known of where the light ends.</summary>
-    public static ICompositeContent Build(LinearRows rows, Composite composite, CancellationToken ct, out PixelFacts facts, SceneRange range = default) =>
-        Build(rows, composite, ct, out facts, range, new HdrBudgets(LivePixelBudget, TiledSceneBudget));
+    public static ICompositeContent Build(LinearRows rows, DecodeContext context, CancellationToken ct, out PixelFacts facts, SceneRange range = default) =>
+        Build(rows, context, ct, out facts, range, new HdrBudgets(LivePixelBudget, TiledSceneBudget));
 
     /// <summary>The same, with the size thresholds given, so tests need not allocate gigabytes to reach them.</summary>
-    internal static ICompositeContent Build(LinearRows rows, Composite composite, CancellationToken ct, out PixelFacts facts, SceneRange range, HdrBudgets budgets)
+    internal static ICompositeContent Build(LinearRows rows, DecodeContext context, CancellationToken ct, out PixelFacts facts, SceneRange range, HdrBudgets budgets)
     {
         var whitePoint = HdrToneMap.MeasureWhitePoint(rows);
-        var content = Build(rows, whitePoint, range, budgets, composite, ct, out var isGrayscale);
+        var content = Build(rows, whitePoint, range, budgets, context, ct, out var isGrayscale);
 
         switch (content)
         {
@@ -64,7 +64,7 @@ internal static class HdrImageBuilder
         return content;
     }
 
-    private static ICompositeContent Build(LinearRows rows, float whitePoint, SceneRange range, HdrBudgets budgets, Composite composite, CancellationToken ct, out bool isGrayscale)
+    private static ICompositeContent Build(LinearRows rows, float whitePoint, SceneRange range, HdrBudgets budgets, DecodeContext context, CancellationToken ct, out bool isGrayscale)
     {
         var width = rows.Width;
         var height = rows.Height;
@@ -74,14 +74,14 @@ internal static class HdrImageBuilder
             var single = TryBuildHalfFloat(rows, ct, out isGrayscale);
             if (single is not null)
             {
-                composite.HdrBakedReason = null;
+                context.HdrBakedReason = null;
                 return new HdrRasterContent(single, SKImage.FromBitmap(single), whitePoint);
             }
 
             Logger.Warning($"[HdrImageBuilder] {width}x{height} does not fit as half-float; falling back to a tone-mapped 8-bit decode (HDR controls will not apply).");
 
-            composite.HdrBakedReason = "Half-float allocation failed.";
-            return BuildToneMapped(rows, composite, whitePoint, range, ct, out isGrayscale);
+            context.HdrBakedReason = "Half-float allocation failed.";
+            return BuildToneMapped(rows, context, whitePoint, range, ct, out isGrayscale);
         }
 
         var halfFloatBytes = pixels * 8;
@@ -95,8 +95,8 @@ internal static class HdrImageBuilder
                              $"{budgets.TiledSceneBytes / 1024 / 1024} MB scene-referred budget " +
                              $"({halfFloatBytes / 1024 / 1024} MB); keeping the whole image as light.");
 
-                composite.HdrBakedReason = null;
-                return RasterContentBuilder.Build(tiled, composite, whitePoint);
+                context.HdrBakedReason = null;
+                return RasterContentBuilder.Build(tiled, context, whitePoint);
             }
         }
 
@@ -105,9 +105,9 @@ internal static class HdrImageBuilder
                      $"{budgets.TiledSceneBytes / 1024 / 1024} MB scene-referred tile budget; keeping the " +
                      "tiles as 8-bit compressed light instead (halves the footprint, controls stay live).");
 
-        composite.HdrBakedReason = null;
+        context.HdrBakedReason = null;
 
-        return BuildCompressed(rows, composite, whitePoint, ct, out isGrayscale);
+        return BuildCompressed(rows, context, whitePoint, ct, out isGrayscale);
     }
 
     private static string DescribeDynamicRange(float whitePoint)
@@ -168,14 +168,14 @@ internal static class HdrImageBuilder
         }
     }
 
-    private static ICompositeContent BuildToneMapped(LinearRows rows, Composite composite, float whitePoint, SceneRange range, CancellationToken ct, out bool isGrayscale)
+    private static ICompositeContent BuildToneMapped(LinearRows rows, DecodeContext context, float whitePoint, SceneRange range, CancellationToken ct, out bool isGrayscale)
     {
         var info = new SKImageInfo(rows.Width, rows.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul, SKColorSpace.CreateSrgb());
         var bitmap = new SKBitmap(info);
 
         try
         {
-            HdrToneMap.ToBitmap(rows, bitmap, whitePoint, range, ct, out isGrayscale);
+            HdrToneMap.ToBitmap(rows, bitmap, whitePoint, range, context.Options.Curve, ct, out isGrayscale);
         }
         catch
         {
@@ -184,14 +184,14 @@ internal static class HdrImageBuilder
         }
 
         // Large by definition at this point, so the builder decides between one texture and tiles.
-        var content = RasterContentBuilder.Build(bitmap, composite);
+        var content = RasterContentBuilder.Build(bitmap, context);
         if (content is RasterLargeContent large)
-            AttachScenePreview(large, rows, whitePoint, ct);
+            AttachScenePreview(large, rows, whitePoint, context.Options, ct);
 
         return content;
     }
 
-    private static ICompositeContent BuildCompressed(LinearRows rows, Composite composite, float whitePoint, CancellationToken ct, out bool isGrayscale)
+    private static ICompositeContent BuildCompressed(LinearRows rows, DecodeContext context, float whitePoint, CancellationToken ct, out bool isGrayscale)
     {
         var info = new SKImageInfo(rows.Width, rows.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul, SKColorSpace.CreateSrgb());
         var bitmap = new SKBitmap(info);
@@ -206,9 +206,9 @@ internal static class HdrImageBuilder
             throw;
         }
 
-        var content = RasterContentBuilder.Build(bitmap, composite, whitePoint, SceneEncoding.Compressed);
+        var content = RasterContentBuilder.Build(bitmap, context, whitePoint, SceneEncoding.Compressed);
         if (content is RasterLargeContent large)
-            AttachScenePreview(large, rows, whitePoint, ct);
+            AttachScenePreview(large, rows, whitePoint, context.Options, ct);
 
         return content;
     }
@@ -220,11 +220,11 @@ internal static class HdrImageBuilder
     /// <remarks>
     /// About 130 MB for a 128 MP panorama. On failure the tone-mapped preview stands.
     /// </remarks>
-    private static void AttachScenePreview(RasterLargeContent large, LinearRows rows, float whitePoint, CancellationToken ct)
+    private static void AttachScenePreview(RasterLargeContent large, LinearRows rows, float whitePoint, DecodeOptions options, CancellationToken ct)
     {
         try
         {
-            var (targetWidth, targetHeight) = RasterContentBuilder.PreviewSize(rows.Width, rows.Height);
+            var (targetWidth, targetHeight) = options.PreviewSize(rows.Width, rows.Height);
 
             var preview = DownsampleToHalfFloat(rows, targetWidth, targetHeight, ct);
             if (preview is null)

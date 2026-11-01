@@ -15,32 +15,33 @@ namespace Lyra.Imaging.Decoding.Decoders;
 
 internal class PsdDecoder : DecoderBase
 {
-    public override bool CanDecode(ImageFormatType format) => format is ImageFormatType.Psd or ImageFormatType.Psb;
+    public override IReadOnlyList<ImageFormatType> Formats { get; } = [ImageFormatType.Psd, ImageFormatType.Psb];
 
-    protected override void Decode(Composite composite, string path, CancellationToken ct)
+    protected override void Decode(DecodeContext context, CancellationToken ct)
     {
-        var header = ReadAndProcessHeader(path, composite);
-        var isLarge = (long)header.Width * header.Height * 4L >= DecodePolicy.SingleTextureCeilingBytes;
+        var path = context.Source.RequireFile();
+
+        var header = ReadAndProcessHeader(path, context);
+        var isLarge = !DecodePolicy.FitsOneTexture(header.Width, header.Height, bytesPerPixel: 4);
 
         if (!isLarge)
-            DecodeSmallPsd(composite, ct);
+            DecodeSmallPsd(context, ct);
         else
-            DecodeLargePsd(path, header, composite, ct);
+            DecodeLargePsd(path, header, context, ct);
     }
 
-    private static FileHeader ReadAndProcessHeader(string path, Composite composite)
+    private static FileHeader ReadAndProcessHeader(string path, DecodeContext context)
     {
         try
         {
-            using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), composite.ReportTransferred, composite.CompleteTransfer);
+            using var stream = context.Source.OpenHead();
             var header = PsdDocument.ReadHeader(stream);
 
-            composite.FullWidth = header.Width;
-            composite.FullHeight = header.Height;
-            composite.ReportPixelCount(header.Width, header.Height);
-            composite.AddFormatSpecific("Color Mode", $"{header.ColorMode}");
-            composite.AddFormatSpecific("Channels", $"{header.NumberOfChannels}");
-            composite.AddFormatSpecific("Depth per Channel", $"{header.Depth}-bit");
+            context.SetFullSize(header.Width, header.Height);
+            context.ReportPixelCount(header.Width, header.Height);
+            context.AddFormatSpecific("Color Mode", $"{header.ColorMode}");
+            context.AddFormatSpecific("Channels", $"{header.NumberOfChannels}");
+            context.AddFormatSpecific("Depth per Channel", $"{header.Depth}-bit");
 
             return header;
         }
@@ -51,54 +52,69 @@ internal class PsdDecoder : DecoderBase
         }
     }
 
-    private static void DecodeSmallPsd(Composite composite, CancellationToken ct)
+    private static void DecodeSmallPsd(DecodeContext context, CancellationToken ct)
     {
-        using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(composite.FileInfo.FullName), composite.ReportTransferred, composite.CompleteTransfer);
+        var path = context.Source.RequireFile();
+        
+        using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), context.ReportTransferred, context.CompleteTransfer);
         var psd = PsdDocument.ReadDocument(stream);
-        composite.ExifInfo = ReadMetadata(psd, stream, composite.FileInfo.FullName);
-        composite.PsdLayers = psd.DecodeLayerRecords(stream);
-        composite.Structure = PsdStructure.Describe(psd);
+        context.ExifInfo = ReadMetadata(psd, stream, path);
+        context.PsdLayers = psd.DecodeLayerRecords(stream);
+        context.Structure = PsdStructure.Describe(psd);
 
         stream.Position = 0;
         using var surface = psd.Decode(stream, null, null, ct);
 
-        ProcessMetadata(psd.PsdMetadata, composite);
-        composite.Content = new RasterContent(ToImage(surface));
+        ProcessMetadata(psd.PsdMetadata, context);
+        context.Content = new RasterContent(ToImage(surface));
     }
 
     #region Large PSD (preview + tiled decode)
 
-    private void DecodeLargePsd(string path, FileHeader header, Composite composite, CancellationToken ct)
+    private void DecodeLargePsd(string path, FileHeader header, DecodeContext context, CancellationToken ct)
     {
         var rasterLarge = new RasterLargeContent(header.Width, header.Height);
-        composite.Content = rasterLarge;
+
+        PsdDocument psd;
+        TiledCompositeImage tiled;
+        RasterTileSource tileSource;
+
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+
+            using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), context.ReportTransferred, context.CompleteTransfer);
+            psd = PsdDocument.ReadDocument(stream);
+            context.ExifInfo = ReadMetadata(psd, stream, path);
+            context.PsdLayers = psd.DecodeLayerRecords(stream);
+            context.Structure = PsdStructure.Describe(psd);
+
+            stream.Position = 0;
+            DecodePreview(psd, stream, rasterLarge, context.Options, ct);
+
+            tiled = psd.CreateTiledComposite(stream, maxBytesPerTile: DecodePolicy.MaxTileDecodeBytes, tileEdgeHint: null, outputFormat: null);
+            tileSource = SetupTileSource(rasterLarge, tiled);
+        }
+        catch
+        {
+            rasterLarge.Dispose();
+            throw;
+        }
+
+        // Published whole: the preview, and the grid the tiles stream into.
+        context.Content = rasterLarge;
+        context.SignalReady();
+
+        ProcessMetadata(psd.PsdMetadata, context);
 
         ct.ThrowIfCancellationRequested();
 
-        using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), composite.ReportTransferred, composite.CompleteTransfer);
-        var psd = PsdDocument.ReadDocument(stream);
-        composite.ExifInfo = ReadMetadata(psd, stream, path);
-        composite.PsdLayers = psd.DecodeLayerRecords(stream);
-        composite.Structure = PsdStructure.Describe(psd);
-
-        stream.Position = 0;
-        DecodePreview(psd, stream, rasterLarge, ct);
-        composite.SignalReady();
-
-        ProcessMetadata(psd.PsdMetadata, composite);
-
-        ct.ThrowIfCancellationRequested();
-        stream.Position = 0;
-
-        var tiled = psd.CreateTiledComposite(stream, maxBytesPerTile: DecodePolicy.MaxTileDecodeBytes, tileEdgeHint: null, outputFormat: null);
-        var tileSource = SetupTileSource(rasterLarge, tiled);
-
-        ScheduleTileDecode(path, psd, tiled, tileSource, rasterLarge, composite, ct);
+        ScheduleTileDecode(path, psd, tiled, tileSource, rasterLarge, context, ct);
     }
 
-    private static void DecodePreview(PsdDocument psd, Stream stream, RasterLargeContent rasterLarge, CancellationToken ct)
+    private static void DecodePreview(PsdDocument psd, Stream stream, RasterLargeContent rasterLarge, DecodeOptions options, CancellationToken ct)
     {
-        var (maxWidth, maxHeight) = RasterContentBuilder.PreviewBounds();
+        var (maxWidth, maxHeight) = (options.PreviewWidth, options.PreviewHeight);
 
         Logger.Debug($"[PsdDecoder] Preview size: {maxWidth}x{maxHeight}");
 
@@ -127,45 +143,33 @@ internal class PsdDecoder : DecoderBase
         TiledCompositeImage tiled,
         RasterTileSource tileSource,
         RasterLargeContent rasterLarge,
-        Composite composite,
+        DecodeContext context,
         CancellationToken ct)
     {
-        // Not passing ct to Task.Run: the body must always run so the finally below signals
-        // completion (the loader defers composite disposal on BackgroundDecodeTask).
-        composite.BackgroundDecodeTask = Task.Run(() =>
+        // The tile pass holds its thread throughout, so it stays off the load's workers.
+        context.ContinueInBackground(token =>
         {
-            try
-            {
-                ct.ThrowIfCancellationRequested();
+            token.ThrowIfCancellationRequested();
 
-                using var tileStream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer);
-                tileStream.Position = 0;
+            using var tileStream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), context.ReportTransferred, context.CompleteTransfer);
 
-                var bandOrder = TileDecodeScheduler.BuildBandOrder(tiled.TilesX, tiled.TilesY);
+            var bandOrder = TileDecodeScheduler.BuildBandOrder(tiled.TilesX, tiled.TilesY);
 
-                Logger.Debug($"[PsdDecoder] Tiled: {tiled.TilesX}x{tiled.TilesY}, tile={tiled.TileWidth}x{tiled.TileHeight}");
-                Logger.Debug($"[PsdDecoder] Compression: {psd.ImageData.CompressionType}");
-                Logger.Debug($"[PsdDecoder] BandOrder head: {string.Join(", ", bandOrder.Take(8))}...");
+            Logger.Debug($"[PsdDecoder] Tiled: {tiled.TilesX}x{tiled.TilesY}, tile={tiled.TileWidth}x{tiled.TileHeight}");
+            Logger.Debug($"[PsdDecoder] Compression: {psd.ImageData.CompressionType}");
+            Logger.Debug($"[PsdDecoder] BandOrder head: {string.Join(", ", bandOrder.Take(8))}...");
 
-                psd.DecodeTiles(
-                    tileStream,
-                    tiled,
-                    bandOrder,
-                    outputFormat: null,
-                    maxSurfaceBytes: null,
-                    onTileReady: (x, y) => OnTileReady(x, y, tiled, tileSource, rasterLarge, ct),
-                    ct);
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                Logger.Warning($"[PsdDecoder] Tile decode failed: {path}\n{ex}");
-            }
-            finally
-            {
-                composite.SignalComplete();
-            }
-        });
+            psd.DecodeTiles(
+                tileStream,
+                tiled,
+                bandOrder,
+                outputFormat: null,
+                maxSurfaceBytes: null,
+                onTileReady: (x, y) => OnTileReady(x, y, tiled, tileSource, rasterLarge, token),
+                token);
+
+            return Task.CompletedTask;
+        }, BackgroundSchedule.ThreadPool, ct);
     }
 
     private static void OnTileReady(
@@ -225,13 +229,13 @@ internal class PsdDecoder : DecoderBase
         return MetadataProcessor.ParsePhotoshopResources(resources, path);
     }
 
-    private static void ProcessMetadata(PsdMetadata metadata, Composite composite)
+    private static void ProcessMetadata(PsdMetadata metadata, DecodeContext context)
     {
-        composite.AddFormatSpecific("Compression", $"{metadata.CompressionType ?? "none"}");
-        composite.AddFormatSpecific("Embedded ICC Profile", $"{metadata.EmbeddedIccProfileName ?? "none"}");
+        context.AddFormatSpecific("Compression", $"{metadata.CompressionType ?? "none"}");
+        context.AddFormatSpecific("Embedded ICC Profile", $"{metadata.EmbeddedIccProfileName ?? "none"}");
 
         if (metadata.EffectiveIccProfileName is not "Embedded ICC Profile")
-            composite.AddFormatSpecific("Effective ICC Profile", $"{metadata.EffectiveIccProfileName ?? "none"}");
+            context.AddFormatSpecific("Effective ICC Profile", $"{metadata.EffectiveIccProfileName ?? "none"}");
     }
 
     #endregion

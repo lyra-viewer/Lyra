@@ -7,6 +7,7 @@ using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Content.Tiling;
 using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders.Raw;
+using Lyra.Imaging.Detection;
 
 namespace Lyra.Imaging.Loading;
 
@@ -445,11 +446,26 @@ internal class ImageLoader : IDisposable
 
         try
         {
-            var decoder = DecoderManager.GetDecoder(composite.ImageFormatType);
-
             ForegroundYield.WaitForForeground(ct);
 
-            composite.State = CompositeState.Loading;
+            var detection = FormatDetector.Detect(composite.FileInfo.FullName, out var head);
+            composite.Head = head;
+            if (detection.IsMisnamed)
+            {
+                Logger.Warning(typeof(ImageLoader), $"{composite.FileInfo.Name} reads as {detection.Format} from its contents, not as its name says; decoding it as that.");
+
+                composite.ImageFormatType = detection.Format;
+                composite.Warning = LoadWarning.Misnamed(extension, detection.Format.Description());
+                
+                extension = ImageFormat.PrimaryExtension(detection.Format) ?? extension;
+                ApplyEstimate(composite, extension, fileSize, pixels: null);
+            }
+
+            var decoder = DecoderManager.GetDecoder(composite.ImageFormatType);
+
+            if (!composite.TryTransition(CompositeState.Pending, CompositeState.Loading))
+                throw new OperationCanceledException($"{composite.FileInfo.Name} was {composite.State} before it began loading.");
+
             composite.BeginLoadTiming();
 
             ct.ThrowIfCancellationRequested();
@@ -509,7 +525,7 @@ internal class ImageLoader : IDisposable
         }
         catch (OperationCanceledException)
         {
-            composite.State = CompositeState.Cancelled;
+            composite.TryTransition(CompositeState.Cancelled);
         }
         catch (Exception ex)
         {

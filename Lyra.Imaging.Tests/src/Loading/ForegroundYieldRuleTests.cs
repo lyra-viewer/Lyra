@@ -28,7 +28,7 @@ public class ForegroundYieldRuleTests : IDisposable
         if (state != CompositeState.Pending)
             composite.BeginLoadTiming();
 
-        composite.State = state;
+        composite.MoveTo(state);
         return composite;
     }
 

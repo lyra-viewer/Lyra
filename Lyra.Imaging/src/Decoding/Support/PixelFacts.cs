@@ -4,11 +4,11 @@ namespace Lyra.Imaging.Decoding.Support;
 
 internal readonly record struct PixelFacts(bool IsGrayscale, string? DynamicRange = null)
 {
-    public void Describe(Composite composite)
+    public void Describe(DecodeContext context)
     {
         if (DynamicRange is not null)
-            composite.AddFormatSpecific("Dynamic Range", DynamicRange);
+            context.AddFormatSpecific("Dynamic Range", DynamicRange);
 
-        composite.AddFormatSpecific("Grayscale", IsGrayscale);
+        context.AddFormatSpecific("Grayscale", IsGrayscale);
     }
 }

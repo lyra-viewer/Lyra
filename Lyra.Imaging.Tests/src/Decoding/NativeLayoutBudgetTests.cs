@@ -79,8 +79,11 @@ public class NativeLayoutBudgetTests
     [Fact]
     public void ADegenerateDirectoryIsRefused()
     {
-        Assert.Throws<InvalidOperationException>(() => TiffNativeLayout.RequireWithinBudget("empty.tif", Odd(0, 4096, 12, 3), isFloat: false));
-        Assert.Throws<InvalidOperationException>(() => TiffNativeLayout.RequireWithinBudget("empty.tif", Odd(4096, 0, 12, 3), isFloat: false));
-        Assert.Throws<InvalidOperationException>(() => TiffNativeLayout.RequireWithinBudget("huge.tif", Odd(uint.MaxValue, 4096, 12, 3), isFloat: false));
+        Assert.Equal(LoadFailureKind.DecodeFailed, Refusal(Odd(0, 4096, 12, 3)));
+        Assert.Equal(LoadFailureKind.DecodeFailed, Refusal(Odd(4096, 0, 12, 3)));
+        Assert.Equal(LoadFailureKind.TooLarge, Refusal(Odd(uint.MaxValue, 4096, 12, 3)));
     }
+
+    private static LoadFailureKind Refusal(TiffNative.DirectoryInfo info) =>
+        Assert.Throws<LoadFailureException>(() => TiffNativeLayout.RequireWithinBudget("odd.tif", info, isFloat: false)).Kind;
 }

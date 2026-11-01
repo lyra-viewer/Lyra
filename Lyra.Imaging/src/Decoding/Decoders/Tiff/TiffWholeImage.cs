@@ -1,5 +1,4 @@
 using Lyra.Common;
-using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Decoding.Support;
 using Lyra.Imaging.Interop;
@@ -28,18 +27,18 @@ internal static class TiffWholeImage
     }
 
     /// <summary>
-    /// With a <paramref name="composite"/>, the file is fetched whole first - into memory, or to
+    /// With a <paramref name="context"/>, the file is fetched whole first - into memory, or to
     /// local scratch when too large - so libtiff's small reads land on a local copy.
     /// </summary>
-    public static TiffRead Read(string path, Composite? composite, CancellationToken ct, out bool metadataParsed)
+    public static TiffRead Read(string path, DecodeContext? context, CancellationToken ct, out bool metadataParsed)
     {
         metadataParsed = false;
 
-        var fileSize = composite?.FileSizeBytes ?? 0;
+        var fileSize = context?.Source.Length ?? 0;
 
-        if (composite is not null && TiffNative.MemoryLoadAvailable && NativeFileBuffer.ShouldBuffer(fileSize))
+        if (context is not null && TiffNative.MemoryLoadAvailable && NativeFileBuffer.ShouldBuffer(fileSize))
         {
-            using var data = TiffFetch.IntoMemory(path, composite, ct)!;
+            using var data = TiffFetch.IntoMemory(path, context, ct)!;
 
             metadataParsed = true;
 
@@ -51,25 +50,25 @@ internal static class TiffWholeImage
 
             Logger.Warning("[TiffDecoder] Native library has no memory entry point; falling back to path decode.");
         }
-        else if (composite is not null && fileSize > 0 && !NativeFileBuffer.ShouldBuffer(fileSize))
+        else if (context is not null && fileSize > 0 && !NativeFileBuffer.ShouldBuffer(fileSize))
         {
-            using var scratch = ScratchFileCopy.TryCreate(path, fileSize, ct, out var copyMs, composite.ReportTransferred);
+            using var scratch = ScratchFileCopy.TryCreate(path, fileSize, ct, out var copyMs, context.ReportTransferred);
             if (scratch is not null)
             {
-                composite.CompleteTransfer(scratch.BytesCopied, copyMs);
+                context.CompleteTransfer(scratch.BytesCopied, copyMs);
                 ct.ThrowIfCancellationRequested();
 
-                composite.ExifInfo = MetadataProcessor.ParseMetadata(scratch.Path);
+                context.ExifInfo = MetadataProcessor.ParseMetadata(scratch.Path);
                 metadataParsed = true;
 
                 return TiffReads.LocalWholeImage(scratch.Path);
             }
         }
 
-        var transfer = new IoTally(composite);
+        var transfer = new IoTally(context);
         var read = TiffReads.WholeImage(path, fileSize > 0 ? fileSize : TiffReads.SafeFileLength(path), ct, transfer);
 
-        transfer.ReportTo(composite);
+        transfer.ReportTo(context);
 
         return read;
     }

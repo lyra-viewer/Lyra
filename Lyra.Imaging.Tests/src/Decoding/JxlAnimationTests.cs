@@ -17,7 +17,7 @@ namespace Lyra.Imaging.Tests.Decoding;
 public class JxlAnimationTests
 {
     // 16x12, three frames: red 100 ms; a 4x4 green layer at 2,4 for 200 ms; blue 50 ms (cjxl -d 0 of an APNG).
-    private const string ThreeFrames =
+    internal const string ThreeFrames =
         "/wpYMMEA1gQIACCZAABEAEsYixWAXep/Aul2Aswj/f0BCIAQgAABBEQiCwBIAEsYixXCSUEOAEB/AAAAQH8AAAgAoEwAAEQASxiLFYBd6n+C/nYC7pv8/QE=";
 
     // 16x12, two frames: the left half clear and the right red, then blue.
