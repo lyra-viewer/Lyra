@@ -58,7 +58,7 @@ internal sealed class WebpDecoder : SkiaDecoder
 
         AnimatedContent.Publish(
             composite, path, codec,
-            AnimatedContent.Opener(bytes, path),
+            AnimatedContent.Opener(bytes, composite),
             () => WebpFrameSet.Describe(frames, chunks, width, height),
             explain: null,
             "WebP",

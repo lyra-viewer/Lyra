@@ -47,6 +47,20 @@ internal static class DecodePolicy
     /// </summary>
     public const long ResidentPageBudgetBytes = 256L * 1024 * 1024;
 
+    /// <summary>What a 3D model may hold resident as decoded textures.</summary>
+    public static long ResidentTextureBudgetBytes => ResidentTextureBudget(Loading.ImageLoader.CacheBudgetBytes);
+
+    internal static long ResidentTextureBudget(long cacheBudgetBytes) => Math.Clamp(cacheBudgetBytes / 4, ResidentPageBudgetBytes, 2L * 1024 * 1024 * 1024);
+
+    /// <summary>
+    /// The longest side of the reduced copy kept of a dropped rendition, shown while it decodes
+    /// again. Sharp enough at fit-to-window on most displays, and at 16 MiB a copy, cheap to keep.
+    /// </summary>
+    public const int StandInEdge = 2048;
+
+    /// <summary>What one container may hold in reduced copies of dropped renditions.</summary>
+    public const long StandInBudgetBytes = 160L * 1024 * 1024;
+
     /// <summary>
     /// What one band of a streaming preview pass may cost. Larger than a tile budget because the
     /// band is transient: it is read, averaged into the preview, and released before the next.

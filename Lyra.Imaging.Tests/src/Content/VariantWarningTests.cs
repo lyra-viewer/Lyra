@@ -43,6 +43,28 @@ public class VariantWarningTests
     }
 
     [Fact]
+    public void TheVersion_MovesWithEveryDescriptionFailureAndWarning_AndNothingElse()
+    {
+        using var set = Set(3);
+        var versions = new List<int> { set.Version };
+
+        set.RecordWarning(1, Damaged);
+        versions.Add(set.Version);
+
+        set.RecordUnavailable(2, new LoadFailure(LoadFailureKind.NotFound, "gone"));
+        versions.Add(set.Version);
+
+        set.Redescribe(0, new ImageVariant("Frame 1", 20, 20, "redrawn", 64));
+        versions.Add(set.Version);
+
+        set.Redescribe(0, set.Variants[0]);
+        set.RecordWarning(1, Damaged);
+
+        Assert.Equal(versions.Count, versions.Distinct().Count());
+        Assert.Equal(versions[^1], set.Version);
+    }
+
+    [Fact]
     public void AWarning_StaysWhenItsRenditionIsShown()
     {
         using var set = Set(3);

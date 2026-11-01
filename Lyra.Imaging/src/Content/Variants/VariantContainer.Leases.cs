@@ -11,14 +11,18 @@ public sealed partial class VariantContainer
 
     /// <summary>
     /// Lends a decoded rendition, for another to be made from it without decoding it again. The
-    /// content stays alive until the lease is disposed, even if it is trimmed meanwhile. Null when
-    /// the rendition is not decoded.
+    /// content stays alive until the lease is disposed, even if it is trimmed meanwhile. With
+    /// <paramref name="orStandIn"/>, lends the reduced stand-in when the rendition is not resident.
+    /// Null when there is neither.
     /// </summary>
-    public ContentLease? Borrow(int index)
+    public ContentLease? Borrow(int index, bool orStandIn = false)
     {
         lock (_gate)
         {
-            if (_disposed || index < 0 || index >= _contents.Count || _contents[index] is not { } content)
+            if (_disposed || index < 0 || index >= _contents.Count)
+                return null;
+
+            if ((_contents[index] ?? (orStandIn ? _standIns.GetValueOrDefault(index) : null)) is not { } content)
                 return null;
 
             _leases[content] = _leases.GetValueOrDefault(content) + 1;

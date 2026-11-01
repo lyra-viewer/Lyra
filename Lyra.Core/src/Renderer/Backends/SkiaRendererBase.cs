@@ -279,6 +279,8 @@ public abstract class SkiaRendererBase : IDisposable, IDrawableSizeAware
             _attached = false;
             Unsubscribe<DrawableSizeChangedEvent>(OnDrawableSizeChanged);
         }
+
+        (_contentDrawer as IDisposable)?.Dispose();
     }
 
     private static SKRect ComputeVisibleFullRect(float imageW, float imageH, int windowPxW, int windowPxH, float displayScale, float zoomPercentage, SKPoint offsetPx)

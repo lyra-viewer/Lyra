@@ -7,6 +7,7 @@ using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Content.Tiling;
 using Lyra.Imaging.Content.Variants;
 using Lyra.Imaging.Decoding.Decoders.Raw;
+using Lyra.Imaging.Detection;
 
 namespace Lyra.Imaging.Loading;
 
@@ -445,9 +446,21 @@ internal class ImageLoader : IDisposable
 
         try
         {
-            var decoder = DecoderManager.GetDecoder(composite.ImageFormatType);
-
             ForegroundYield.WaitForForeground(ct);
+
+            var detection = FormatDetector.Detect(composite.FileInfo.FullName);
+            if (detection.IsMisnamed)
+            {
+                Logger.Warning(typeof(ImageLoader), $"{composite.FileInfo.Name} reads as {detection.Format} from its contents, not as its name says; decoding it as that.");
+
+                composite.ImageFormatType = detection.Format;
+                composite.Warning = LoadWarning.Misnamed(extension, detection.Format.Description());
+                
+                extension = ImageFormat.PrimaryExtension(detection.Format) ?? extension;
+                ApplyEstimate(composite, extension, fileSize, pixels: null);
+            }
+
+            var decoder = DecoderManager.GetDecoder(composite.ImageFormatType);
 
             composite.State = CompositeState.Loading;
             composite.BeginLoadTiming();

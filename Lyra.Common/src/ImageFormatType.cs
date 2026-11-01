@@ -24,9 +24,19 @@ public enum ImageFormatType
     [Description("OpenEXR Image")]
     Exr,
 
+    [NoDuplicateScan]
+    [FileExtension([".fbx"])]
+    [Description("FBX 3D Model")]
+    Fbx,
+
     [FileExtension([".gif"])]
     [Description("GIF Image")]
     Gif,
+
+    [NoDuplicateScan]
+    [FileExtension([".gltf", ".glb"])]
+    [Description("glTF 3D Model")]
+    Gltf,
 
     [FileExtension([".hdr"])]
     [Description("Radiance HDR Image")]
@@ -120,3 +130,6 @@ public class DisabledPreloadAttribute : Attribute;
 
 [AttributeUsage(AttributeTargets.Field)]
 public class NoPerceptualHashAttribute : Attribute;
+
+[AttributeUsage(AttributeTargets.Field)]
+public class NoDuplicateScanAttribute : Attribute;

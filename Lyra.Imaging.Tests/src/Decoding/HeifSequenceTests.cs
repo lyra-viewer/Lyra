@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Runtime.InteropServices;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Content.Variants;
@@ -18,15 +17,6 @@ namespace Lyra.Imaging.Tests.Decoding;
 public class HeifSequenceTests
 {
     private const uint Red = 0xFFFF0000, Green = 0xFF00FF00, Blue = 0xFF0000FF;
-
-    private static readonly string[] LibheifCandidates = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-        ? ["libheif.dll", "heif.dll"]
-        : RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-            ? ["libheif.so.1", "libheif.so"]
-            : ["/opt/homebrew/opt/libheif/lib/libheif.dylib", "/usr/local/opt/libheif/lib/libheif.dylib", "libheif.dylib"];
-
-    private static readonly Lazy<bool> LibheifReady = new(() =>
-        NativeWrapper.TryLoadSystem("libheif", LibheifCandidates, typeof(HeifDecoder).Assembly));
 
     [Fact]
     public void AnAnimatedAvif_IsPublishedAsFrames()
@@ -163,7 +153,7 @@ public class HeifSequenceTests
         ZeroTrackSizes(file);
         DropPrimaryItem(file);
 
-        if (!LibheifReady.Value)
+        if (!Libheif.Ready)
             Assert.Skip("libheif not available on this machine.");
 
         using var temp = new TempFile(file);
@@ -206,7 +196,7 @@ public class HeifSequenceTests
         StartEditsAt(file, mediaTime: 1);
         DropPrimaryItem(file);
 
-        if (!LibheifReady.Value)
+        if (!Libheif.Ready)
             Assert.Skip("libheif not available on this machine.");
 
         using var temp = new TempFile(file);
@@ -243,7 +233,7 @@ public class HeifSequenceTests
     {
         var file = SequenceOnly(fixture);
 
-        if (!LibheifReady.Value)
+        if (!Libheif.Ready)
             Assert.Skip("libheif not available on this machine.");
 
         using var temp = new TempFile(file);
@@ -300,7 +290,7 @@ public class HeifSequenceTests
 
     private static void WithDecoded(byte[] file, Action<Composite> assert)
     {
-        if (!LibheifReady.Value)
+        if (!Libheif.Ready)
             Assert.Skip("libheif not available on this machine.");
 
         using var temp = new TempFile(file);

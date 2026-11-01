@@ -8,6 +8,7 @@ public enum LoadFailureKind
     SourceUnavailable,
     TooLarge,
     DecodeFailed,
+    NothingToShow,
     OutOfMemory,
     Unknown
 }
@@ -25,6 +26,7 @@ public sealed record LoadFailure(LoadFailureKind Kind, string Detail, string? Pa
         LoadFailureKind.SourceUnavailable => "Could not read the file",
         LoadFailureKind.TooLarge          => "Image too large to open",
         LoadFailureKind.DecodeFailed      => "Could not decode the image",
+        LoadFailureKind.NothingToShow     => "Nothing to show",
         LoadFailureKind.OutOfMemory       => "Not enough memory to open the image",
         _                                 => "Could not open the image"
     };

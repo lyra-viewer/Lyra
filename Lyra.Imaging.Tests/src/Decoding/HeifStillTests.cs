@@ -103,7 +103,7 @@ public class HeifStillTests
     [Fact]
     public void LibheifReadsOnlyWhatItNeeds()
     {
-        if (!LibheifReady.Value)
+        if (!Libheif.Ready)
             Assert.Skip("libheif not available on this machine.");
 
         var padding = new byte[1024 * 1024];
@@ -122,7 +122,7 @@ public class HeifStillTests
     [Fact]
     public void TheFileLength_IsAskedForOnce()
     {
-        if (!LibheifReady.Value)
+        if (!Libheif.Ready)
             Assert.Skip("libheif not available on this machine.");
 
         var stream = new CountingStream(Convert.FromBase64String(HeifStillFixtures.HeicThumbnailAndExif));
@@ -137,7 +137,7 @@ public class HeifStillTests
     [Fact]
     public void ACancelledRead_IsACancellation()
     {
-        if (!LibheifReady.Value)
+        if (!Libheif.Ready)
             Assert.Skip("libheif not available on this machine.");
 
         using var cancelled = new CancellationTokenSource();
@@ -211,7 +211,7 @@ public class HeifStillTests
     /// <summary>The load failure the decoder's exception becomes, as the loader turns it into one.</summary>
     private static LoadFailure Failure(byte[] file)
     {
-        if (!LibheifReady.Value)
+        if (!Libheif.Ready)
             Assert.Skip("libheif not available on this machine.");
 
         using var temp = new TempFile(file);
@@ -223,17 +223,9 @@ public class HeifStillTests
         return LoadFailure.From(thrown, temp.Path);
     }
 
-    private static readonly string[] LibheifCandidates = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-        ? ["libheif.dll", "heif.dll"]
-        : RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-            ? ["libheif.so.1", "libheif.so"]
-            : ["/opt/homebrew/opt/libheif/lib/libheif.dylib", "/usr/local/opt/libheif/lib/libheif.dylib", "libheif.dylib"];
-
-    private static readonly Lazy<bool> LibheifReady = new(() => NativeWrapper.TryLoadSystem("libheif", LibheifCandidates, typeof(HeifDecoder).Assembly));
-
     private static void WithFile(string base64, Action<string> act)
     {
-        if (!LibheifReady.Value)
+        if (!Libheif.Ready)
             Assert.Skip("libheif not available on this machine.");
 
         using var temp = new TempFile(Convert.FromBase64String(base64));
@@ -244,7 +236,7 @@ public class HeifStillTests
 
     private static void WithDecoded(byte[] file, Action<Composite> assert)
     {
-        if (!LibheifReady.Value)
+        if (!Libheif.Ready)
             Assert.Skip("libheif not available on this machine.");
 
         using var temp = new TempFile(file);

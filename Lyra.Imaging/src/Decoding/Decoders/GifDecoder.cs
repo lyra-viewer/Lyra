@@ -47,7 +47,7 @@ internal sealed class GifDecoder : SkiaDecoder
 
         ct.ThrowIfCancellationRequested();
 
-        var open = AnimatedContent.Opener(bytes, path);
+        var open = AnimatedContent.Opener(bytes, composite);
 
         AnimatedContent.Publish(
             composite, path, codec, open,

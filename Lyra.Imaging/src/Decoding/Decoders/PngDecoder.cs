@@ -50,7 +50,7 @@ internal sealed class PngDecoder : SkiaDecoder
 
         var damage = new FrameDamageLog();
         var info = AnimatedContent.CanvasInfo(chunks.Width, chunks.Height, ColorSpaceOf(bytes));
-        var renderer = new ApngFrameRenderer(AnimatedContent.Opener(bytes, path), chunks, info, damage.Report);
+        var renderer = new ApngFrameRenderer(AnimatedContent.Opener(bytes, composite), chunks, info, damage.Report);
         var source = new RasterFrameSource(renderer.Count, renderer.Render, renderer, composite);
 
         AnimatedContent.Publish(composite, path, source, damage, () => ApngFrameSet.Describe(chunks), "APNG", ct);

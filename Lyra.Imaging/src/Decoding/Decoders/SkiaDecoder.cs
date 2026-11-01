@@ -18,7 +18,7 @@ internal class SkiaDecoder : DecoderBase, IThumbnailDecoder
 
     protected override void Decode(Composite composite, string path, CancellationToken ct)
     {
-        using var stream = new MeasuredReadStream(DecoderIO.OpenSequentialRead(path), composite.ReportTransferred, composite.CompleteTransfer);
+        using var stream = new MeasuredReadStream(composite.OpenSequentialRead(),composite.ReportTransferred, composite.CompleteTransfer);
 
         if (TryDecodeAnimation(composite, stream, path, ct))
             return;

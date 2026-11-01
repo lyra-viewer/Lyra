@@ -2,6 +2,7 @@ using Lyra.Common;
 using Lyra.Imaging.Content.Exif;
 using Lyra.Imaging.Content.Hdr;
 using Lyra.Imaging.Content.Status;
+using Lyra.Imaging.Content.Textures;
 using Lyra.Imaging.Content.Variants;
 using Lyra.Psd.Core.Decode.Layers;
 
@@ -21,7 +22,22 @@ public sealed class Composite : IDisposable
         FileSizeBytes = ReadSize(fileInfo);
     }
 
+    /// <summary>
+    /// An image held in memory, such as a texture inside a 3D model. <paramref name="fileInfo"/>
+    /// names it and is never opened; the decoders read <see cref="Payload"/> instead.
+    /// </summary>
+    internal Composite(FileInfo fileInfo, ImageFormatType format, byte[] payload)
+    {
+        FileInfo = fileInfo;
+        ImageFormatType = format;
+        Payload = payload;
+        FileSizeBytes = payload.LongLength;
+    }
+
     public FileInfo FileInfo { get; }
+
+    /// <summary>The image's bytes when it is not a file of its own.</summary>
+    internal byte[]? Payload { get; }
 
     public long? FileSizeBytes { get; }
 
@@ -110,7 +126,7 @@ public sealed class Composite : IDisposable
     public bool IsHdrImage => IsHdrDecoded || HdrBakedReason is not null;
 
     /// <summary>Whether the pixels are still scene-referred, and so whether exposure and curve apply at draw time.</summary>
-    public bool IsHdrDecoded => Displayed is HdrRasterContent or RasterLargeContent { HasScenePreview: true };
+    public bool IsHdrDecoded => Displayed is HdrRasterContent or RasterLargeContent { HasScenePreview: true } or ContactSheetContent { HasHdrCells: true };
 
     /// <summary>What the image on screen says about where its light ends, and its own curve.</summary>
     public SceneRange DisplayedRange => Displayed switch

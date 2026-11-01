@@ -16,11 +16,14 @@ internal static class AnimatedContent
     /// <summary>Up to this size a file's bytes stay in memory for later frames.</summary>
     private const long RetainedBytesCeiling = 64L * 1024 * 1024;
 
-    /// <summary>Reopens the file for a later frame: from memory when small, else from disk.</summary>
-    public static Func<Stream> Opener(byte[] bytes, string path) =>
-        bytes.LongLength <= RetainedBytesCeiling
+    /// <summary>
+    /// Reopens the file for a later frame: from memory when small or when it never was a file,
+    /// else from disk.
+    /// </summary>
+    public static Func<Stream> Opener(byte[] bytes, Composite composite) =>
+        bytes.LongLength <= RetainedBytesCeiling || composite.Payload is not null
             ? () => new MemoryStream(bytes, writable: false)
-            : () => DecoderIO.OpenRandomAccessRead(path);
+            : () => DecoderIO.OpenRandomAccessRead(composite.FileInfo.FullName);
 
     public static SKImageInfo CanvasInfo(int width, int height, SKColorSpace? colorSpace) =>
         new(width, height, SKColorType.Rgba8888, SKAlphaType.Premul, colorSpace ?? SKColorSpace.CreateSrgb());
