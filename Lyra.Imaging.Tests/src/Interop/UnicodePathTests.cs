@@ -82,14 +82,14 @@ public class UnicodePathTests : IDisposable
     }
 
     [Fact]
-    public void TiffDecode_EndToEnd_ForAFileWhoseNameNoCodePageHolds()
+    public async Task TiffDecode_EndToEnd_ForAFileWhoseNameNoCodePageHolds()
     {
         Assert.SkipUnless(TiffNativeReady.Value, "libtiff_native not available (native wrappers not built for this platform).");
 
         var path = WriteWithAwkwardName(MinimalImageBuilder.TiffBytes(), ".tif");
 
         using var composite = new Composite(new FileInfo(path));
-        new TiffDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+        await new TiffDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken);
 
         Assert.NotNull(composite.Content);
         Assert.Equal(2f, composite.LogicalWidth);

@@ -15,7 +15,7 @@ public class ExclusiveResourceTests
     }
 
     [Fact]
-    public void ADisposeDuringWork_WaitsForTheWorkToEnd()
+    public async Task ADisposeDuringWork_WaitsForTheWorkToEnd()
     {
         var probe = new Probe();
         using var working = new ManualResetEventSlim(false);
@@ -26,7 +26,7 @@ public class ExclusiveResourceTests
             working.Set();
             finish.Wait();
             return probe.Releases;
-        }));
+        }), TestContext.Current.CancellationToken);
 
         working.Wait(TestContext.Current.CancellationToken);
         probe.Dispose();
@@ -34,7 +34,7 @@ public class ExclusiveResourceTests
         Assert.Equal(0, probe.Releases);
 
         finish.Set();
-        Assert.Equal(0, work.GetAwaiter().GetResult());
+        Assert.Equal(0, await work);
         Assert.Equal(1, probe.Releases);
     }
 

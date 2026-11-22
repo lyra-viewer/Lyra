@@ -171,11 +171,6 @@ public sealed class DirectoryTreePresenter
         }
     }
 
-    /// <summary>
-    /// True if the section should mark itself non-present (no entries).
-    /// </summary>
-    public bool IsEmpty => _directoryMap.Count == 0;
-
     private static string FindCommonRoot(List<string> paths)
     {
         if (paths.Count == 0) return "";

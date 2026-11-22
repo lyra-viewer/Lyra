@@ -10,20 +10,18 @@ public static class ImageStore
 {
     private static readonly ImageLoader ImageLoader = new();
 
+    private static readonly DecoderPrewarm Prewarmer = new(() => ImageLoader.OnScreenLoading);
+
     public static void Initialize()
     {
         _ = DecodeConstraintsProvider.Current;
         ScratchFileCopy.SweepStaleFiles();
     }
     
-    public static Composite GetImage(string path)
-    {
-        if (!IsLoading(path) && !File.Exists(path))
-            throw new FileNotFoundException($"File not found: {path}");
-
-        return ImageLoader.GetImage(path);
-    }
+    public static Composite GetImage(string path) => ImageLoader.GetImage(path);
     
+    public static void CloseCurrent() => ImageLoader.CloseCurrent();
+
     public static bool IsLoading(string path) => ImageLoader.IsLoading(path);
 
     public static void Preload(string[] paths)
@@ -45,8 +43,11 @@ public static class ImageStore
         ImageLoader.Purge(path);
     }
 
+    public static void Prewarm(IReadOnlySet<WarmTarget> targets) => Prewarmer.Request(targets);
+
     public static void SaveAndDispose()
     {
+        Prewarmer.Dispose();
         DecodeTimeEstimator.SaveTimeDataToFile();
         ImageLoader.Dispose();
     }

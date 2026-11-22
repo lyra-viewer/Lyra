@@ -63,10 +63,6 @@ internal sealed class DecodeSource
     public Stream OpenRandomAccess() =>
         _bytes is { } bytes ? new MemoryStream(bytes, writable: false) : DecoderIO.OpenRandomAccessRead(_file!);
 
-    /// <summary>For a reader that keeps the source open while the image is shown, such as an animation.</summary>
-    public Stream OpenHeld() =>
-        _bytes is { } bytes ? new MemoryStream(bytes, writable: false) : DecoderIO.OpenHeldRead(_file!);
-
     public byte[] ReadAllBytes(CancellationToken ct, out double elapsedMs, Action<long>? onProgress = null)
     {
         if (_bytes is { } bytes)

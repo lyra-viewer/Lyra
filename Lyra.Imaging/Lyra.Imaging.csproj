@@ -9,7 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Lyra.Psd" Version="0.1.5" />
+        <PackageReference Include="Lyra.Psd" Version="0.1.5" PrivateAssets="compile" />
         <PackageReference Include="SkiaSharp" Version="4.153.1" />
         <PackageReference Include="Svg.Skia" Version="5.2.3" />
     </ItemGroup>
@@ -18,6 +18,10 @@
         <ProjectReference Include="..\Lyra.Common\Lyra.Common.csproj" />
         <ProjectReference Include="..\Lyra.ManagedCodecs\Lyra.ManagedCodecs.csproj" />
         <ProjectReference Include="..\Lyra.Metadata\Lyra.Metadata.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="Resources\Warmup\*" LogicalName="Lyra.Imaging.Warmup.%(Filename)%(Extension)" />
     </ItemGroup>
 
     <ItemGroup>

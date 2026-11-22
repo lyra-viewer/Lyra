@@ -89,19 +89,6 @@ public static class TiffDirectoryReader
 
     public static bool IsBigTiff(Stream stream) => Version(stream) == BigTiffVersion;
 
-    public static bool IsBigTiff(string path)
-    {
-        try
-        {
-            using var stream = File.OpenRead(path);
-            return IsBigTiff(stream);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
-
     /// <summary>The directory tree, or null when the stream is neither a TIFF nor a BigTIFF.</summary>
     /// <param name="firstKind">The kind of the first directory, which decides the pointers followed from it: IFD0 but in CR3's EXIF and GPS blocks.</param>
     public static TiffLayout? Read(Stream stream, TiffDirectoryKind firstKind = TiffDirectoryKind.Image)

@@ -112,9 +112,9 @@ public class HeifStillTests
 
         var stream = new CountingStream([.. Convert.FromBase64String(HeifStillFixtures.AvifDisplayP3), .. padding]);
 
-        using (var file = HeifFile.Open(stream))
+        using (var file = HeifFile.Open(stream, TestContext.Current.CancellationToken))
         using (var image = file.PrimaryImage())
-        using (image.DecodeRgba(colorSpace: null, CancellationToken.None)) { }
+        using (image.DecodeRgba(colorSpace: null, TestContext.Current.CancellationToken)) { }
 
         Assert.True(stream.BytesRead < 64 * 1024, $"read {stream.BytesRead} bytes of {stream.Length}");
     }
@@ -127,9 +127,9 @@ public class HeifStillTests
 
         var stream = new CountingStream(Convert.FromBase64String(HeifStillFixtures.HeicThumbnailAndExif));
 
-        using (var file = HeifFile.Open(stream))
+        using (var file = HeifFile.Open(stream, TestContext.Current.CancellationToken))
         using (var image = file.PrimaryImage())
-        using (image.DecodeRgba(colorSpace: null, CancellationToken.None)) { }
+        using (image.DecodeRgba(colorSpace: null, TestContext.Current.CancellationToken)) { }
 
         Assert.Equal(1, stream.LengthQueries);
     }

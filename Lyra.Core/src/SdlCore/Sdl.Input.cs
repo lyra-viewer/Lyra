@@ -1,5 +1,5 @@
-using Lyra.FileLoader.Navigation;
 using Lyra.GUI;
+using Lyra.Session;
 using Lyra.Imaging.Content.Variants;
 using Lyra.SystemUtils;
 using SkiaSharp;
@@ -114,27 +114,27 @@ public partial class SdlCore
 
     private void NextImage()
     {
-        if (DirectoryNavigator.HasNext())
+        if (_session.Navigator.HasNext())
         {
-            DirectoryNavigator.MoveToNext();
+            _session.Navigator.MoveToNext();
             LoadImage(NavigationDirection.Forward);
         }
     }
 
     private void PreviousImage()
     {
-        if (DirectoryNavigator.HasPrevious())
+        if (_session.Navigator.HasPrevious())
         {
-            DirectoryNavigator.MoveToPrevious();
+            _session.Navigator.MoveToPrevious();
             LoadImage(NavigationDirection.Backward);
         }
     }
 
     private void FirstImage()
     {
-        if (!DirectoryNavigator.IsFirst())
+        if (!_session.Navigator.IsFirst())
         {
-            DirectoryNavigator.MoveToFirst();
+            _session.Navigator.MoveToFirst();
             // Correct - if the first image was deleted, the direction should be forward.
             LoadImage(NavigationDirection.Forward);
         }
@@ -142,9 +142,9 @@ public partial class SdlCore
 
     private void LastImage()
     {
-        if (!DirectoryNavigator.IsLast())
+        if (!_session.Navigator.IsLast())
         {
-            DirectoryNavigator.MoveToLast();
+            _session.Navigator.MoveToLast();
             // Correct - if the first image was deleted, the direction should be backward.
             LoadImage(NavigationDirection.Backward);
         }
@@ -152,18 +152,18 @@ public partial class SdlCore
 
     private void MoveToLeftEdge()
     {
-        if (!DirectoryNavigator.IsFirst())
+        if (!_session.Navigator.IsFirst())
         {
-            DirectoryNavigator.MoveToLeftEdge();
+            _session.Navigator.MoveToLeftEdge();
             LoadImage(NavigationDirection.Backward);
         }
     }
 
     private void MoveToRightEdge()
     {
-        if (!DirectoryNavigator.IsLast())
+        if (!_session.Navigator.IsLast())
         {
-            DirectoryNavigator.MoveToRightEdge();
+            _session.Navigator.MoveToRightEdge();
             LoadImage(NavigationDirection.Forward);
         }
     }
@@ -180,13 +180,13 @@ public partial class SdlCore
 
     private void NextGroup()
     {
-        if (DirectoryNavigator.MoveToNextGroup())
+        if (_session.Navigator.MoveToNextGroup())
             LoadImage(NavigationDirection.Forward);
     }
 
     private void PreviousGroup()
     {
-        if (DirectoryNavigator.MoveToPreviousGroup())
+        if (_session.Navigator.MoveToPreviousGroup())
             LoadImage(NavigationDirection.Backward);
     }
 
@@ -248,7 +248,7 @@ public partial class SdlCore
 
     private void OpenFileExplorer()
     {
-        var path = DirectoryNavigator.GetCurrent() ?? DirectoryNavigator.GetTopDirectory();
+        var path = _session.Navigator.GetCurrent() ?? _session.Navigator.GetTopDirectory();
         if (path != null)
             FileExplorerOpener.RevealPath(path);
     }

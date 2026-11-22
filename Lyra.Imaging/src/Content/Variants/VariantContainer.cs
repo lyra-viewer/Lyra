@@ -370,6 +370,7 @@ public sealed partial class VariantContainer : ICompositeContent
             if (_preloadIndex == index && _preload is { } preload)
             {
                 _pending = preload;
+                PromotePreload();
                 return true;
             }
 
@@ -415,12 +416,13 @@ public sealed partial class VariantContainer : ICompositeContent
         lock (_gate)
         {
             var requested = _pendingIndex == index;
-            var preloaded = _preloadIndex == index;
+            var preloaded = _preloadIndex == index && _preload is { } preload && preload.Token == ct;
 
             if (preloaded)
             {
                 _preload = null;
                 _preloadIndex = -1;
+                _preloadStart = null;
             }
 
             if (decoded is null || _disposed || ct.IsCancellationRequested || !(requested || preloaded))

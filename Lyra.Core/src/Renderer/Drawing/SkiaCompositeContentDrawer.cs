@@ -2,7 +2,7 @@ using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Textures;
 using Lyra.Imaging.Content.Tiling;
 using Lyra.Imaging.Content.Variants;
-using Lyra.Imaging.Decoding.Support;
+using Lyra.Imaging;
 using Lyra.Renderer.Backends;
 using Lyra.UI.Components.Controls;
 using SkiaSharp;

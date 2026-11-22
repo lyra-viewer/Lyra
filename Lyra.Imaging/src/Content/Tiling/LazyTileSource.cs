@@ -79,8 +79,6 @@ public sealed class LazyTileSource : ITileSource
     /// <summary>Raised on a background thread when a tile becomes drawable.</summary>
     public event Action<LazyTileSource>? TileReady;
 
-    public int TileCount => _tilesX * _tilesY;
-
     /// <summary>
     /// The level to draw at this scale: the coarsest one whose texels are still at least as dense
     /// as the screen needs, so nothing is ever magnified and the texture drawn is about the size

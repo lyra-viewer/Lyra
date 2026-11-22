@@ -60,7 +60,7 @@ public class TiffReadPathTests
     }
 
     [Fact]
-    public void SmallGray_AsImage_IsFetchedWholeFirst()
+    public async Task SmallGray_AsImage_IsFetchedWholeFirst()
     {
         Assert.SkipUnless(TiffNativeReady.Value, NotBuilt);
 
@@ -70,7 +70,7 @@ public class TiffReadPathTests
         using var composite = new Composite(new FileInfo(file.Path));
 
         composite.BeginLoadTiming();
-        new TiffDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+        await new TiffDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken);
 
         {
             Assert.Equal(SKColorType.Gray8, Assert.IsType<RasterContent>(composite.Content).Image.ColorType);

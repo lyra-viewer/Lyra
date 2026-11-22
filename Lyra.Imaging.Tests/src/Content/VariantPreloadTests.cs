@@ -129,7 +129,7 @@ public class VariantPreloadTests
         using var set = Container(provider, 3);
 
         set.StartPreloading();
-        Assert.True(provider.Started.Wait(Patience));
+        Assert.True(provider.Started.Wait(Patience, TestContext.Current.CancellationToken));
 
         Assert.True(set.Select(1));
         var wait = Assert.IsType<VariantWait>(set.Waiting);
@@ -139,7 +139,7 @@ public class VariantPreloadTests
         set.VariantReady += _ => shown.Set();
         provider.Release.Set();
 
-        Assert.True(shown.Wait(Patience));
+        Assert.True(shown.Wait(Patience, TestContext.Current.CancellationToken));
         Assert.Equal(1, set.ShownIndex);
         Assert.Null(set.Waiting);
         Assert.Equal(1, provider.Decoded.Count(index => index == 1));
@@ -153,7 +153,7 @@ public class VariantPreloadTests
         using var set = Container(provider, 5);
 
         set.StartPreloading();
-        Assert.True(provider.Started.Wait(Patience));
+        Assert.True(provider.Started.Wait(Patience, TestContext.Current.CancellationToken));
 
         Assert.True(set.Select(3));
         WaitFor(() => provider.Cancelled.Contains(1));
@@ -195,7 +195,7 @@ public class VariantPreloadTests
         using var shown = new ManualResetEventSlim();
         set.VariantReady += _ => shown.Set();
         Assert.True(set.Select(1));
-        Assert.True(shown.Wait(Patience));
+        Assert.True(shown.Wait(Patience, TestContext.Current.CancellationToken));
 
         // Over budget, so the first was trimmed; lent, so it survives the release pass.
         set.ReleaseRetired();

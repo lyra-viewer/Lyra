@@ -6,15 +6,14 @@ using Lyra.Common.SystemExtensions;
 using Lyra.DropStatusProvider;
 using Lyra.FileLoader.Duplicates;
 using Lyra.FileLoader.Duplicates.Perceptual;
-using Lyra.FileLoader.Navigation;
 using Lyra.GUI;
 using Lyra.Imaging;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Variants;
-using Lyra.Imaging.Decoding.Support;
 using Lyra.Renderer;
 using Lyra.Renderer.Backends;
 using Lyra.Renderer.Display;
+using Lyra.Session;
 using Lyra.UI.SupportingTypes;
 using SkiaSharp;
 using static SDL3.SDL;
@@ -39,6 +38,7 @@ public partial class SdlCore : IDisposable
     private readonly DropProgressTracker _dropProgressTracker = new();
     private readonly DuplicateScanService _duplicateScanService = new(new ImagingThumbnailSource());
     private readonly ViewState _viewState = new(SettingsManager.UiSettings);
+    private readonly ViewerSession _session = new(new ImageStoreCache());
 
     // -------------------------------------------------------------------------
     //  Frame pacing
@@ -72,9 +72,6 @@ public partial class SdlCore : IDisposable
     private Composite? _composite;
     private float _zoomPercentage = 100f;
     private DisplayMode _displayMode = DisplayMode.Undefined;
-
-    private const int PreloadDepth = 3;
-    private const int CleanupSafeRange = 4;
 
     // -------------------------------------------------------------------------
     //  Cursor
@@ -325,40 +322,59 @@ public partial class SdlCore : IDisposable
     //  Main loop
     // =========================================================================
 
+    private readonly FrameFaults _frameFaults = new();
+
     public void Run()
     {
         while (_running)
         {
-            DrainMainThreadQueue();
-            HandleEvents();
-            _displays.Poll();
-            RecalculateDisplayModeIfNecessary();
-            _ui.Refresh(CurrentUIState());
-
-            var scene = CurrentScene();
-            UpdateStatusOverlay(scene);
-            var presented = _renderer.Render(scene, _ui);
-
-            GLSwapWindow(_window);
-
-            // Safety pacing
-            var frameNs = presented || !_coldStartSafe ? TargetFrameNs : IdleFrameNs;
-            var now = GetTicksNS();
-            if (now < _nextFrameDeadlineNs)
+            try
             {
-                DelayNS(_nextFrameDeadlineNs - now);
-                _nextFrameDeadlineNs += frameNs;
+                RunFrame();
+                _frameFaults.Succeeded();
             }
-            else
+            catch (Exception ex)
             {
-                // Running late - resync to avoid drift.
-                _nextFrameDeadlineNs = now + frameNs;
-            }
+                if (!_frameFaults.TrySkip())
+                    throw;
 
-            // Advance cold start countdown
-            if (!_coldStartSafe && --_coldStartFramesPending <= 0)
-                _coldStartSafe = true;
+                Logger.Error($"[Core] A frame failed and was skipped ({_frameFaults.InARow} in a row): {ex}");
+                DelayNS(IdleFrameNs);
+            }
         }
+    }
+
+    private void RunFrame()
+    {
+        DrainMainThreadQueue();
+        HandleEvents();
+        _displays.Poll();
+        RecalculateDisplayModeIfNecessary();
+        _ui.Refresh(CurrentUIState());
+
+        var scene = CurrentScene();
+        UpdateStatusOverlay(scene);
+        var presented = _renderer.Render(scene, _ui);
+
+        GLSwapWindow(_window);
+
+        // Safety pacing
+        var frameNs = presented || !_coldStartSafe ? TargetFrameNs : IdleFrameNs;
+        var now = GetTicksNS();
+        if (now < _nextFrameDeadlineNs)
+        {
+            DelayNS(_nextFrameDeadlineNs - now);
+            _nextFrameDeadlineNs += frameNs;
+        }
+        else
+        {
+            // Running late - resync to avoid drift.
+            _nextFrameDeadlineNs = now + frameNs;
+        }
+
+        // Advance cold start countdown
+        if (!_coldStartSafe && --_coldStartFramesPending <= 0)
+            _coldStartSafe = true;
     }
 
     private void RecalculateDisplayModeIfNecessary()
@@ -389,13 +405,12 @@ public partial class SdlCore : IDisposable
     {
         while (_mainThreadQueue.TryDequeue(out var action))
             action();
-
-        if (_coldStartSafe && _deferredUntilWarm.Count > 0)
+        
+        while (_coldStartSafe && _deferredUntilWarm.Count > 0)
         {
-            foreach (var action in _deferredUntilWarm)
-                action();
-            
-            _deferredUntilWarm.Clear();
+            var action = _deferredUntilWarm[0];
+            _deferredUntilWarm.RemoveAt(0);
+            action();
         }
     }
 
@@ -433,13 +448,6 @@ public partial class SdlCore : IDisposable
 
     private void LoadImage(NavigationDirection direction = NavigationDirection.None)
     {
-        PurgeNotExistingFiles(direction);
-        if (ReconcileViewMode())
-            PurgeNotExistingFiles(direction);
-
-        var keepPaths = DirectoryNavigator.GetRange(CleanupSafeRange);
-        ImageStore.Cleanup(keepPaths);
-
         CaptureLockedView();
 
         // Detach from the outgoing composite before it's replaced.
@@ -448,23 +456,17 @@ public partial class SdlCore : IDisposable
 
         _refitForVariant = -1;
 
-        var currentPath = DirectoryNavigator.GetCurrent();
-        if (currentPath == null)
+        _composite = _session.OpenCurrent(direction);
+        if (_composite is null)
         {
-            _composite = null;
             _panHelper = null;
+            return;
         }
-        else
-        {
-            _composite = ImageStore.GetImage(currentPath);
-            _composite.ProgressChanged += OnCompositeProgress;
 
-            var preloadPaths = DirectoryNavigator.GetRange(PreloadDepth);
-            ImageStore.Preload(preloadPaths);
-            _displayMode = ResolveInitialView(out var offset);
-            _panHelper = new PanHelper(_window, _composite, _zoomPercentage) { CurrentOffset = offset };
-            _panHelper.Clamp();
-        }
+        _composite.ProgressChanged += OnCompositeProgress;
+        _displayMode = ResolveInitialView(out var offset);
+        _panHelper = new PanHelper(_window, _composite, _zoomPercentage) { CurrentOffset = offset };
+        _panHelper.Clamp();
     }
 
     private readonly ViewLock _viewLock = new();
@@ -495,18 +497,6 @@ public partial class SdlCore : IDisposable
     {
         if (mode != InitDisplayMode.Locked)
             _viewLock.Release();
-    }
-
-    private void PurgeNotExistingFiles(NavigationDirection direction = NavigationDirection.None)
-    {
-        while (DirectoryNavigator.GetCurrent() is { } candidate && !ImageStore.IsLoading(candidate) && !File.Exists(candidate))
-        {
-            DirectoryNavigator.Purge(candidate);
-            ImageStore.Purge(candidate);
-
-            if (direction == NavigationDirection.Backward && DirectoryNavigator.HasPrevious())
-                DirectoryNavigator.MoveToPrevious();
-        }
     }
 
     // =========================================================================
@@ -661,11 +651,11 @@ public partial class SdlCore : IDisposable
 
     private void OnDirectoryPicked(string absoluteDir)
     {
-        var currentDir = DirectoryNavigator.GetCurrentDirectory();
+        var currentDir = _session.Navigator.GetCurrentDirectory();
         if (string.Equals(currentDir, absoluteDir, StringComparison.Ordinal))
             return; // already in this directory
 
-        if (DirectoryNavigator.MoveToFirstInDirectory(absoluteDir))
+        if (_session.Navigator.MoveToFirstInDirectory(absoluteDir))
             LoadImage();
     }
 

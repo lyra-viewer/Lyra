@@ -17,8 +17,6 @@ public readonly ref struct PngChunk(ReadOnlySpan<byte> type, ReadOnlySpan<byte> 
     public bool CutShort { get; } = cutShort;
 
     public int TotalBytes { get; } = totalBytes;
-
-    public bool Is(ReadOnlySpan<byte> fourCc) => Type.SequenceEqual(fourCc);
 }
 
 /// <summary>

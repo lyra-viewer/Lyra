@@ -22,6 +22,12 @@ internal static class FatalError
 
         Show(report);
     }
+    
+    public static void Record(string summary, Exception cause)
+    {
+        Logger.Error($"[Fatal] {summary} {cause}");
+        WriteToStandardError($"{summary}\n\n{Describe(cause)}");
+    }
 
     private static void Show(string report)
     {

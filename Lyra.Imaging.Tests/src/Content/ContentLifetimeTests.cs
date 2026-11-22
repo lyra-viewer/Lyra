@@ -50,7 +50,7 @@ public class ContentLifetimeTests
             });
 
             reader.Start();
-            start.SignalAndWait();
+            start.SignalAndWait(TestContext.Current.CancellationToken);
             content.Dispose();
             reader.Join();
 

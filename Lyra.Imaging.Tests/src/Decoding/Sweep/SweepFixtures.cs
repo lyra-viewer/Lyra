@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using Lyra.Imaging.Decoding.Decoders;
+using Lyra.Imaging.Interop;
 using Lyra.Imaging.Tests.Support;
 using Lyra.ManagedCodecs.Tests.Gif;
 using Lyra.ManagedCodecs.Tests.Png;
@@ -21,6 +22,17 @@ internal sealed record SweepFixture(string Name, string Extension, Func<byte[]> 
 /// <summary>One small valid file of every format a decoder reads, generated rather than read from disk.</summary>
 internal static class SweepFixtures
 {
+    private static readonly Lazy<bool> LibRawReady = new(() => NativeWrapper.TryLoad("libraw_native", typeof(RawDecoder).Assembly));
+
+    private static readonly Lazy<bool> LibJxlReady = new(() => NativeWrapper.TryLoad("libjxl_native", typeof(JxlDecoder).Assembly));
+
+    private static readonly Lazy<bool> LibExrReady = new(() => NativeWrapper.TryLoad("libexr_native", typeof(ExrDecoder).Assembly));
+
+    private static readonly Lazy<bool> LibJ2KReady = new(() => NativeWrapper.TryLoad("libj2k_native", typeof(J2KDecoder).Assembly));
+
+    private static readonly Lazy<bool> LibTiffReady = new(() => NativeWrapper.TryLoad("libtiff_native", typeof(TiffNative).Assembly,
+        () => TiffNative.DescribeDirectories("lyra-absent.tif", IntPtr.Zero, 0)));
+
     public static IReadOnlyList<SweepFixture> All { get; } =
     [
         new("png", ".png", () => Encode(SKEncodedImageFormat.Png)),
@@ -32,16 +44,16 @@ internal static class SweepFixtures
         new("icns", ".icns", Icns),
         new("gif", ".gif", () => new GifBuilder(8, 6).AddSolid(1).AddSolid(2).Build()),
         new("apng", ".png", () => new ApngBuilder(8, 6).AddSolid(0xFFFF0000).AddSolid(0xFF0000FF).Build()),
-        new("tiff", ".tif", () => TiffBuilder.Build(TiffBuilder.Rgb(8, 6))),
+        new("tiff", ".tif", () => TiffBuilder.Build(TiffBuilder.Rgb(8, 6)), () => LibTiffReady.Value),
         new("qoi", ".qoi", Qoi),
         new("hdr", ".hdr", Radiance),
         new("dds", ".dds", () => DdsTestFile.Legacy(8, 8, 1, "DXT1", [.. Enumerable.Range(0, 4).SelectMany(_ => DdsTestFile.RedBc1Block())])),
         new("ktx", ".ktx", Ktx1),
         new("psd", ".psd", Psd),
         new("svg", ".svg", () => Encoding.UTF8.GetBytes("""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="12"><rect width="16" height="12" fill="teal"/></svg>""")),
-        new("exr", ".exr", () => Convert.FromBase64String(ExrGrayscaleTests.SingleChannelExrBase64)),
-        new("jp2", ".jp2", () => Convert.FromBase64String(J2KColorSpaceTests.SyccJp2Base64)),
-        new("htj2k", ".jhc", () => Convert.FromBase64String(Htj2kTests.Codestream)),
+        new("exr", ".exr", () => Convert.FromBase64String(ExrGrayscaleTests.SingleChannelExrBase64), () => LibExrReady.Value),
+        new("jp2", ".jp2", () => Convert.FromBase64String(J2KColorSpaceTests.SyccJp2Base64), () => LibJ2KReady.Value),
+        new("htj2k", ".jhc", () => Convert.FromBase64String(Htj2kTests.Codestream), () => LibJ2KReady.Value),
         new("jxl", ".jxl", () => Convert.FromBase64String(JxlColorSpaceTests.DisplayP3JxlBase64), () => LibJxlReady.Value),
         new("jxl-animated", ".jxl", () => Convert.FromBase64String(JxlAnimationTests.ThreeFrames), () => LibJxlReady.Value),
         new("avif", ".avif", () => Convert.FromBase64String(HeifStillFixtures.AvifDisplayP3), () => Libheif.Ready),
@@ -50,10 +62,6 @@ internal static class SweepFixtures
     ];
 
     public static SweepFixture Named(string name) => All.Single(fixture => fixture.Name == name);
-
-    private static readonly Lazy<bool> LibRawReady = new(() => NativeWrapper.TryLoad("libraw_native", typeof(RawDecoder).Assembly));
-
-    private static readonly Lazy<bool> LibJxlReady = new(() => NativeWrapper.TryLoad("libjxl_native", typeof(JxlDecoder).Assembly));
 
     private static byte[] Encode(SKEncodedImageFormat format, int width = 8, int height = 6)
     {

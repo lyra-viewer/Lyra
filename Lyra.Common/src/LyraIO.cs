@@ -25,8 +25,6 @@ public static class LyraIO
 
     public static string GetAppSettingsFile() => Path.Combine(ConfigDir.Value, AppSettingsFileName);
 
-    public static string GetThemesDir() => ThemesDir.Value;
-
     public static string GetThemeFile(string themeName) => Path.Combine(ThemesDir.Value, themeName + ThemeExtension);
 
     public static string GetLogFile() => Path.Combine(DataDir.Value, LogFileName);

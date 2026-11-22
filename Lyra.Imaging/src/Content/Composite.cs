@@ -4,7 +4,6 @@ using Lyra.Imaging.Content.Hdr;
 using Lyra.Imaging.Content.Status;
 using Lyra.Imaging.Content.Textures;
 using Lyra.Imaging.Content.Variants;
-using Lyra.Psd.Core.Decode.Layers;
 
 namespace Lyra.Imaging.Content;
 
@@ -171,7 +170,7 @@ public sealed class Composite : IDisposable
     private int _formatSpecificVersion;
 
     public volatile IReadOnlyList<StructureGroup>? Structure;
-    public volatile LayerRecord[]? PsdLayers;
+    public volatile LayerEntry[]? Layers;
 
     /// <summary>
     /// Why the scene-referred half-float form was not kept, or null when it was and for everything

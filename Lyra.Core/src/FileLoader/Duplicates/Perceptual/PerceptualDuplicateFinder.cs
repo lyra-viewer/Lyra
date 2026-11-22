@@ -19,19 +19,19 @@ public sealed class PerceptualDuplicateFinder(IThumbnailSource thumbnails)
     private static readonly int DegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2);
 
     private const int HashBits = 64;
-
-    public IReadOnlyList<PerceptualGroup> Scan(int maxDistance = DefaultMaxDistance, IProgress<PerceptualScanProgress>? progress = null, CancellationToken ct = default)
+    
+    public IReadOnlyList<PerceptualGroup> Scan(FileRecord[] records, int maxDistance = DefaultMaxDistance, IProgress<PerceptualScanProgress>? progress = null, CancellationToken ct = default)
     {
-        EnsureHashes(progress, ct);
-        return Cluster(maxDistance, ct);
+        EnsureHashes(records, progress, ct);
+        return Cluster(records, maxDistance, ct);
     }
 
-    private static List<PerceptualGroup> Cluster(int maxDistance, CancellationToken ct)
+    private static List<PerceptualGroup> Cluster(FileRecord[] records, int maxDistance, CancellationToken ct)
     {
         if (maxDistance < 0)
             return [];
 
-        var hashed = FileRecordDatabase.Records.ToArray().Where(r => r.HasPHash && IsEligible(r)).ToList();
+        var hashed = records.Where(r => r.HasPHash && IsEligible(r)).ToList();
 
         var hashes = hashed.Select(r => r.PHash).ToArray();
         var uf = new UnionFind(hashes.Length);
@@ -134,18 +134,18 @@ public sealed class PerceptualDuplicateFinder(IThumbnailSource thumbnails)
         return byRoot.Values.Where(g => g.Count > 1).Select(g => new PerceptualGroup(g)).ToList();
     }
 
-    private void EnsureHashes(IProgress<PerceptualScanProgress>? progress, CancellationToken ct)
+    private void EnsureHashes(FileRecord[] records, IProgress<PerceptualScanProgress>? progress, CancellationToken ct)
     {
-        var pending = new List<string>();
+        var pending = new List<int>();
         var eligible = 0;
-        foreach (var record in FileRecordDatabase.Records.ToArray())
+        for (var i = 0; i < records.Length; i++)
         {
-            if (!IsEligible(record))
+            if (!IsEligible(records[i]))
                 continue;
 
             eligible++;
-            if (!record.HasPHash)
-                pending.Add(record.Path);
+            if (!records[i].HasPHash)
+                pending.Add(i);
         }
 
         if (eligible == 0)
@@ -154,8 +154,7 @@ public sealed class PerceptualDuplicateFinder(IThumbnailSource thumbnails)
         var reporter = new ProgressReporter(progress, eligible, done: eligible - pending.Count);
         reporter.Publish();
 
-        // FileRecordDatabase is not thread-safe, so the workers only fill a local array and the
-        // store is written from this thread once they are done.
+        // The workers only fill a local array; the records are written from this thread once they are done.
         var hashes = new ulong[pending.Count];
         var options = new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = DegreeOfParallelism };
 
@@ -163,7 +162,7 @@ public sealed class PerceptualDuplicateFinder(IThumbnailSource thumbnails)
         {
             Parallel.For(0, pending.Count, options, i =>
             {
-                var luma = thumbnails.GetLuma(pending[i], PerceptualHash.Width, PerceptualHash.Height, ct);
+                var luma = thumbnails.GetLuma(records[pending[i]].Path, PerceptualHash.Width, PerceptualHash.Height, ct);
                 if (luma is not null && luma.Length == PerceptualHash.SampleCount)
                     hashes[i] = PerceptualHash.Compute(luma); // never 0, see PerceptualHash.ComputedMarker
 
@@ -175,7 +174,7 @@ public sealed class PerceptualDuplicateFinder(IThumbnailSource thumbnails)
             for (var i = 0; i < pending.Count; i++)
             {
                 if (hashes[i] != 0)
-                    FileRecordDatabase.SetPHash(pending[i], hashes[i]);
+                    records[pending[i]] = records[pending[i]] with { PHash = hashes[i] };
             }
         }
     }

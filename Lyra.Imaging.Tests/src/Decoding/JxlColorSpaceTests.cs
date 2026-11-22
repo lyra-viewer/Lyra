@@ -31,7 +31,7 @@ public class JxlColorSpaceTests
     private static readonly Lazy<bool> NativeJxlReady = new(() => NativeWrapper.TryLoad("libjxl_native", typeof(JxlDecoder).Assembly));
 
     [Fact]
-    public void DecodesDisplayP3Jxl_PreservesWideGamut_AndTagsDisplayP3()
+    public async Task DecodesDisplayP3Jxl_PreservesWideGamut_AndTagsDisplayP3()
     {
         if (!NativeJxlReady.Value)
             Assert.Skip("libjxl_native not available (native wrappers not built for this platform).");
@@ -42,7 +42,7 @@ public class JxlColorSpaceTests
         try
         {
             using var composite = new Composite(new FileInfo(tempPath));
-            new JxlDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
+            await new JxlDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken);
 
             var raster = Assert.IsType<RasterContent>(composite.Content);
             using var image = raster.Image;

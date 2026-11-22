@@ -11,6 +11,7 @@ static class Program
     {
         NumberCulture.Apply();
         LogSetup();
+        WatchOtherThreads();
         Logger.Info($"[Application] Application started on {RuntimeInformation.RuntimeIdentifier}");
 
         NativeLibraryLoader.Initialize();
@@ -50,6 +51,18 @@ static class Program
         {
             Logger.Error($"[Application] Shutting down failed: {ex}");
         }
+    }
+
+    private static void WatchOtherThreads()
+    {
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            FatalError.Record("Lyra Viewer has stopped.", e.ExceptionObject as Exception ?? new Exception(e.ExceptionObject?.ToString()));
+
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            Logger.Error($"[Application] A background task failed and nothing observed it: {e.Exception}");
+            e.SetObserved();
+        };
     }
 
     private static void LogSetup()

@@ -207,8 +207,7 @@ public partial class SdlCore
                 // Apply results back on the main thread. Only raising the window waits for warm-up.
                 DispatchToMain(() =>
                 {
-                    DirectoryNavigator.ApplyCollection(result);
-                    ResetViewMode();
+                    _session.ApplyCollection(result);
                     _ui.SetNoDuplicatesFound(false);
                     LoadImage();
                 });

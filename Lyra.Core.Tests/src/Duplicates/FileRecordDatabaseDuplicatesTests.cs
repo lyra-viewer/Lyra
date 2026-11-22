@@ -3,16 +3,17 @@ using Xunit;
 
 namespace Lyra.Core.Tests.Duplicates;
 
-[Collection("FileRecordDatabase")]
 public sealed class FileRecordDatabaseDuplicatesTests
 {
+    private readonly FileRecordDatabase _db = new();
+
     private static FileRecord Rec(string path, int? groupId = null) =>
         new(path, Path.GetFileName(path), Path.GetDirectoryName(path) ?? string.Empty, GroupId: groupId);
 
     [Fact]
     public void EnterDuplicatesView_ShowsOnlyGroupedRecords_OrderedByGroup()
     {
-        FileRecordDatabase.Load([
+        _db.Load([
             Rec("/x/a.png", groupId: 2),
             Rec("/x/b.png"),               // ungrouped
             Rec("/x/c.png", groupId: 1),
@@ -20,10 +21,10 @@ public sealed class FileRecordDatabaseDuplicatesTests
             Rec("/x/e.png", groupId: 2),
         ]);
 
-        Assert.True(FileRecordDatabase.EnterDuplicatesView());
-        Assert.True(FileRecordDatabase.InDuplicatesView);
+        Assert.True(_db.EnterDuplicatesView());
+        Assert.True(_db.InDuplicatesView);
 
-        var shown = FileRecordDatabase.Records.Select(r => r.Path).ToArray();
+        var shown = _db.Records.Select(r => r.Path).ToArray();
         // Group 1 (c, d) before group 2 (a, e); ungrouped b excluded.
         Assert.Equal(["/x/c.png", "/x/d.png", "/x/a.png", "/x/e.png"], shown);
     }
@@ -31,85 +32,128 @@ public sealed class FileRecordDatabaseDuplicatesTests
     [Fact]
     public void ExitDuplicatesView_RestoresFullCollection()
     {
-        FileRecordDatabase.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png"), Rec("/x/c.png", groupId: 1)]);
+        _db.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png"), Rec("/x/c.png", groupId: 1)]);
 
-        FileRecordDatabase.EnterDuplicatesView();
-        FileRecordDatabase.ExitDuplicatesView();
+        _db.EnterDuplicatesView();
+        _db.ExitDuplicatesView();
 
-        Assert.False(FileRecordDatabase.InDuplicatesView);
-        Assert.Equal(3, FileRecordDatabase.Count);
+        Assert.False(_db.InDuplicatesView);
+        Assert.Equal(3, _db.Count);
     }
 
     [Fact]
     public void EnterDuplicatesView_NoGroups_ReturnsFalseAndStaysFull()
     {
-        FileRecordDatabase.Load([Rec("/x/a.png"), Rec("/x/b.png")]);
+        _db.Load([Rec("/x/a.png"), Rec("/x/b.png")]);
 
-        Assert.False(FileRecordDatabase.EnterDuplicatesView());
-        Assert.False(FileRecordDatabase.InDuplicatesView);
-        Assert.Equal(2, FileRecordDatabase.Count);
+        Assert.False(_db.EnterDuplicatesView());
+        Assert.False(_db.InDuplicatesView);
+        Assert.Equal(2, _db.Count);
     }
 
     [Fact]
     public void Remove_InDuplicatesView_AlsoRemovesFromFullCollection()
     {
-        FileRecordDatabase.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png"), Rec("/x/c.png", groupId: 1)]);
-        FileRecordDatabase.EnterDuplicatesView();
+        _db.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png"), Rec("/x/c.png", groupId: 1)]);
+        _db.EnterDuplicatesView();
 
-        Assert.True(FileRecordDatabase.Remove("/x/a.png"));
-        FileRecordDatabase.ExitDuplicatesView();
+        Assert.True(_db.Remove("/x/a.png"));
+        _db.ExitDuplicatesView();
 
-        Assert.Equal(["/x/b.png", "/x/c.png"], FileRecordDatabase.Records.Select(r => r.Path).ToArray());
+        Assert.Equal(["/x/b.png", "/x/c.png"], _db.Records.Select(r => r.Path).ToArray());
     }
 
     [Fact]
     public void ExitDuplicatesView_LandsOnShownDuplicate()
     {
-        FileRecordDatabase.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png"), Rec("/x/c.png", groupId: 1)]);
-        FileRecordDatabase.MoveTo("/x/b.png");
-        FileRecordDatabase.EnterDuplicatesView();
-        FileRecordDatabase.MoveTo("/x/c.png");
+        _db.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png"), Rec("/x/c.png", groupId: 1)]);
+        _db.MoveTo("/x/b.png");
+        _db.EnterDuplicatesView();
+        _db.MoveTo("/x/c.png");
 
-        FileRecordDatabase.ExitDuplicatesView();
+        _db.ExitDuplicatesView();
 
-        Assert.Equal("/x/c.png", FileRecordDatabase.Current?.Path);
+        Assert.Equal("/x/c.png", _db.Current?.Path);
     }
 
     [Fact]
     public void ExitDuplicatesView_EmptySubset_FallsBackToPreScanRecord()
     {
-        FileRecordDatabase.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png"), Rec("/x/c.png")]);
-        FileRecordDatabase.MoveTo("/x/c.png");
-        FileRecordDatabase.EnterDuplicatesView();
+        _db.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png"), Rec("/x/c.png")]);
+        _db.MoveTo("/x/c.png");
+        _db.EnterDuplicatesView();
 
-        FileRecordDatabase.Remove("/x/a.png");
-        FileRecordDatabase.ExitDuplicatesView();
+        _db.Remove("/x/a.png");
+        _db.ExitDuplicatesView();
 
-        Assert.Equal("/x/c.png", FileRecordDatabase.Current?.Path);
+        Assert.Equal("/x/c.png", _db.Current?.Path);
     }
 
     [Fact]
     public void Remove_LastDuplicate_LeavesSubsetEmptyAndFullCollectionIntact()
     {
-        FileRecordDatabase.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png")]);
-        FileRecordDatabase.EnterDuplicatesView();
+        _db.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png")]);
+        _db.EnterDuplicatesView();
 
-        FileRecordDatabase.Remove("/x/a.png");
+        _db.Remove("/x/a.png");
 
-        Assert.True(FileRecordDatabase.InDuplicatesView);
-        Assert.Null(FileRecordDatabase.Current);
+        Assert.True(_db.InDuplicatesView);
+        Assert.Null(_db.Current);
 
-        FileRecordDatabase.ExitDuplicatesView();
-        Assert.Equal(["/x/b.png"], FileRecordDatabase.Records.Select(r => r.Path).ToArray());
+        _db.ExitDuplicatesView();
+        Assert.Equal(["/x/b.png"], _db.Records.Select(r => r.Path).ToArray());
     }
 
     [Fact]
-    public void ClearGroups_RemovesAllGroupIds()
+    public void ApplyScan_WithGroups_ReplacesEarlierGrouping_AndKeepsWhatWasLearned()
     {
-        FileRecordDatabase.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png", groupId: 1)]);
+        _db.Load([Rec("/x/a.png", groupId: 1), Rec("/x/b.png", groupId: 1), Rec("/x/c.png")]);
 
-        FileRecordDatabase.ClearGroups();
+        _db.ApplyScan([Rec("/x/a.png") with { PHash = 7 }, Rec("/x/c.png", groupId: 3) with { Size = 42 }], groups: true);
 
-        Assert.All(FileRecordDatabase.Records, r => Assert.False(r.HasGroup));
+        var byPath = _db.Records.ToDictionary(r => r.Path);
+        Assert.Null(byPath["/x/a.png"].GroupId);
+        Assert.Equal(7UL, byPath["/x/a.png"].PHash);
+        Assert.Null(byPath["/x/b.png"].GroupId);
+        Assert.Equal(3, byPath["/x/c.png"].GroupId);
+        Assert.Equal(42, byPath["/x/c.png"].Size);
+    }
+
+    [Fact]
+    public void ApplyScan_WithoutGroups_KeepsTheGroups_ButTakesTheHashes()
+    {
+        _db.Load([Rec("/x/a.png", groupId: 1) with { PHash = 5 }]);
+
+        _db.ApplyScan([Rec("/x/a.png") with { ContentHash = 9 }], groups: false);
+
+        var record = _db.Records.Single();
+        Assert.Equal(1, record.GroupId);
+        Assert.Equal(5UL, record.PHash);
+        Assert.Equal((UInt128)9, record.ContentHash);
+    }
+
+    [Fact]
+    public void ApplyScan_SkipsRecordsRemovedMeanwhile()
+    {
+        _db.Load([Rec("/x/a.png"), Rec("/x/b.png")]);
+        _db.Remove("/x/a.png");
+
+        _db.ApplyScan([Rec("/x/a.png", groupId: 1), Rec("/x/b.png", groupId: 1)], groups: true);
+
+        Assert.Equal(["/x/b.png"], _db.Records.Select(r => r.Path).ToArray());
+        Assert.Equal(1, _db.Records.Single().GroupId);
+    }
+
+    [Fact]
+    public void Load_ChangesTheGeneration_ButRemoveDoesNot()
+    {
+        _db.Load([Rec("/x/a.png"), Rec("/x/b.png")]);
+        var first = _db.Generation;
+
+        _db.Remove("/x/a.png");
+        Assert.Equal(first, _db.Generation);
+
+        _db.Load([Rec("/x/c.png")]);
+        Assert.NotEqual(first, _db.Generation);
     }
 }

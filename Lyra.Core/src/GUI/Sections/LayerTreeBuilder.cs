@@ -1,36 +1,36 @@
-using Lyra.Psd.Core.Decode.Layers;
+using Lyra.Imaging.Content;
 using Lyra.UI.Components.Controls.TreeView;
 
 namespace Lyra.GUI.Sections;
 
 // ============================================================================
-//  PsdLayerTreeBuilder - reconstructs PSD group hierarchy from flat records.
+//  LayerTreeBuilder - reconstructs a layered file's group hierarchy from flat entries.
 // ----------------------------------------------------------------------------
 //  PSD stores layers as a flat list in bottom-to-top visual order, with
 //  section-divider markers (the 'lsct' additional layer information) that
 //  bracket groups:
 //
-//    BoundingDivider  - marks the bottom of a group's contents
+//    GroupDivider     - marks the bottom of a group's contents
 //    OpenGroup        - group header (visually expanded by default)
 //    ClosedGroup      - group header (visually collapsed by default)
-//    Normal           - regular layer
+//    Layer            - regular layer
 //
 //  File order for  OuterGroup { leaf1, leaf2, InnerGroup { leaf3 } }  is:
 //
-//    BoundingDivider (outer bottom)
+//    GroupDivider (outer bottom)
 //    leaf1
 //    leaf2
-//    BoundingDivider (inner bottom)
+//    GroupDivider (inner bottom)
 //    leaf3
 //    InnerGroup header
 //    OuterGroup header
 //
-//  We walk forward with a stack of child lists: a BoundingDivider pushes a
+//  We walk forward with a stack of child lists: a GroupDivider pushes a
 //  new list, a group header pops one and wraps it in a group node. File
 //  order is bottom-up; we reverse at the end so the TreeView renders in
 //  Photoshop-UI top-down order.
 // ============================================================================
-public static class PsdLayerTreeBuilder
+public static class LayerTreeBuilder
 {
     /// <summary>
     /// Builds the group hierarchy from a flat record list.
@@ -38,38 +38,38 @@ public static class PsdLayerTreeBuilder
     /// dividers/headers) are tolerated: stray headers become normal nodes,
     /// unclosed groups are flattened into the enclosing scope.
     /// </summary>
-    public static List<TreeNode<LayerRecord>> Build(IReadOnlyList<LayerRecord> records)
+    public static List<TreeNode<LayerEntry>> Build(IReadOnlyList<LayerEntry> records)
     {
-        var roots = new List<TreeNode<LayerRecord>>();
+        var roots = new List<TreeNode<LayerEntry>>();
 
         if (records.Count == 0)
             return roots;
 
         // stack[0] is the root frame; each push opens a pending group scope.
-        var stack = new Stack<List<TreeNode<LayerRecord>>>();
+        var stack = new Stack<List<TreeNode<LayerEntry>>>();
         stack.Push(roots);
 
         foreach (var record in records)
         {
-            switch (record.SectionType)
+            switch (record.Section)
             {
-                case LayerSectionType.BoundingDivider:
-                    stack.Push(new List<TreeNode<LayerRecord>>());
+                case LayerSection.GroupDivider:
+                    stack.Push(new List<TreeNode<LayerEntry>>());
                     break;
 
-                case LayerSectionType.OpenGroup:
-                case LayerSectionType.ClosedGroup:
+                case LayerSection.OpenGroup:
+                case LayerSection.ClosedGroup:
                     if (stack.Count <= 1)
                     {
                         // Stray header with no matching divider - degrade to a normal node.
-                        stack.Peek().Add(new TreeNode<LayerRecord>(record));
+                        stack.Peek().Add(new TreeNode<LayerEntry>(record));
                         break;
                     }
 
                     var groupChildren = stack.Pop();
-                    var groupNode = new TreeNode<LayerRecord>(record)
+                    var groupNode = new TreeNode<LayerEntry>(record)
                     {
-                        IsExpanded = record.SectionType == LayerSectionType.OpenGroup
+                        IsExpanded = record.Section == LayerSection.OpenGroup
                     };
                     foreach (var child in groupChildren)
                         groupNode.AttachChild(child);
@@ -78,7 +78,7 @@ public static class PsdLayerTreeBuilder
                     break;
 
                 default:
-                    stack.Peek().Add(new TreeNode<LayerRecord>(record));
+                    stack.Peek().Add(new TreeNode<LayerEntry>(record));
                     break;
             }
         }
@@ -97,7 +97,7 @@ public static class PsdLayerTreeBuilder
         return roots;
     }
 
-    private static void ReverseRecursive(List<TreeNode<LayerRecord>> nodes)
+    private static void ReverseRecursive(List<TreeNode<LayerEntry>> nodes)
     {
         nodes.Reverse();
         foreach (var node in nodes)

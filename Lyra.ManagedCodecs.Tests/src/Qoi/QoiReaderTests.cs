@@ -124,7 +124,7 @@ public class QoiReaderTests
     {
         var header = new QoiHeader(100_000, 100_000, 4, QoiColorSpace.SrgbLinearAlpha);
 
-        Assert.Throws<NotSupportedException>(() => QoiReader.DecodeInto([], header, []));
+        Assert.Throws<NotSupportedException>(() => QoiReader.DecodeInto([], header, [], TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public class QoiReaderTests
     {
         var (_, qoi) = VariedImage();
 
-        Assert.Throws<ArgumentException>(() => QoiReader.DecodeInto(qoi, QoiReader.ReadHeader(qoi), new byte[16]));
+        Assert.Throws<ArgumentException>(() => QoiReader.DecodeInto(qoi, QoiReader.ReadHeader(qoi), new byte[16], TestContext.Current.CancellationToken));
     }
 
     [Fact]

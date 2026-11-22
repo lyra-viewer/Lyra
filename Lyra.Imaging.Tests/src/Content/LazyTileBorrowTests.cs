@@ -90,7 +90,7 @@ public class LazyTileBorrowTests
     }
 
     [Fact]
-    public void Dispose_DuringACoarseBuild_NeverThrows_AndLeavesNothingResident()
+    public async Task Dispose_DuringACoarseBuild_NeverThrows_AndLeavesNothingResident()
     {
         // Hammer the window between borrowing the four finer tiles and finishing with them.
         for (var iteration = 0; iteration < 150; iteration++)
@@ -107,13 +107,13 @@ public class LazyTileBorrowTests
 
             source.GetTiles(Whole, WholeSize, 0.5f); // queues the halving
 
-            var disposer = Task.Run(source.Dispose);
+            var disposer = Task.Run(source.Dispose, TestContext.Current.CancellationToken);
 
             // Keep asking while it goes down: drawing does not stop because cleanup started.
             for (var i = 0; i < 8; i++)
                 source.GetTiles(Whole, WholeSize, 0.5f);
 
-            disposer.GetAwaiter().GetResult(); // must not throw
+            await disposer; // must not throw
 
             Assert.True(
                 WaitFor(() => source.ResidentCount == 0, TimeSpan.FromSeconds(5)),

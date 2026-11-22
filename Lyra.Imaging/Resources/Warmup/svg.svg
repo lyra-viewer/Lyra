@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="8" height="8" viewBox="0 0 8 8">
+<style>.a{fill:#123;stroke:rgb(10,20,30);stroke-width:.5}</style>
+<defs><linearGradient id="l" x1="0" x2="1"><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue" stop-opacity=".5"/></linearGradient>
+<radialGradient id="r" gradientTransform="scale(.5)"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient>
+<clipPath id="c"><circle cx="4" cy="4" r="3"/></clipPath><path id="p" d="M0 0h1v1z"/></defs>
+<g transform="translate(1 1) rotate(10) scale(.9)" opacity=".8" clip-path="url(#c)">
+<rect width="6" height="6" rx="1" fill="url(#l)"/><ellipse cx="3" cy="3" rx="2" ry="1" fill="url(#r)"/>
+<path class="a" d="M1 1C2 0 3 2 4 1S6 3 5 4Q4 5 3 4T1 3A1 1 0 0 1 1 1Z" stroke-dasharray="1 .5" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="0,0 2,2 4,0" fill="none" stroke="green"/><polygon points="5,5 6,7 7,5" style="fill:#0f0;fill-opacity:.5"/>
+<line x1="0" y1="7" x2="7" y2="7" stroke="black"/><use xlink:href="#p" x="2" y="2"/>
+<text x="1" y="6" font-family="sans-serif" font-size="2">A</text></g></svg>

@@ -38,7 +38,7 @@ public class RasterTileSourceDisposeTests
     }
 
     [Fact]
-    public void ConcurrentSetTileAndDispose_NeverThrows_AndDisposesEveryImage()
+    public async Task ConcurrentSetTileAndDispose_NeverThrows_AndDisposesEveryImage()
     {
         // Hammer the race window: writers stream tiles while Dispose runs concurrently.
         // Every image handed to SetTile must end up disposed regardless of who wins each slot.
@@ -66,10 +66,10 @@ public class RasterTileSourceDisposeTests
             {
                 start.Wait();
                 source.Dispose();
-            });
+            }, TestContext.Current.CancellationToken);
 
             start.Set();
-            Task.WaitAll([.. writers, disposer]);
+            await Task.WhenAll([.. writers, disposer]);
 
             foreach (var img in images.SelectMany(list => list))
                 Assert.Equal(IntPtr.Zero, img.Handle);

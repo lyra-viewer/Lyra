@@ -70,14 +70,6 @@ internal static class BitmapFixture
         return [.. header, .. new byte[32]];
     }
 
-    // PSD
-
-    /// <summary>A PSD header, an empty color mode section and the resource section given; nothing after.</summary>
-    public static byte[] Psd(byte[] resources)
-    {
-        return [.. "8BPS"u8, 0, 1, 0, 0, 0, 0, 0, 0, 0, 3, .. U32Be(8), .. U32Be(8), 0, 8, 0, 3, .. U32Be(0), .. U32Be((uint)resources.Length), .. resources, .. U32Be(0)];
-    }
-
     private static byte[] U16(int value)
     {
         var bytes = new byte[2];
@@ -89,13 +81,6 @@ internal static class BitmapFixture
     {
         var bytes = new byte[4];
         BinaryPrimitives.WriteInt32LittleEndian(bytes, value);
-        return bytes;
-    }
-
-    private static byte[] U32Be(uint value)
-    {
-        var bytes = new byte[4];
-        BinaryPrimitives.WriteUInt32BigEndian(bytes, value);
         return bytes;
     }
 }

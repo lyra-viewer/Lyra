@@ -18,8 +18,6 @@ internal static class TiffFixture
         return new Entry(tag, 2, bytes.Length, _ => bytes);
     }
 
-    public static Entry Bytes(ushort tag, params byte[] values) => new(tag, 1, values.Length, _ => values);
-
     public static Entry Undefined(ushort tag, params byte[] values) => new(tag, 7, values.Length, _ => values);
 
     public static Entry Short(ushort tag, params ushort[] values) =>
@@ -41,9 +39,6 @@ internal static class TiffFixture
             Write32(span, little, (uint)(int)v.Numerator);
             Write32(span[4..], little, (uint)(int)v.Denominator);
         }));
-
-    public static Entry Double(ushort tag, params double[] values) =>
-        new(tag, 12, values.Length, little => Concat(values, 8, (span, v) => Write64(span, little, (ulong)BitConverter.DoubleToInt64Bits(v))));
 
     /// <summary>A pointer to one directory, as EXIF, GPS and Interop use, of the layout's natural type.</summary>
     public static Entry Pointer(ushort tag, params Entry[] child) => new(tag, 0, 1, _ => [], [child]);

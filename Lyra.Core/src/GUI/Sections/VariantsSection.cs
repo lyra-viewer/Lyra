@@ -192,9 +192,6 @@ public sealed class VariantsSection : IUISection, IDisposable
         VariantSelected?.Invoke(index);
     }
 
-    /// <summary>Applies a pick. Internal so tests can drive it without a real click.</summary>
-    internal void Select(ImageVariant variant) => OnPicked(variant);
-
     private static int IndexOf(IReadOnlyList<ImageVariant>? variants, ImageVariant variant)
     {
         if (variants is null)

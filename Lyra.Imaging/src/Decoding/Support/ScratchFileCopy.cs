@@ -103,6 +103,15 @@ internal sealed class ScratchFileCopy : IDisposable
         }
     }
 
+    /// <summary>A fresh scratch path that the startup sweep treats like a copy's; null when there can be none.</summary>
+    internal static string? NewPath()
+    {
+        if (!TryGetScratchDir(out var dir) || ScratchSession.Claim(dir) is not { } token)
+            return null;
+
+        return System.IO.Path.Combine(dir, $"{token}-{Guid.NewGuid():N}{ScratchSuffix}");
+    }
+
     /// <summary>
     /// Deletes what runs that never got to clean up after themselves left behind - a hard kill or
     /// a crash between finishing a copy and disposing it.
@@ -225,7 +234,7 @@ internal sealed class ScratchFileCopy : IDisposable
         }
     }
 
-    private static void TryDelete(string path)
+    internal static void TryDelete(string path)
     {
         try
         {

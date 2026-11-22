@@ -8,6 +8,7 @@ using Lyra.Imaging.Metadata;
 using Lyra.Metadata.Photoshop;
 using Lyra.Psd;
 using Lyra.Psd.Core.Decode.Composite;
+using Lyra.Psd.Core.Decode.Layers;
 using Lyra.Psd.Core.SectionData;
 using SkiaSharp;
 
@@ -59,7 +60,7 @@ internal class PsdDecoder : DecoderBase
         using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), context.ReportTransferred, context.CompleteTransfer);
         var psd = PsdDocument.ReadDocument(stream);
         context.ExifInfo = ReadMetadata(psd, stream, path);
-        context.PsdLayers = psd.DecodeLayerRecords(stream);
+        context.Layers = LayersOf(psd.DecodeLayerRecords(stream));
         context.Structure = PsdStructure.Describe(psd);
 
         stream.Position = 0;
@@ -68,6 +69,15 @@ internal class PsdDecoder : DecoderBase
         ProcessMetadata(psd.PsdMetadata, context);
         context.Content = new RasterContent(ToImage(surface));
     }
+
+    private static LayerEntry[] LayersOf(LayerRecord[] records) =>
+        Array.ConvertAll(records, record => new LayerEntry(record.Name, record.Visible, record.SectionType switch
+        {
+            LayerSectionType.BoundingDivider => LayerSection.GroupDivider,
+            LayerSectionType.OpenGroup => LayerSection.OpenGroup,
+            LayerSectionType.ClosedGroup => LayerSection.ClosedGroup,
+            _ => LayerSection.Layer
+        }));
 
     #region Large PSD (preview + tiled decode)
 
@@ -86,7 +96,7 @@ internal class PsdDecoder : DecoderBase
             using var stream = new MeasuredReadStream(DecoderIO.OpenRandomAccessRead(path), context.ReportTransferred, context.CompleteTransfer);
             psd = PsdDocument.ReadDocument(stream);
             context.ExifInfo = ReadMetadata(psd, stream, path);
-            context.PsdLayers = psd.DecodeLayerRecords(stream);
+            context.Layers = LayersOf(psd.DecodeLayerRecords(stream));
             context.Structure = PsdStructure.Describe(psd);
 
             stream.Position = 0;

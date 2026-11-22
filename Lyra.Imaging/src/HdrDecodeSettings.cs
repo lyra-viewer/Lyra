@@ -1,7 +1,7 @@
 using Lyra.Common.Settings;
 using Lyra.Common.Settings.Enums;
 
-namespace Lyra.Imaging.Decoding.Support;
+namespace Lyra.Imaging;
 
 internal readonly record struct ToneCurve(ToneMapMode Mode, float ExposureScale);
 

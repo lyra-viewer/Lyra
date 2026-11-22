@@ -70,7 +70,7 @@ public class J2KColorSpaceTests
     }
 
     [Fact]
-    public void PublishesWhetherTheImageIsGrey()
+    public async Task PublishesWhetherTheImageIsGrey()
     {
         if (!NativeJ2KReady.Value)
             Assert.Skip("libj2k_native not available (native wrappers not built for this platform).");
@@ -81,7 +81,7 @@ public class J2KColorSpaceTests
         try
         {
             using var composite = new Composite(new FileInfo(tempPath));
-            new J2KDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
+            await new J2KDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken);
 
             var entry = Assert.Single(composite.FormatSpecificSnapshot(), pair => pair.Key == "Grayscale");
             Assert.Equal("No", entry.Value);

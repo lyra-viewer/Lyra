@@ -156,7 +156,7 @@ public class IcnsDecoderTests
     // ------------------------------------------------------------------
 
     [Fact]
-    public void Decoder_SkipsAJpeg2000EntryDeclaringAnImpossibleSize_WithoutDecodingIt()
+    public async Task Decoder_SkipsAJpeg2000EntryDeclaringAnImpossibleSize_WithoutDecodingIt()
     {
         var impossible = Convert.FromHexString(
             "FF4FFF51002F0000000000CB0020009800000000000000000000" +
@@ -176,7 +176,7 @@ public class IcnsDecoderTests
             var clock = System.Diagnostics.Stopwatch.StartNew();
 
             using var composite = new Composite(new FileInfo(path));
-            new IcnsDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
+            await new IcnsDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken);
 
             Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), $"took {clock.Elapsed}");
             Assert.Equal(128f, composite.Content!.DecodedWidth);
@@ -188,7 +188,7 @@ public class IcnsDecoderTests
     }
 
     [Fact]
-    public void Decoder_PublishesOneVariantPerIcon_LargestActive()
+    public async Task Decoder_PublishesOneVariantPerIcon_LargestActive()
     {
         var icns = Container(
             Chunk("is32", Rle24Plate(16)),
@@ -204,7 +204,7 @@ public class IcnsDecoderTests
         try
         {
             using var composite = new Composite(new FileInfo(path));
-            new IcnsDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
+            await new IcnsDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken);
 
             var set = Assert.IsType<VariantContainer>(composite.Content);
             Assert.Equal(["128 x 128", "32 x 32", "16 x 16"], set.Variants.Select(v => v.Label));
@@ -228,7 +228,7 @@ public class IcnsDecoderTests
     }
 
     [Fact]
-    public void Decoder_DescribesTheContainer_InFormatSpecific()
+    public async Task Decoder_DescribesTheContainer_InFormatSpecific()
     {
         var icns = Container(
             Chunk("is32", Rle24Plate(16)),
@@ -243,7 +243,7 @@ public class IcnsDecoderTests
         try
         {
             using var composite = new Composite(new FileInfo(path));
-            new IcnsDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
+            await new IcnsDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken);
 
             var facts = composite.FormatSpecificSnapshot().ToDictionary(p => p.Key, p => p.Value);
 
@@ -268,7 +268,7 @@ public class IcnsDecoderTests
     }
 
     [Fact]
-    public void Decoder_SwitchingVariants_LeavesEveryVariantUsable()
+    public async Task Decoder_SwitchingVariants_LeavesEveryVariantUsable()
     {
         var icns = Container(
             Chunk("il32", Rle24Plate(32)),
@@ -282,7 +282,7 @@ public class IcnsDecoderTests
         try
         {
             using var composite = new Composite(new FileInfo(path));
-            new IcnsDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
+            await new IcnsDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken);
 
             var set = Assert.IsType<VariantContainer>(composite.Content);
             var held = Assert.IsType<RasterContent>(set.Active).Image;
@@ -304,7 +304,7 @@ public class IcnsDecoderTests
     /// claims.
     /// </summary>
     [Fact]
-    public void Decoder_OrdersByDecodedSize_NotByWhatTheTypeCodeClaims()
+    public async Task Decoder_OrdersByDecodedSize_NotByWhatTheTypeCodeClaims()
     {
         var icns = Container(
             Chunk("ic09", PngBytes(64)),   // claims 512x512, holds 64x64
@@ -317,7 +317,7 @@ public class IcnsDecoderTests
         try
         {
             using var composite = new Composite(new FileInfo(path));
-            new IcnsDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
+            await new IcnsDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken);
 
             var set = Assert.IsType<VariantContainer>(composite.Content);
 

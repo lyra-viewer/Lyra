@@ -1,4 +1,4 @@
-namespace Lyra.SdlCore;
+namespace Lyra.Session;
 
 public enum NavigationDirection
 {

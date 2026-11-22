@@ -1,6 +1,5 @@
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Status;
-using Lyra.Psd.Core.Decode.Layers;
 using Lyra.UI;
 using Lyra.UI.Components;
 using Lyra.UI.Components.Controls;
@@ -15,12 +14,12 @@ namespace Lyra.GUI.Sections;
 // ============================================================================
 //  LayersSection - sidebar collapsible showing the PSD layer hierarchy.
 // ----------------------------------------------------------------------------
-//  Only visible for PSD composites. PsdLayers is null until the decoder has
+//  Only visible for PSD composites. Layers is null until the decoder has
 //  walked the layer table; the (composite, state) dedup catches the moment
 //  it becomes available.
 //
 //  The group hierarchy is reconstructed from lsct section dividers by
-//  PsdLayerTreeBuilder. The TreeView is display-only here - no Locate or
+//  LayerTreeBuilder. The TreeView is display-only here - no Locate or
 //  Picked wiring, since clicking a PSD layer has no companion action.
 // ============================================================================
 public sealed class LayersSection : IUISection
@@ -29,7 +28,7 @@ public sealed class LayersSection : IUISection
 
     private readonly Collapsible _collapsible;
     private readonly Label _statusLabel;
-    private readonly TreeView<LayerRecord> _tree;
+    private readonly TreeView<LayerEntry> _tree;
 
     private Composite? _lastComposite;
     private CompositeState _lastState;
@@ -47,7 +46,7 @@ public sealed class LayersSection : IUISection
             Padding = new Padding(0, 4, 0, 0)
         };
 
-        _tree = new TreeView<LayerRecord>([], RenderRow)
+        _tree = new TreeView<LayerEntry>([], RenderRow)
         {
             Padding = new Padding(0, 4, 0, 0),
             VerticalSize = SizeMode.Flexible,
@@ -72,14 +71,14 @@ public sealed class LayersSection : IUISection
         _lastComposite = composite;
         _lastState = state.CompositeState;
 
-        if (composite?.PsdLayers != null)
+        if (composite?.Layers != null)
         {
             _collapsible.Present = true;
 
-            if (composite.PsdLayers.Length > 0)
+            if (composite.Layers.Length > 0)
             {
                 _statusLabel.Present = false;
-                _tree.UpdateData(PsdLayerTreeBuilder.Build(composite.PsdLayers));
+                _tree.UpdateData(LayerTreeBuilder.Build(composite.Layers));
             }
             else
             {
@@ -95,12 +94,10 @@ public sealed class LayersSection : IUISection
         }
     }
 
-    private static IComponent RenderRow(TreeNode<LayerRecord> node, bool isPicked)
+    private static IComponent RenderRow(TreeNode<LayerEntry> node, bool isPicked)
     {
         var record = node.Data;
-        var isGroup = record.SectionType
-            is LayerSectionType.OpenGroup
-            or LayerSectionType.ClosedGroup;
+        var isGroup = record.IsGroup;
 
         var name = string.IsNullOrEmpty(record.Name) ? "[unnamed]" : record.Name;
         var displayName = isGroup

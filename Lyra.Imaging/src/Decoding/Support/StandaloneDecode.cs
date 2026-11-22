@@ -86,7 +86,7 @@ internal static class StandaloneDecode
     /// Some decoders, such as PSD, go on filling the content they returned from a background task.
     /// The content may be disposed as soon as it is handed on, so that waits until they are done.
     /// </summary>
-    private static void AwaitBackgroundDecode(Composite composite, CancellationToken ct)
+    internal static void AwaitBackgroundDecode(Composite composite, CancellationToken ct)
     {
         var task = composite.BackgroundDecodeTask;
 

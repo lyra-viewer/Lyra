@@ -4,7 +4,6 @@ using Xunit;
 
 namespace Lyra.Core.Tests.Duplicates;
 
-[Collection("FileRecordDatabase")]
 public sealed class PerceptualDuplicateFinderTests
 {
     /// <summary>The scanner hashes in parallel, so the call log needs its own lock.</summary>
@@ -132,11 +131,11 @@ public sealed class PerceptualDuplicateFinderTests
                 records.Add(Add(seedHash));
         }
 
-        FileRecordDatabase.Load(records);
+        FileRecord[] scanned = [.. records];
         var expected = BruteForceGroups(records, maxDistance);
 
         var actual = new PerceptualDuplicateFinder(new FakeThumbnailSource())
-            .Scan(maxDistance, ct: TestContext.Current.CancellationToken);
+            .Scan(scanned, maxDistance, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, Canonical(actual));
     }
@@ -148,10 +147,10 @@ public sealed class PerceptualDuplicateFinderTests
             .Select(i => Rec($"/x/{i}.jpg", 0xDEAD_BEEF_0000_0001UL))
             .ToList();
 
-        FileRecordDatabase.Load(records);
+        FileRecord[] scanned = [.. records];
 
         var groups = new PerceptualDuplicateFinder(new FakeThumbnailSource())
-            .Scan(ct: TestContext.Current.CancellationToken);
+            .Scan(scanned, ct: TestContext.Current.CancellationToken);
 
         var group = Assert.Single(groups);
         Assert.Equal(records.Count, group.Files.Count);
@@ -160,12 +159,12 @@ public sealed class PerceptualDuplicateFinderTests
     [Fact]
     public void HashesEligibleRecords_AndSkipsPsd()
     {
-        FileRecordDatabase.Load([Rec("/x/a.jpg"), Rec("/x/b.png"), Rec("/x/c.psd")]);
+        FileRecord[] scanned = [Rec("/x/a.jpg"), Rec("/x/b.png"), Rec("/x/c.psd")];
         var fake = new FakeThumbnailSource();
 
-        new PerceptualDuplicateFinder(fake).Scan(ct: TestContext.Current.CancellationToken);
+        new PerceptualDuplicateFinder(fake).Scan(scanned, ct: TestContext.Current.CancellationToken);
 
-        var byPath = FileRecordDatabase.Records.ToDictionary(r => r.Path);
+        var byPath = scanned.ToDictionary(r => r.Path);
         Assert.True(byPath["/x/a.jpg"].HasPHash);
         Assert.True(byPath["/x/b.png"].HasPHash);
         Assert.False(byPath["/x/c.psd"].HasPHash);      // PSD excluded from perceptual hashing
@@ -175,10 +174,10 @@ public sealed class PerceptualDuplicateFinderTests
     [Fact]
     public void SkipsRecordsThatAlreadyHaveAHash()
     {
-        FileRecordDatabase.Load([Rec("/x/a.jpg", pHash: 123UL), Rec("/x/b.jpg")]);
+        FileRecord[] scanned = [Rec("/x/a.jpg", pHash: 123UL), Rec("/x/b.jpg")];
         var fake = new FakeThumbnailSource();
 
-        new PerceptualDuplicateFinder(fake).Scan(ct: TestContext.Current.CancellationToken);
+        new PerceptualDuplicateFinder(fake).Scan(scanned, ct: TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain("/x/a.jpg", fake.Calls); // already hashed -> not re-decoded
         Assert.Contains("/x/b.jpg", fake.Calls);
@@ -187,12 +186,12 @@ public sealed class PerceptualDuplicateFinderTests
     [Fact]
     public void NullLuma_LeavesRecordUnhashed()
     {
-        FileRecordDatabase.Load([Rec("/x/a.jpg")]);
+        FileRecord[] scanned = [Rec("/x/a.jpg")];
         var fake = new FakeThumbnailSource { Provider = _ => null };
 
-        new PerceptualDuplicateFinder(fake).Scan(ct: TestContext.Current.CancellationToken);
+        new PerceptualDuplicateFinder(fake).Scan(scanned, ct: TestContext.Current.CancellationToken);
 
-        Assert.False(FileRecordDatabase.Records.Single().HasPHash);
+        Assert.False(scanned.Single().HasPHash);
     }
 
     [Fact]
@@ -201,7 +200,7 @@ public sealed class PerceptualDuplicateFinderTests
         // Enough files to spread across workers, so a slot/path mix-up would show up here.
         const int count = 200;
         var paths = Enumerable.Range(0, count).Select(i => $"/x/{i}.jpg").ToArray();
-        FileRecordDatabase.Load(paths.Select(p => Rec(p)).ToList());
+        FileRecord[] scanned = [.. paths.Select(p => Rec(p)).ToList()];
 
         var expected = paths.ToDictionary(
             p => p,
@@ -213,9 +212,9 @@ public sealed class PerceptualDuplicateFinderTests
             Provider = path => DistinctLuma(int.Parse(Path.GetFileNameWithoutExtension(path)))
         };
 
-        new PerceptualDuplicateFinder(fake).Scan(ct: TestContext.Current.CancellationToken);
+        new PerceptualDuplicateFinder(fake).Scan(scanned, ct: TestContext.Current.CancellationToken);
 
-        foreach (var record in FileRecordDatabase.Records)
+        foreach (var record in scanned)
             Assert.Equal(expected[record.Path], record.PHash);
 
         Assert.Equal(count, fake.Calls.Count); // each file decoded exactly once
@@ -225,7 +224,7 @@ public sealed class PerceptualDuplicateFinderTests
     public void Cancellation_KeepsHashesAlreadyComputed()
     {
         var paths = Enumerable.Range(0, 50).Select(i => $"/x/{i}.jpg").ToArray();
-        FileRecordDatabase.Load(paths.Select(p => Rec(p)).ToList());
+        FileRecord[] scanned = [.. paths.Select(p => Rec(p)).ToList()];
 
         using var cts = new CancellationTokenSource();
         var served = 0;
@@ -241,11 +240,11 @@ public sealed class PerceptualDuplicateFinderTests
             }
         };
 
-        Assert.Throws<OperationCanceledException>(() => new PerceptualDuplicateFinder(fake).Scan(ct: cts.Token));
+        Assert.Throws<OperationCanceledException>(() => new PerceptualDuplicateFinder(fake).Scan(scanned, ct: cts.Token));
 
         // Decode work already paid for is kept. How far the scan got is timing-dependent, so
         // only what was actually served is asserted on.
-        var byPath = FileRecordDatabase.Records.ToDictionary(r => r.Path);
+        var byPath = scanned.ToDictionary(r => r.Path);
         foreach (var path in fake.Calls)
             Assert.True(byPath[path].HasPHash, $"{path} was decoded but its hash was discarded");
     }
@@ -254,7 +253,7 @@ public sealed class PerceptualDuplicateFinderTests
     public void Progress_NeverGoesBackwards_AndEndsAtTotal()
     {
         var paths = Enumerable.Range(0, 100).Select(i => $"/x/{i}.jpg").ToArray();
-        FileRecordDatabase.Load(paths.Select(p => Rec(p)).ToList());
+        FileRecord[] scanned = [.. paths.Select(p => Rec(p)).ToList()];
 
         var gate = new Lock();
         var reports = new List<PerceptualScanProgress>();
@@ -269,7 +268,7 @@ public sealed class PerceptualDuplicateFinderTests
             Provider = path => DistinctLuma(int.Parse(Path.GetFileNameWithoutExtension(path)))
         };
 
-        new PerceptualDuplicateFinder(fake).Scan(progress: progress, ct: TestContext.Current.CancellationToken);
+        new PerceptualDuplicateFinder(fake).Scan(scanned, progress: progress, ct: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(reports);
         for (var i = 1; i < reports.Count; i++)
@@ -298,13 +297,13 @@ public sealed class PerceptualDuplicateFinderTests
         for (var x = 0; x < PerceptualHash.Width; x++)
             gradient[y * PerceptualHash.Width + x] = (byte)(x * 10);
 
-        FileRecordDatabase.Load([Rec("/x/a.jpg"), Rec("/x/b.jpg"), Rec("/x/c.jpg")]);
+        FileRecord[] scanned = [Rec("/x/a.jpg"), Rec("/x/b.jpg"), Rec("/x/c.jpg")];
         var fake = new FakeThumbnailSource
         {
             Provider = path => path.EndsWith("c.jpg") ? gradient : flat
         };
 
-        var groups = new PerceptualDuplicateFinder(fake).Scan(maxDistance: 10, ct: TestContext.Current.CancellationToken);
+        var groups = new PerceptualDuplicateFinder(fake).Scan(scanned, maxDistance: 10, ct: TestContext.Current.CancellationToken);
 
         var group = Assert.Single(groups);
         var members = group.Files.Select(f => f.Path).OrderBy(p => p, StringComparer.Ordinal).ToArray();

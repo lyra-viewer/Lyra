@@ -8,42 +8,45 @@ namespace Lyra.FileLoader.Duplicates.Exact;
 public static class DuplicateFinder
 {
     private const int BufferSize = 1 << 16; // 64 KB
-
-    public static IReadOnlyList<DuplicateGroup> Scan(IProgress<DuplicateScanProgress>? progress = null, CancellationToken ct = default)
+    
+    public static IReadOnlyList<DuplicateGroup> Scan(FileRecord[] records, IProgress<DuplicateScanProgress>? progress = null, CancellationToken ct = default)
     {
-        var records = FileRecordDatabase.Records.Where(record => !ImageFormat.IsExcludedFromDuplicateScan(record.Format)).ToArray();
+        var eligible = new List<int>(records.Length);
+        for (var i = 0; i < records.Length; i++)
+        {
+            if (!ImageFormat.IsExcludedFromDuplicateScan(records[i].Format))
+                eligible.Add(i);
+        }
 
-        EnsureSizes(records, progress, ct);
-        var candidates = GatherSizeCandidates(records);
+        EnsureSizes(records, eligible, progress, ct);
+        var candidates = GatherSizeCandidates(records, eligible);
         HashCandidates(records, candidates, progress, ct);
 
         return GroupByContentHash(records, candidates);
     }
 
-    private static void EnsureSizes(FileRecord[] records, IProgress<DuplicateScanProgress>? progress, CancellationToken ct)
+    private static void EnsureSizes(FileRecord[] records, List<int> eligible, IProgress<DuplicateScanProgress>? progress, CancellationToken ct)
     {
-        for (var i = 0; i < records.Length; i++)
+        for (var k = 0; k < eligible.Count; k++)
         {
             ct.ThrowIfCancellationRequested();
 
+            var i = eligible[k];
             if (!records[i].HasSize)
             {
                 var size = TryGetSize(records[i].Path);
                 if (size > 0)
-                {
                     records[i] = records[i] with { Size = size };
-                    FileRecordDatabase.SetSize(records[i].Path, size);
-                }
             }
 
-            progress?.Report(new DuplicateScanProgress(i + 1, 0, 0));
+            progress?.Report(new DuplicateScanProgress(k + 1, 0, 0));
         }
     }
 
-    private static List<int> GatherSizeCandidates(FileRecord[] records)
+    private static List<int> GatherSizeCandidates(FileRecord[] records, List<int> eligible)
     {
         var bySize = new Dictionary<long, List<int>>();
-        for (var i = 0; i < records.Length; i++)
+        foreach (var i in eligible)
         {
             // Skip zero-byte and still-unknown sizes (both are 0 by convention).
             if (records[i].Size <= 0)
@@ -69,10 +72,7 @@ public static class DuplicateFinder
             {
                 var hash = TryHashFile(records[i].Path, ct);
                 if (hash is { } value)
-                {
                     records[i] = records[i] with { ContentHash = value };
-                    FileRecordDatabase.SetContentHash(records[i].Path, value);
-                }
             }
 
             hashed++;

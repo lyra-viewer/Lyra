@@ -27,7 +27,6 @@ public sealed class DuplicatesFinderSection : IUISection
     private bool _inDuplicatesMode;
     private bool _noDuplicatesFound;
 
-    public Collapsible Collapsible => _collapsible;
     public IComponent Root => _collapsible;
 
     /// <summary>Raised when "Find Duplicates" / "Regroup" is clicked.</summary>

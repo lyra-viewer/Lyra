@@ -9,9 +9,9 @@ namespace Lyra.FileLoader.Navigation;
 /// Directory-aware view over <see cref="FileRecordDatabase"/>. Owns collection
 /// semantics (collection type, top directory, the full directory tree, the
 /// "x-in-directory" counter, directory-edge navigation) and delegates the raw
-/// ordered list and cursor to the database.
+/// ordered list and cursor to the database. Not thread-safe: main thread only.
 /// </summary>
-public static class DirectoryNavigator
+public sealed class DirectoryNavigator
 {
     /// <summary>
     /// The default ordering for an enumerated collection: group by directory
@@ -26,33 +26,35 @@ public static class DirectoryNavigator
             return byDir != 0 ? byDir : NaturalStringComparer.Instance.Compare(a.Name, b.Name);
         });
 
-    private static CollectionType _collectionType = CollectionType.Undefined;
-    private static bool? _singleDirectory;
-    private static string? _topDirectory;
+    private readonly FileRecordDatabase _store = new();
+    public FileRecordDatabase Store => _store;
+
+    private CollectionType _collectionType = CollectionType.Undefined;
+    private bool? _singleDirectory;
+    private string? _topDirectory;
 
     /// All directories visited during file enumeration, including
     /// intermediate ones with no supported images. Used to build
     /// the complete directory tree in the UI.
-    private static IReadOnlyList<string> _allDirectories = [];
+    private IReadOnlyList<string> _allDirectories = [];
 
     /// <summary>
-    /// Incremented on every structural change (ApplyCollection, Purge). UIManager
-    /// checks this to avoid rebuilding the directory tree every frame. A pure
-    /// re-sort does not bump it: it reorders files but not directory membership.
+    /// Incremented on every structural change (ApplyCollection, Purge). Keys the
+    /// cached tree here, and travels in <see cref="GetSnapshot"/> so the directory
+    /// tree presenter rebuilds only when it changes. A pure re-sort does not bump
+    /// it: it reorders files but not directory membership.
     /// </summary>
-    private static int _version;
+    private int _version;
 
-    private static List<DirEntry>? _cachedFullTree;
-    private static int _cachedFullTreeVersion = -1;
+    private List<DirEntry>? _cachedFullTree;
+    private int _cachedFullTreeVersion = -1;
 
-    public static int Version => _version;
-    
-    public static bool HasDuplicatesSubset => FileRecordDatabase.InDuplicatesView;
+    public bool HasDuplicatesSubset => _store.InDuplicatesView;
 
     /// <summary>Narrows the records to the grouped ones. Returns false if nothing is grouped.</summary>
-    public static bool ApplyDuplicatesSubset()
+    public bool ApplyDuplicatesSubset()
     {
-        if (!FileRecordDatabase.EnterDuplicatesView())
+        if (!_store.EnterDuplicatesView())
             return false;
 
         _version++;
@@ -60,16 +62,16 @@ public static class DirectoryNavigator
     }
 
     /// <summary>Restores the full collection if the duplicates subset is applied.</summary>
-    public static void RestoreFullCollection()
+    public void RestoreFullCollection()
     {
-        if (!FileRecordDatabase.InDuplicatesView)
+        if (!_store.InDuplicatesView)
             return;
 
-        FileRecordDatabase.ExitDuplicatesView();
+        _store.ExitDuplicatesView();
         _version++;
     }
 
-    public static void ApplyCollection(CollectionLoadResult result)
+    public void ApplyCollection(CollectionLoadResult result)
     {
         _topDirectory = result.TopDirectory;
         _allDirectories = result.AllDirectories;
@@ -77,11 +79,11 @@ public static class DirectoryNavigator
         _collectionType = result.CollectionType;
 
         var anchor = ResolveAnchor(result.Files, result.DropContext.AnchorPath);
-        FileRecordDatabase.Load(result.Files, DefaultComparer, anchor);
+        _store.Load(result.Files, DefaultComparer, anchor);
         _version++;
     }
 
-    private static string? ResolveAnchor(IReadOnlyList<FileRecord> files, string? anchorCandidate)
+    private string? ResolveAnchor(IReadOnlyList<FileRecord> files, string? anchorCandidate)
     {
         // No explicit anchor (e.g. a directory drop): return null and let the
         // database default the cursor to index 0 of the *sorted* collection.
@@ -98,27 +100,27 @@ public static class DirectoryNavigator
         return null;
     }
 
-    public static string? GetCurrent() => FileRecordDatabase.Current?.Path;
+    public string? GetCurrent() => _store.Current?.Path;
 
-    public static void MoveToNext() => FileRecordDatabase.MoveNext();
-    public static void MoveToPrevious() => FileRecordDatabase.MovePrevious();
-    public static void MoveToFirst() => FileRecordDatabase.MoveToFirst();
-    public static void MoveToLast() => FileRecordDatabase.MoveToLast();
+    public void MoveToNext() => _store.MoveNext();
+    public void MoveToPrevious() => _store.MovePrevious();
+    public void MoveToFirst() => _store.MoveToFirst();
+    public void MoveToLast() => _store.MoveToLast();
 
-    public static void MoveToLeftEdge() => MoveToDirEdge(goToStart: true);
-    public static void MoveToRightEdge() => MoveToDirEdge(goToStart: false);
+    public void MoveToLeftEdge() => MoveToDirEdge(goToStart: true);
+    public void MoveToRightEdge() => MoveToDirEdge(goToStart: false);
 
-    private static void MoveToDirEdge(bool goToStart)
+    private void MoveToDirEdge(bool goToStart)
     {
-        var records = FileRecordDatabase.Records;
-        var currentIndex = FileRecordDatabase.CurrentIndex;
+        var records = _store.Records;
+        var currentIndex = _store.CurrentIndex;
         if ((uint)currentIndex >= (uint)records.Count)
             return;
 
         if (_singleDirectory is true)
         {
-            if (goToStart) FileRecordDatabase.MoveToFirst();
-            else FileRecordDatabase.MoveToLast();
+            if (goToStart) _store.MoveToFirst();
+            else _store.MoveToLast();
             return;
         }
 
@@ -131,7 +133,7 @@ public static class DirectoryNavigator
         var edge = goToStart ? start : end;
         if (currentIndex != edge)
         {
-            FileRecordDatabase.MoveToIndex(edge);
+            _store.MoveToIndex(edge);
             return;
         }
 
@@ -139,8 +141,8 @@ public static class DirectoryNavigator
         var neighborProbe = goToStart ? start - 1 : end + 1;
         if ((uint)neighborProbe >= (uint)records.Count)
         {
-            if (goToStart) FileRecordDatabase.MoveToFirst();
-            else FileRecordDatabase.MoveToLast();
+            if (goToStart) _store.MoveToFirst();
+            else _store.MoveToLast();
             return;
         }
 
@@ -149,7 +151,7 @@ public static class DirectoryNavigator
             return;
 
         var (ns, ne) = GetContiguousDirBounds(seedIndex: neighborProbe, normalizedDir: neighborDir);
-        FileRecordDatabase.MoveToIndex(goToStart ? ne : ns);
+        _store.MoveToIndex(goToStart ? ne : ns);
     }
 
     /// <summary>
@@ -158,13 +160,13 @@ public static class DirectoryNavigator
     /// not in duplicates view. Records in the view are contiguous by group and
     /// ordered by ascending group id.
     /// </summary>
-    public static bool MoveToNextGroup()
+    public bool MoveToNextGroup()
     {
         if (!HasDuplicatesSubset)
             return false;
 
-        var records = FileRecordDatabase.Records;
-        var currentIndex = FileRecordDatabase.CurrentIndex;
+        var records = _store.Records;
+        var currentIndex = _store.CurrentIndex;
         if ((uint)currentIndex >= (uint)records.Count)
             return false;
 
@@ -177,7 +179,7 @@ public static class DirectoryNavigator
         if (next >= records.Count)
             return false;
 
-        FileRecordDatabase.MoveToIndex(next);
+        _store.MoveToIndex(next);
         return true;
     }
 
@@ -186,13 +188,13 @@ public static class DirectoryNavigator
     /// group (lower group id). Returns false if already in the first group or
     /// not in duplicates view.
     /// </summary>
-    public static bool MoveToPreviousGroup()
+    public bool MoveToPreviousGroup()
     {
         if (!HasDuplicatesSubset)
             return false;
 
-        var records = FileRecordDatabase.Records;
-        var currentIndex = FileRecordDatabase.CurrentIndex;
+        var records = _store.Records;
+        var currentIndex = _store.CurrentIndex;
         if ((uint)currentIndex >= (uint)records.Count)
             return false;
 
@@ -213,35 +215,35 @@ public static class DirectoryNavigator
         while (target > 0 && records[target - 1].GroupId == previousGroup)
             target--;
 
-        FileRecordDatabase.MoveToIndex(target);
+        _store.MoveToIndex(target);
         return true;
     }
 
-    public static void Purge(string filePath)
+    public void Purge(string filePath)
     {
-        if (FileRecordDatabase.Remove(filePath))
+        if (_store.Remove(filePath))
             _version++;
     }
 
-    public static bool HasNext() => FileRecordDatabase.Count > 0 && FileRecordDatabase.CurrentIndex < FileRecordDatabase.Count - 1;
+    public bool HasNext() => _store.Count > 0 && _store.CurrentIndex < _store.Count - 1;
 
-    public static bool HasPrevious() => FileRecordDatabase.CurrentIndex > 0;
+    public bool HasPrevious() => _store.CurrentIndex > 0;
 
-    public static bool IsFirst() => FileRecordDatabase.Count > 0 && FileRecordDatabase.CurrentIndex == 0;
+    public bool IsFirst() => _store.Count > 0 && _store.CurrentIndex == 0;
 
-    public static bool IsLast() => FileRecordDatabase.Count > 0 && FileRecordDatabase.CurrentIndex == FileRecordDatabase.Count - 1;
+    public bool IsLast() => _store.Count > 0 && _store.CurrentIndex == _store.Count - 1;
 
     /// <summary>
     /// Returns a slice of image file paths centered on the current image,
     /// including the current image and up to <paramref name="depth"/> images
     /// before and after it in the collection.
     /// </summary>
-    public static string[] GetRange(int depth) => FileRecordDatabase.GetRange(depth);
+    public string[] GetRange(int depth) => _store.GetRange(depth);
 
-    public static Navigation GetNavigation()
+    public Navigation GetNavigation()
     {
-        var records = FileRecordDatabase.Records;
-        var currentIndex = FileRecordDatabase.CurrentIndex;
+        var records = _store.Records;
+        var currentIndex = _store.CurrentIndex;
 
         var navigation = new Navigation
         {
@@ -265,9 +267,9 @@ public static class DirectoryNavigator
         return navigation;
     }
 
-    private static (int Start, int End) GetContiguousDirBounds(int seedIndex, string normalizedDir)
+    private (int Start, int End) GetContiguousDirBounds(int seedIndex, string normalizedDir)
     {
-        var records = FileRecordDatabase.Records;
+        var records = _store.Records;
 
         var start = seedIndex;
         while (start > 0)
@@ -290,19 +292,19 @@ public static class DirectoryNavigator
         return (start, end);
     }
 
-    public static string? GetTopDirectory() => _topDirectory;
+    public string? GetTopDirectory() => _topDirectory;
 
-    public static CollectionType GetCollectionType()
+    public CollectionType GetCollectionType()
     {
-        return FileRecordDatabase.Count == 0 ? CollectionType.Undefined : _collectionType;
+        return _store.Count == 0 ? CollectionType.Undefined : _collectionType;
     }
 
     /// <summary>
     /// Returns sorted unique normalized directory paths from the current records.
     /// </summary>
-    public static List<string> GetDirectoryPaths()
+    public List<string> GetDirectoryPaths()
     {
-        var records = FileRecordDatabase.Records;
+        var records = _store.Records;
         if (records.Count == 0)
             return [];
         
@@ -325,7 +327,7 @@ public static class DirectoryNavigator
     /// Cached by version - returns the same list reference until the next
     /// structural change (ApplyCollection, Purge).
     /// </summary>
-    public static List<DirEntry> GetFullDirectoryTree()
+    public List<DirEntry> GetFullDirectoryTree()
     {
         if (_cachedFullTreeVersion == _version && _cachedFullTree != null)
             return _cachedFullTree;
@@ -350,13 +352,12 @@ public static class DirectoryNavigator
     /// Returns an immutable snapshot of the navigator's current state for
     /// the UI layer. Called every frame; the tree list is cached by version.
     /// </summary>
-    public static DirectorySnapshot GetSnapshot() =>
-        new(_version, _topDirectory, GetFullDirectoryTree(), GetCurrentDirectory());
+    public DirectorySnapshot GetSnapshot() => new(_version, _topDirectory, GetFullDirectoryTree(), GetCurrentDirectory());
 
     /// <summary>
     /// Returns the normalized directory of the current image.
     /// </summary>
-    public static string? GetCurrentDirectory() => FileRecordDatabase.Current?.Directory;
+    public string? GetCurrentDirectory() => _store.Current?.Directory;
 
     /// <summary>
     /// Moves to the first image in the given directory.
@@ -364,14 +365,14 @@ public static class DirectoryNavigator
     /// (same format as returned by GetDirectoryPaths).
     /// Returns true if a matching image was found.
     /// </summary>
-    public static bool MoveToFirstInDirectory(string normalizedDir)
+    public bool MoveToFirstInDirectory(string normalizedDir)
     {
-        var records = FileRecordDatabase.Records;
+        var records = _store.Records;
         for (var i = 0; i < records.Count; i++)
         {
             if (PathComparer.Equals(records[i].Directory, normalizedDir))
             {
-                FileRecordDatabase.MoveToIndex(i);
+                _store.MoveToIndex(i);
                 return true;
             }
         }

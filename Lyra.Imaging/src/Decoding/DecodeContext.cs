@@ -2,7 +2,6 @@ using Lyra.Common;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Exif;
 using Lyra.Imaging.Content.Status;
-using Lyra.Psd.Core.Decode.Layers;
 
 namespace Lyra.Imaging.Decoding;
 
@@ -126,10 +125,10 @@ internal sealed class DecodeContext
         set => _composite.Structure = value;
     }
 
-    public LayerRecord[]? PsdLayers
+    public LayerEntry[]? Layers
     {
-        get => _composite.PsdLayers;
-        set => _composite.PsdLayers = value;
+        get => _composite.Layers;
+        set => _composite.Layers = value;
     }
 
     public void SetFullSize(float width, float height) => _composite.SetFullSize(width, height);

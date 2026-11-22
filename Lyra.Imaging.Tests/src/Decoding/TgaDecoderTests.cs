@@ -66,14 +66,14 @@ public class TgaDecoderTests
     }
 
     [Fact]
-    public void ATruncatedTga_IsShownAndFlagged()
+    public async Task ATruncatedTga_IsShownAndFlagged()
     {
         var tga = TgaTestImage.Header(0, 2, 0, 0, 2, 2, 24, TgaTestImage.TopLeft);
         tga.AddRange([0, 0, 255, /**/ 0, 255, 0, /**/ 255, 0, 0]);
 
         using var temp = new TempFile([.. tga]);
         using var composite = new Composite(new FileInfo(temp.Path));
-        new TgaDecoder().DecodeAsync(composite, CancellationToken.None).GetAwaiter().GetResult();
+        await new TgaDecoder().DecodeAsync(composite, TestContext.Current.CancellationToken);
 
         Assert.IsType<RasterContent>(composite.Content);
         Assert.Equal(LoadWarning.PartiallyDecoded("The file ends before the image does"), composite.Warning);

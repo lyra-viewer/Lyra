@@ -37,8 +37,6 @@ internal sealed class HeifFile : IDisposable
         }
     }
 
-    public IntPtr Context => _context;
-
     public CancellationToken Cancellation
     {
         set => _reader.Cancellation = value;

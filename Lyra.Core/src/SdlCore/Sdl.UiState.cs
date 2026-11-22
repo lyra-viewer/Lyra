@@ -1,8 +1,6 @@
 using Lyra.Common.Settings.Enums;
 using Lyra.Common.SystemExtensions;
 using Lyra.DuplicateStatusProvider;
-using Lyra.FileLoader.Navigation;
-using Lyra.FileLoader.Store;
 using Lyra.GUI;
 using Lyra.GUI.Presenters;
 using Lyra.Imaging.Content.Status;
@@ -14,17 +12,17 @@ namespace Lyra.SdlCore;
 public partial class SdlCore
 {
     private UIState CurrentUIState() =>
-        UIState.Create(_composite, GetApplicationStates(), DirectoryNavigator.GetSnapshot(), DirectoryNavigator.GetNavigation(), FileRecordDatabase.Current);
+        UIState.Create(_composite, GetApplicationStates(), _session.Navigator.GetSnapshot(), _session.Navigator.GetNavigation(), _session.Navigator.Store.Current);
 
     private ApplicationStates GetApplicationStates()
     {
-        var navigation = DirectoryNavigator.GetNavigation();
+        var navigation = _session.Navigator.GetNavigation();
         var drop = _dropProgressTracker.GetDropStatus();
         var scan = _duplicateScanService.Progress.GetScanStatus();
 
         return new ApplicationStates
         {
-            CollectionType = DirectoryNavigator.GetCollectionType(),
+            CollectionType = _session.Navigator.GetCollectionType(),
             CollectionIndex = navigation.CollectionIndex,
             CollectionCount = navigation.CollectionCount,
             DirectoryIndex = navigation.DirectoryIndex,

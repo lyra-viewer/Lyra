@@ -12,7 +12,6 @@ namespace Lyra.Metadata.Tests.Tiff;
 /// </summary>
 public class BigTiffTests
 {
-    private const int HeaderLength = 16;
     private const int EntryLength = 20;
 
     [Fact]

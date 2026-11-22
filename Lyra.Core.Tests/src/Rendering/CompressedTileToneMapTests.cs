@@ -1,9 +1,9 @@
 using System.Runtime.InteropServices;
 using Lyra.Common.Settings.Enums;
+using Lyra.Imaging;
 using Lyra.Imaging.Content;
 using Lyra.Imaging.Content.Hdr;
 using Lyra.Imaging.Content.Tiling;
-using Lyra.Imaging.Decoding.Support;
 using Lyra.Renderer.Drawing;
 using SkiaSharp;
 using Xunit;
